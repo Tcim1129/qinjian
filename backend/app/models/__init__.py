@@ -40,7 +40,7 @@ class User(Base):
     nickname: Mapped[str] = mapped_column(String(50))
     password_hash: Mapped[str] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # 关系
     checkins: Mapped[list["Checkin"]] = relationship(back_populates="user")
@@ -55,7 +55,7 @@ class Pair(Base):
     type: Mapped[PairType] = mapped_column(Enum(PairType))
     status: Mapped[PairStatus] = mapped_column(Enum(PairStatus), default=PairStatus.PENDING)
     invite_code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # 关系
     checkins: Mapped[list["Checkin"]] = relationship(back_populates="pair")
@@ -74,7 +74,7 @@ class Checkin(Base):
     mood_tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # 情绪标签
     sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     checkin_date: Mapped[date] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # 关系
     user: Mapped["User"] = relationship(back_populates="checkins")
@@ -90,7 +90,7 @@ class Report(Base):
     content: Mapped[dict] = mapped_column(JSON)  # AI生成的报告JSON
     health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     report_date: Mapped[date] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # 关系
     pair: Mapped["Pair"] = relationship(back_populates="reports")
