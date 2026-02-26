@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: qinjian
+      POSTGRES_USER: qinjian
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-qinjian_dev_123}
+    # 生产环境不暴露PG端口到外网
+    expose:
+      - "5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # 限制内存（2C/4GB服务器省着用）
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  backend:
+    build: ./backend
+    restart: always
+    expose:
+      - "8000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+asyncpg://qinjian:${DB_PASSWORD:-qinjian_dev_123}@db:5432/qinjian
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+      SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1
+      AI_MULTIMODAL_MODEL: ${AI_MULTIMODAL_MODEL:-moonshot/kimi-k2.5}
+      AI_TEXT_MODEL: ${AI_TEXT_MODEL:-deepseek-ai/DeepSeek-V3}
+    volumes:
+      - uploads:/app/uploads
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  web:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  pgdata:
+  uploads:

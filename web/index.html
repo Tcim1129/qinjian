@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>亲健 · 亲密关系健康管理</title>
+  <meta name="description" content="亲健——中国首个AI亲密关系健康管理平台，为你的关系提供科学评估与个性化改善方案">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+  <div class="app">
+    <div id="toast" class="toast"></div>
+
+    <!-- ═══ 登录/注册页 ═══ -->
+    <div id="page-auth" class="page auth-page active">
+      <div class="auth-logo">
+        <div class="auth-logo-icon">💑</div>
+        <div class="auth-logo-title">亲健</div>
+        <div class="auth-logo-desc">让每一段关系都被温柔以待</div>
+      </div>
+
+      <form id="auth-form">
+        <h2 id="auth-title" style="font-size: 20px; margin-bottom: 24px; text-align: center;">欢迎回来</h2>
+
+        <div class="form-group" id="auth-nickname-group" style="display: none">
+          <label class="form-label">昵称</label>
+          <input id="auth-nickname" class="form-input" type="text" placeholder="你希望对方怎么称呼你">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">邮箱</label>
+          <input id="auth-email" class="form-input" type="email" placeholder="your@email.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">密码</label>
+          <input id="auth-password" class="form-input" type="password" placeholder="至少6位" minlength="6" required>
+        </div>
+
+        <button id="auth-submit-btn" type="submit" class="btn btn-primary btn-block">登录</button>
+
+        <div class="auth-toggle" id="auth-toggle-text">
+          还没有账号？<a href="#" id="auth-toggle-link">立即注册</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- ═══ 配对页 ═══ -->
+    <div id="page-pair" class="page">
+      <div style="text-align: center; padding: 40px 0 30px">
+        <div style="font-size: 48px; margin-bottom: 12px">🤝</div>
+        <h2 style="font-size: 20px; margin-bottom: 8px">建立你们的专属空间</h2>
+        <p style="font-size: 14px; color: var(--text-muted)">选择关系类型，邀请你的另一半</p>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size: 15px; margin-bottom: 14px">选择关系类型</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <label class="mood-tag pair-type-option selected"
+            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
+            <input type="radio" name="pair-type" value="couple" checked style="display: none">
+            <span style="font-size: 20px">💕</span>
+            <span>情侣</span>
+          </label>
+          <label class="mood-tag pair-type-option"
+            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
+            <input type="radio" name="pair-type" value="spouse" style="display: none">
+            <span style="font-size: 20px">💍</span>
+            <span>夫妻</span>
+          </label>
+          <label class="mood-tag pair-type-option"
+            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
+            <input type="radio" name="pair-type" value="bestfriend" style="display: none">
+            <span style="font-size: 20px">🤜🤛</span>
+            <span>挚友</span>
+          </label>
+        </div>
+        <button id="pair-create-btn" class="btn btn-primary btn-block" style="margin-top: 20px">创建配对</button>
+      </div>
+
+      <div style="text-align: center; color: var(--text-muted); margin: 20px 0; font-size: 14px">── 或 ──</div>
+
+      <div class="card">
+        <h3 style="font-size: 15px; margin-bottom: 14px">加入已有配对</h3>
+        <input id="pair-join-code" class="form-input" type="text" placeholder="输入8位邀请码" maxlength="8"
+          style="text-align: center; letter-spacing: 4px; font-size: 18px; text-transform: uppercase">
+        <button id="pair-join-btn" class="btn btn-secondary btn-block" style="margin-top: 14px">加入配对</button>
+      </div>
+    </div>
+
+    <!-- ═══ 等待配对页 ═══ -->
+    <div id="page-pair-waiting" class="page">
+      <div style="text-align: center; padding: 60px 0 30px">
+        <div style="font-size: 48px; margin-bottom: 16px">⏳</div>
+        <h2 style="font-size: 20px; margin-bottom: 8px">等待对方加入</h2>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px">把下面的邀请码发给 TA</p>
+        <div id="waiting-invite-code" class="invite-code">--------</div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 16px">对方输入此邀请码即可完成配对</p>
+      </div>
+    </div>
+
+    <!-- ═══ 首页 ═══ -->
+    <div id="page-home" class="page">
+      <div class="header">
+        <div>
+          <div class="header-title">亲健</div>
+          <div class="header-subtitle">今天也要好好经营关系哦 ✨</div>
+        </div>
+        <div class="avatar" onclick="showPage('profile')">我</div>
+      </div>
+
+      <!-- 连续打卡 -->
+      <div class="card" style="text-align: center; padding: 16px">
+        <div
+          style="font-size: 32px; font-weight: 700; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent"
+          id="streak-count">0</div>
+        <div style="font-size: 12px; color: var(--text-muted)">连续打卡天数 🔥</div>
+      </div>
+
+      <!-- 打卡状态卡片 -->
+      <div class="card card-accent">
+        <div style="font-size: 14px; opacity: 0.9; margin-bottom: 10px">📝 今日打卡</div>
+        <div class="checkin-status">
+          <div class="status-item" style="background: rgba(255,255,255,0.15); border-radius: var(--radius-md)">
+            <div id="status-my-dot" class="status-dot" style="background: rgba(255,255,255,0.3)"></div>
+            <div id="status-my-label" class="status-label" style="color: rgba(255,255,255,0.9)">加载中...</div>
+          </div>
+          <div class="status-item" style="background: rgba(255,255,255,0.15); border-radius: var(--radius-md)">
+            <div id="status-partner-dot" class="status-dot" style="background: rgba(255,255,255,0.3)"></div>
+            <div id="status-partner-label" class="status-label" style="color: rgba(255,255,255,0.9)">加载中...</div>
+          </div>
+        </div>
+        <button id="home-checkin-btn" class="btn"
+          style="width: 100%; background: rgba(255,255,255,0.95); color: var(--coral-500); font-weight: 600; margin-top: 8px">
+          开始打卡
+        </button>
+      </div>
+
+      <!-- 生成报告按钮 -->
+      <button id="home-report-btn" class="btn btn-secondary btn-block" style="display: none; margin-bottom: 16px">
+        查看今日报告 📊
+      </button>
+
+      <!-- 隐私提示 -->
+      <div style="text-align: center; margin-top: 20px">
+        <span class="privacy-badge">🔒 隐私沙盒 · 对方看不到你的原始打卡内容</span>
+      </div>
+    </div>
+
+    <!-- ═══ 打卡页 ═══ -->
+    <div id="page-checkin" class="page">
+      <div class="header">
+        <div>
+          <div class="header-title">每日打卡</div>
+          <div class="header-subtitle">记录今天你们之间发生的事</div>
+        </div>
+      </div>
+
+      <form id="checkin-form">
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">今天想说什么？</label>
+            <textarea id="checkin-content" class="form-input"
+              placeholder="记录你今天的感受、你们之间的互动、或者任何想说的话...&#10;&#10;这些内容是隐私的，对方不会看到原文，只有AI会分析后给出洞察 💭"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">今天的情绪</label>
+            <div class="mood-tags">
+              <span class="mood-tag" data-mood="开心">😊 开心</span>
+              <span class="mood-tag" data-mood="平静">😌 平静</span>
+              <span class="mood-tag" data-mood="感动">🥰 感动</span>
+              <span class="mood-tag" data-mood="期待">🤩 期待</span>
+              <span class="mood-tag" data-mood="焦虑">😰 焦虑</span>
+              <span class="mood-tag" data-mood="委屈">😢 委屈</span>
+              <span class="mood-tag" data-mood="生气">😤 生气</span>
+              <span class="mood-tag" data-mood="疲惫">😩 疲惫</span>
+            </div>
+          </div>
+
+          <!-- 多媒体上传 -->
+          <div class="form-group">
+            <label class="form-label">添加图片/语音（可选）</label>
+            <div style="display: flex; gap: 10px; margin-top: 6px">
+              <button type="button" id="checkin-image-btn" class="btn btn-outline btn-sm" style="flex:1">📷
+                添加图片</button>
+              <button type="button" id="checkin-voice-btn" class="btn btn-outline btn-sm" style="flex:1">🎤
+                添加语音</button>
+            </div>
+            <input type="file" id="checkin-image-input" accept="image/*" style="display:none">
+            <input type="file" id="checkin-voice-input" accept="audio/*" style="display:none">
+            <div id="checkin-image-preview"></div>
+            <div id="checkin-voice-preview"></div>
+          </div>
+        </div>
+
+        <button id="checkin-submit-btn" type="submit" class="btn btn-primary btn-block">提交打卡</button>
+      </form>
+    </div>
+
+    <!-- ═══ 报告页 ═══ -->
+    <div id="page-report" class="page">
+      <div class="header">
+        <div>
+          <div class="header-title">关系报告</div>
+          <div class="header-subtitle">AI 为你们生成的健康洞察</div>
+        </div>
+      </div>
+
+      <div id="report-content">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div class="empty-title">暂无报告</div>
+          <div class="empty-desc">双方完成打卡后即可生成 AI 健康报告</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 个人中心页 ═══ -->
+    <div id="page-profile" class="page">
+      <div class="header">
+        <div>
+          <div class="header-title">个人中心</div>
+        </div>
+      </div>
+
+      <div class="card" style="text-align: center; padding: 30px">
+        <div class="avatar" style="width: 64px; height: 64px; font-size: 24px; margin: 0 auto 12px">我</div>
+        <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px">用户</div>
+        <div style="font-size: 13px; color: var(--text-muted)">MVP 版本</div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div
+            style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-light)">
+            <span style="color: var(--text-secondary)">配对状态</span>
+            <span style="font-weight: 500" id="profile-pair-status">--</span>
+          </div>
+          <div
+            style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-light)">
+            <span style="color: var(--text-secondary)">关系类型</span>
+            <span style="font-weight: 500" id="profile-pair-type">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 12px 0">
+            <span style="color: var(--text-secondary)">隐私保护</span>
+            <span class="privacy-badge">🔒 已开启</span>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="api.logout(); showPage('auth'); document.getElementById('tab-bar').style.display='none'"
+        class="btn btn-outline btn-block" style="margin-top: 8px; color: var(--coral-500)">
+        退出登录
+      </button>
+    </div>
+
+    <!-- ═══ 底部导航栏 ═══ -->
+    <nav id="tab-bar" class="tab-bar" style="display: none">
+      <button class="tab-item active" data-page="home">
+        <span class="tab-icon">🏠</span>
+        <span class="tab-label">首页</span>
+      </button>
+      <button class="tab-item" data-page="checkin">
+        <span class="tab-icon">✍️</span>
+        <span class="tab-label">打卡</span>
+      </button>
+      <button class="tab-item" data-page="report">
+        <span class="tab-icon">📊</span>
+        <span class="tab-label">报告</span>
+      </button>
+      <button class="tab-item" data-page="profile">
+        <span class="tab-icon">👤</span>
+        <span class="tab-label">我的</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>
