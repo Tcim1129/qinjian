@@ -1,6 +1,6 @@
-"""文件上传接口"""
 import os
 import uuid
+import mimetypes
 import aiofiles
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 
@@ -31,21 +31,25 @@ async def upload_voice(file: UploadFile = File(...), user: User = Depends(get_cu
 
 
 async def _save_file(file: UploadFile, subdir: str) -> dict:
-    """保存文件到本地并返回URL"""
-    # 检查文件大小
-    content = await file.read()
-    if len(content) > settings.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail=f"文件大小超过限制 ({settings.MAX_FILE_SIZE // 1024 // 1024}MB)")
-
-    # 生成唯一文件名
-    ext = os.path.splitext(file.filename or "file")[1] or ".bin"
+    """保存文件到本地并返回URL（流式写入，防止大文件导致OOM）"""
+    ext = mimetypes.guess_extension(file.content_type)
+    if not ext:
+        ext = os.path.splitext(file.filename or "file")[1] or ".bin"
+        
     filename = f"{uuid.uuid4().hex}{ext}"
     dir_path = os.path.join(settings.UPLOAD_DIR, subdir)
     os.makedirs(dir_path, exist_ok=True)
     file_path = os.path.join(dir_path, filename)
 
+    total_size = 0
     async with aiofiles.open(file_path, "wb") as f:
-        await f.write(content)
+        while chunk := await file.read(1024 * 1024):  # 每次读取 1MB
+            total_size += len(chunk)
+            if total_size > settings.MAX_FILE_SIZE:
+                # 清除已写入的残缺文件
+                os.remove(file_path)
+                raise HTTPException(status_code=400, detail=f"文件大小超过限制 ({settings.MAX_FILE_SIZE // 1024 // 1024}MB)")
+            await f.write(chunk)
 
     url = f"/uploads/{subdir}/{filename}"
-    return {"url": url, "filename": filename, "size": len(content)}
+    return {"url": url, "filename": filename, "size": total_size}

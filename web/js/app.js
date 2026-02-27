@@ -415,33 +415,87 @@ async function triggerReport() {
     if (!state.pair) return;
     const btn = document.getElementById('home-report-btn');
     btn.disabled = true;
-    btn.textContent = 'AI 分析中...';
+    btn.textContent = '深度分析中...';
 
     try {
-        await api.generateDailyReport(state.pair.id);
-        showToast('报告已生成 📊');
-        showPage('report');
-    } catch (err) { showToast(err.message); }
-    btn.disabled = false;
-    btn.textContent = '查看今日报告 📊';
+        const report = await api.generateDailyReport(state.pair.id);
+        if (report.status === 'pending') {
+            showToast('AI生成中，预计需等几十秒 ⏳', 5000);
+            _pollReportStatus('daily', btn, '查看今日报告 📊', () => showPage('report'));
+        } else {
+            showToast('报告已生成 📊');
+            showPage('report');
+            btn.disabled = false;
+            btn.textContent = '查看今日报告 📊';
+        }
+    } catch (err) {
+        showToast(err.message);
+        btn.disabled = false;
+        btn.textContent = '重新生成报告';
+    }
 }
 
 async function generateWeekly() {
     if (!state.pair) return;
-    showToast('正在生成周报...');
     try {
+        showToast('提取周报特征...');
         const report = await api.generateWeeklyReport(state.pair.id);
-        showWeeklyReport(report);
+        if (report.status === 'pending') {
+            showToast('大模型深入汇总中，请耐心等候...⏳', 5000);
+            _pollReportStatus('weekly', null, null, showWeeklyReport);
+        } else {
+            showWeeklyReport(report);
+        }
     } catch (err) { showToast(err.message); }
 }
 
 async function generateMonthly() {
     if (!state.pair) return;
-    showToast('正在生成月报...');
     try {
+        showToast('提取月报特征...');
         const report = await api.generateMonthlyReport(state.pair.id);
-        showMonthlyReport(report);
+        if (report.status === 'pending') {
+            showToast('计算月度长周期趋势，请稍候...⏳', 5000);
+            _pollReportStatus('monthly', null, null, showMonthlyReport);
+        } else {
+            showMonthlyReport(report);
+        }
     } catch (err) { showToast(err.message); }
+}
+
+function _pollReportStatus(type, btn, btnText, callback) {
+    let attempts = 0;
+    const interval = setInterval(async () => {
+        attempts++;
+        try {
+            const r = await api.getLatestReport(state.pair.id, type);
+            if (r && r.status === 'completed') {
+                clearInterval(interval);
+                showToast(`分析完成 🎉`);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = btnText;
+                }
+                if (callback) callback(r);
+            } else if (r && r.status === 'failed') {
+                clearInterval(interval);
+                showToast('AI 分析失败，可能有网络波动', 4000);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '重新生成报告';
+                }
+            }
+        } catch { /* 忽略瞬时断网错误 */ }
+
+        if (attempts > 30) { // 90 秒超时
+            clearInterval(interval);
+            showToast('请求超时，请稍后刷新页面查看');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '查看/重新生成';
+            }
+        }
+    }, 3000);
 }
 
 function showWeeklyReport(report) {

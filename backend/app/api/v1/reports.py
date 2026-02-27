@@ -1,24 +1,87 @@
 """报告接口（Phase 2 增强：支持日报/周报/月报 + 趋势查询）"""
+import uuid
+import logging
 from datetime import date, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, async_session
 from app.api.deps import get_current_user
-from app.models import User, Pair, Checkin, Report, ReportType, PairStatus
+from app.models import User, Pair, Checkin, Report, ReportType, PairStatus, ReportStatus
 from app.schemas import ReportResponse
 from app.ai.reporter import generate_daily_report, generate_weekly_report, generate_monthly_report
 
 router = APIRouter(prefix="/reports", tags=["报告"])
+logger = logging.getLogger(__name__)
+
+
+async def _process_daily_report(report_id: uuid.UUID, pair_type: str, content_a: str, content_b: str):
+    async with async_session() as db:
+        result = await db.execute(select(Report).where(Report.id == report_id))
+        report = result.scalar_one_or_none()
+        if not report:
+            return
+        
+        try:
+            report_content = await generate_daily_report(
+                pair_type=pair_type,
+                content_a=content_a,
+                content_b=content_b,
+            )
+            report.content = report_content
+            report.health_score = report_content.get("health_score")
+            report.status = ReportStatus.COMPLETED
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Daily report generation failed for {report_id}: {str(e)}")
+            report.status = ReportStatus.FAILED
+            await db.commit()
+
+
+async def _process_weekly_report(report_id: uuid.UUID, pair_type: str, daily_reports: list):
+    async with async_session() as db:
+        result = await db.execute(select(Report).where(Report.id == report_id))
+        report = result.scalar_one_or_none()
+        if not report:
+            return
+        
+        try:
+            report_content = await generate_weekly_report(pair_type, daily_reports)
+            report.content = report_content
+            report.health_score = report_content.get("overall_health_score")
+            report.status = ReportStatus.COMPLETED
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Weekly report generation failed for {report_id}: {str(e)}")
+            report.status = ReportStatus.FAILED
+            await db.commit()
+
+
+async def _process_monthly_report(report_id: uuid.UUID, pair_type: str, weekly_reports: list):
+    async with async_session() as db:
+        result = await db.execute(select(Report).where(Report.id == report_id))
+        report = result.scalar_one_or_none()
+        if not report:
+            return
+        
+        try:
+            report_content = await generate_monthly_report(pair_type, weekly_reports)
+            report.content = report_content
+            report.health_score = report_content.get("overall_health_score")
+            report.status = ReportStatus.COMPLETED
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Monthly report generation failed for {report_id}: {str(e)}")
+            report.status = ReportStatus.FAILED
+            await db.commit()
 
 
 @router.post("/generate-daily", response_model=ReportResponse)
-async def trigger_daily_report(pair_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """手动触发生成今日报告（双方打卡完成后可调用）"""
+async def trigger_daily_report(pair_id: str, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """手动触发生成今日报告（异步，使用后台任务以防阻塞）"""
     today = date.today()
 
-    # 获取今日双方打卡
     result = await db.execute(
         select(Checkin).where(Checkin.pair_id == pair_id, Checkin.checkin_date == today)
     )
@@ -26,56 +89,55 @@ async def trigger_daily_report(pair_id: str, user: User = Depends(get_current_us
     if len(checkins) < 2:
         raise HTTPException(status_code=400, detail="需要双方都完成打卡后才能生成报告")
 
-    # 获取配对信息
     result = await db.execute(select(Pair).where(Pair.id == pair_id))
     pair = result.scalar_one_or_none()
     if not pair:
         raise HTTPException(status_code=404, detail="配对不存在")
 
-    # 检查是否已生成
+    # 检查是否已有生成中或已生成的
     result = await db.execute(
         select(Report).where(Report.pair_id == pair_id, Report.report_date == today, Report.type == ReportType.DAILY)
     )
     existing = result.scalar_one_or_none()
     if existing:
-        return existing
+        if existing.status == ReportStatus.FAILED:
+            await db.delete(existing)
+            await db.flush()
+        else:
+            return existing
 
-    # 分离双方打卡
     checkin_a = next((c for c in checkins if c.user_id == pair.user_a_id), checkins[0])
     checkin_b = next((c for c in checkins if c.user_id == pair.user_b_id), checkins[-1])
 
-    # 调用 AI 生成报告
-    report_content = await generate_daily_report(
-        pair_type=pair.type.value,
-        content_a=checkin_a.content,
-        content_b=checkin_b.content,
-    )
-
+    # 插入 PENDING 数据
     report = Report(
         pair_id=pair_id,
         type=ReportType.DAILY,
-        content=report_content,
-        health_score=report_content.get("health_score"),
+        status=ReportStatus.PENDING,
+        content=None,
+        health_score=None,
         report_date=today,
     )
     db.add(report)
-    await db.flush()
+    await db.commit()
+    await db.refresh(report)
+
+    background_tasks.add_task(_process_daily_report, report.id, pair.type.value, checkin_a.content, checkin_b.content)
+
     return report
 
 
 @router.post("/generate-weekly", response_model=ReportResponse)
-async def trigger_weekly_report(pair_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """生成周报（基于过去7天的日报汇总）"""
+async def trigger_weekly_report(pair_id: str, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """生成周报（基于过去7天的日报汇总，异步后台任务）"""
     today = date.today()
     week_ago = today - timedelta(days=7)
 
-    # 获取配对
     result = await db.execute(select(Pair).where(Pair.id == pair_id))
     pair = result.scalar_one_or_none()
     if not pair:
         raise HTTPException(status_code=404, detail="配对不存在")
 
-    # 检查是否已生成本周报告
     result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
@@ -85,38 +147,45 @@ async def trigger_weekly_report(pair_id: str, user: User = Depends(get_current_u
     )
     existing = result.scalar_one_or_none()
     if existing:
-        return existing
+        if existing.status == ReportStatus.FAILED:
+            await db.delete(existing)
+            await db.flush()
+        else:
+            return existing
 
-    # 获取过去7天的日报
     result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
             Report.report_date >= week_ago,
             Report.type == ReportType.DAILY,
+            Report.status == ReportStatus.COMPLETED,
         ).order_by(Report.report_date)
     )
-    daily_reports = [r.content for r in result.scalars().all()]
+    daily_reports = [r.content for r in result.scalars().all() if r.content]
 
     if len(daily_reports) < 3:
-        raise HTTPException(status_code=400, detail="至少需要3天的日报数据才能生成周报")
-
-    report_content = await generate_weekly_report(pair.type.value, daily_reports)
+        raise HTTPException(status_code=400, detail="至少需要3天的完整日报数据才能生成周报")
 
     report = Report(
         pair_id=pair_id,
         type=ReportType.WEEKLY,
-        content=report_content,
-        health_score=report_content.get("overall_health_score"),
+        status=ReportStatus.PENDING,
+        content=None,
+        health_score=None,
         report_date=today,
     )
     db.add(report)
-    await db.flush()
+    await db.commit()
+    await db.refresh(report)
+
+    background_tasks.add_task(_process_weekly_report, report.id, pair.type.value, daily_reports)
+
     return report
 
 
 @router.post("/generate-monthly", response_model=ReportResponse)
-async def trigger_monthly_report(pair_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """生成月报（基于过去30天的周报汇总）"""
+async def trigger_monthly_report(pair_id: str, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """生成月报（基于过去30天的周报汇总，异步后台任务）"""
     today = date.today()
     month_ago = today - timedelta(days=30)
 
@@ -125,30 +194,48 @@ async def trigger_monthly_report(pair_id: str, user: User = Depends(get_current_
     if not pair:
         raise HTTPException(status_code=404, detail="配对不存在")
 
-    # 获取过去30天的周报
+    result = await db.execute(
+        select(Report).where(
+            Report.pair_id == pair_id,
+            Report.report_date >= month_ago,
+            Report.type == ReportType.MONTHLY,
+        ).order_by(Report.report_date)
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        if existing.status == ReportStatus.FAILED:
+            await db.delete(existing)
+            await db.flush()
+        else:
+            return existing
+
     result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
             Report.report_date >= month_ago,
             Report.type == ReportType.WEEKLY,
+            Report.status == ReportStatus.COMPLETED,
         ).order_by(Report.report_date)
     )
-    weekly_reports = [r.content for r in result.scalars().all()]
+    weekly_reports = [r.content for r in result.scalars().all() if r.content]
 
     if len(weekly_reports) < 2:
-        raise HTTPException(status_code=400, detail="至少需要2周的数据才能生成月报")
-
-    report_content = await generate_monthly_report(pair.type.value, weekly_reports)
+        raise HTTPException(status_code=400, detail="至少需要2周的完整数据才能生成月报")
 
     report = Report(
         pair_id=pair_id,
         type=ReportType.MONTHLY,
-        content=report_content,
-        health_score=report_content.get("overall_health_score"),
+        status=ReportStatus.PENDING,
+        content=None,
+        health_score=None,
         report_date=today,
     )
     db.add(report)
-    await db.flush()
+    await db.commit()
+    await db.refresh(report)
+
+    background_tasks.add_task(_process_monthly_report, report.id, pair.type.value, weekly_reports)
+
     return report
 
 
@@ -170,8 +257,8 @@ async def get_report_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取报告历史"""
-    query = select(Report).where(Report.pair_id == pair_id)
+    """获取报告历史（仅返回生成的）"""
+    query = select(Report).where(Report.pair_id == pair_id, Report.status == ReportStatus.COMPLETED)
     if report_type in ("daily", "weekly", "monthly"):
         query = query.where(Report.type == ReportType(report_type))
     query = query.order_by(Report.report_date.desc()).limit(limit)
@@ -189,6 +276,7 @@ async def get_health_trend(pair_id: str, days: int = 14, user: User = Depends(ge
         .where(
             Report.pair_id == pair_id,
             Report.type == ReportType.DAILY,
+            Report.status == ReportStatus.COMPLETED,
             Report.report_date >= since,
             Report.health_score.isnot(None),
         )
@@ -201,8 +289,8 @@ async def get_health_trend(pair_id: str, days: int = 14, user: User = Depends(ge
     if len(trend_data) >= 2:
         recent = [d["score"] for d in trend_data[-3:]]
         older = [d["score"] for d in trend_data[:3]]
-        avg_recent = sum(recent) / len(recent)
-        avg_older = sum(older) / len(older)
+        avg_recent = sum(recent) / len(recent) if recent else 0
+        avg_older = sum(older) / len(older) if older else 0
         if avg_recent - avg_older > 5:
             direction = "improving"
         elif avg_older - avg_recent > 5:

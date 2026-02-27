@@ -87,7 +87,8 @@ class ReportResponse(BaseModel):
     id: uuid.UUID
     pair_id: uuid.UUID
     type: str
-    content: dict
+    status: str
+    content: dict | None = None
     health_score: float | None = None
     report_date: date
     created_at: datetime

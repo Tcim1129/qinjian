@@ -30,6 +30,12 @@ class ReportType(str, PyEnum):
     MONTHLY = "monthly"
 
 
+class ReportStatus(str, PyEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # ── 模型 ──
 
 class User(Base):
@@ -87,7 +93,8 @@ class Report(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
     type: Mapped[ReportType] = mapped_column(Enum(ReportType))
-    content: Mapped[dict] = mapped_column(JSON)  # AI生成的报告JSON
+    status: Mapped[ReportStatus] = mapped_column(Enum(ReportStatus), default=ReportStatus.COMPLETED)
+    content: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # AI生成的报告JSON，可能为空
     health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     report_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
