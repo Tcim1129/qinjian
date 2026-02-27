@@ -1,7 +1,6 @@
 """打卡系统接口（Phase 3 增强：支持非对称打卡 + 个人情感日记）"""
-import asyncio
 from datetime import date, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +15,7 @@ router = APIRouter(prefix="/checkins", tags=["打卡"])
 
 
 @router.post("/", response_model=CheckinResponse)
-async def create_checkin(req: CheckinRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def create_checkin(req: CheckinRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """提交每日打卡（含自动AI情感分析 + 双方完成检测 + 单方solo日记）"""
     # 验证配对存在且用户属于该配对
     result = await db.execute(select(Pair).where(Pair.id == req.pair_id, Pair.status == PairStatus.ACTIVE))
@@ -50,7 +49,7 @@ async def create_checkin(req: CheckinRequest, user: User = Depends(get_current_u
     await db.flush()
 
     # 异步执行 AI 情感分析（不阻塞响应）
-    asyncio.create_task(_run_sentiment_analysis(str(checkin.id), req.content))
+    background_tasks.add_task(_run_sentiment_analysis, str(checkin.id), req.content)
 
     # 检查对方是否也打卡完毕
     partner_result = await db.execute(
@@ -64,27 +63,16 @@ async def create_checkin(req: CheckinRequest, user: User = Depends(get_current_u
 
     if partner_checkin:
         # 双方都完成 → 自动生成日报（后台不阻塞）
-        asyncio.create_task(_auto_generate_daily(
-            pair_id=str(req.pair_id),
-            pair_type=pair.type.value,
-            checkin_a_content=checkin.content if user.id == pair.user_a_id else partner_checkin.content,
-            checkin_b_content=partner_checkin.content if user.id == pair.user_a_id else checkin.content,
-        ))
+        checkin_a_content = checkin.content if user.id == pair.user_a_id else partner_checkin.content
+        checkin_b_content = partner_checkin.content if user.id == pair.user_a_id else checkin.content
+        background_tasks.add_task(_auto_generate_daily, str(req.pair_id), pair.type.value, checkin_a_content, checkin_b_content)
     else:
         # 仅单方打卡 → 生成个人情感日记
-        asyncio.create_task(_auto_generate_solo(
-            pair_id=str(req.pair_id),
-            pair_type=pair.type.value,
-            content=checkin.content,
-        ))
+        background_tasks.add_task(_auto_generate_solo, str(req.pair_id), pair.type.value, checkin.content)
 
     # 关系树成长
     from app.api.v1.tree import grow_tree_on_checkin
-    asyncio.create_task(grow_tree_on_checkin(
-        pair_id=str(req.pair_id),
-        both_done=partner_checkin is not None,
-        streak=0,  # 简化处理，streak 由后台函数内部查询
-    ))
+    background_tasks.add_task(grow_tree_on_checkin, str(req.pair_id), partner_checkin is not None, 0)
 
     return checkin
 

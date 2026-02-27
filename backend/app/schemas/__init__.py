@@ -1,7 +1,7 @@
 """Pydantic 请求/响应模型"""
 import uuid
 from datetime import date, datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 # ── 认证 ──
