@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.v1 import auth, pairs, checkins, reports, upload
+from app.api.v1 import auth, pairs, checkins, reports, upload, tree
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.include_router(pairs.router, prefix="/api/v1")
 app.include_router(checkins.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
+app.include_router(tree.router, prefix="/api/v1")
 
 
 @app.get("/api/health")

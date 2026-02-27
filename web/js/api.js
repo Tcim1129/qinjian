@@ -134,6 +134,15 @@ class ApiClient {
     async getHealthTrend(pairId, days = 14) {
         return this.request('GET', `/reports/trend?pair_id=${pairId}&days=${days}`);
     }
+
+    // ── 关系树 ──
+    async getTreeStatus(pairId) {
+        return this.request('GET', `/tree/status?pair_id=${pairId}`);
+    }
+
+    async waterTree(pairId) {
+        return this.request('POST', `/tree/water?pair_id=${pairId}`);
+    }
 }
 
 const api = new ApiClient();

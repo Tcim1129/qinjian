@@ -139,6 +139,22 @@
         </button>
       </div>
 
+      <!-- 关系树 -->
+      <div id="tree-card" class="card" style="text-align: center; padding: 24px; display: none">
+        <div id="tree-visual" style="font-size: 56px; margin-bottom: 8px">🌰</div>
+        <div id="tree-level" style="font-size: 16px; font-weight: 600; margin-bottom: 4px">种子</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px">
+          成长值 <span id="tree-points">0</span>
+        </div>
+        <div
+          style="background: var(--border-light); border-radius: var(--radius-full); height: 8px; overflow: hidden; margin-bottom: 14px">
+          <div id="tree-progress-bar"
+            style="height: 100%; background: var(--gradient-primary); border-radius: var(--radius-full); transition: width 0.6s ease; width: 0%">
+          </div>
+        </div>
+        <button id="tree-water-btn" class="btn btn-sm btn-secondary" style="font-size: 13px">💧 浇水</button>
+      </div>
+
       <!-- 生成报告按钮 -->
       <button id="home-report-btn" class="btn btn-secondary btn-block" style="display: none; margin-bottom: 16px">
         查看今日报告 📊
@@ -214,7 +230,7 @@
         <div class="empty-state">
           <div class="empty-icon">📊</div>
           <div class="empty-title">暂无报告</div>
-          <div class="empty-desc">双方完成打卡后即可生成 AI 健康报告</div>
+          <div class="empty-desc">每次打卡即可生成个人日记，双方完成后还有关系健康报告</div>
         </div>
       </div>
     </div>

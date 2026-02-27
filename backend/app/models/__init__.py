@@ -28,6 +28,7 @@ class ReportType(str, PyEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"
+    SOLO = "solo"        # 单方打卡的个人情感日记
 
 
 class ReportStatus(str, PyEnum):
@@ -101,3 +102,46 @@ class Report(Base):
 
     # 关系
     pair: Mapped["Pair"] = relationship(back_populates="reports")
+
+
+# ── 关系树（游戏化） ──
+
+class TreeLevel(str, PyEnum):
+    SEED = "seed"           # 种子  0-49
+    SPROUT = "sprout"       # 嫩芽  50-149
+    SAPLING = "sapling"     # 树苗  150-349
+    TREE = "tree"           # 小树  350-699
+    BLOSSOM = "blossom"     # 花开  700+
+
+
+TREE_LEVEL_THRESHOLDS = [
+    (0, TreeLevel.SEED),
+    (50, TreeLevel.SPROUT),
+    (150, TreeLevel.SAPLING),
+    (350, TreeLevel.TREE),
+    (700, TreeLevel.BLOSSOM),
+]
+
+
+def calc_tree_level(points: int) -> TreeLevel:
+    """根据成长值计算等级"""
+    level = TreeLevel.SEED
+    for threshold, lvl in TREE_LEVEL_THRESHOLDS:
+        if points >= threshold:
+            level = lvl
+    return level
+
+
+class RelationshipTree(Base):
+    __tablename__ = "relationship_trees"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"), unique=True)
+    growth_points: Mapped[int] = mapped_column(default=0)
+    level: Mapped[TreeLevel] = mapped_column(Enum(TreeLevel), default=TreeLevel.SEED)
+    milestones: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=lambda: [])
+    last_watered: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    # 关系
+    pair: Mapped["Pair"] = relationship()

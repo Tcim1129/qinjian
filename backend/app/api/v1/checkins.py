@@ -1,4 +1,4 @@
-"""打卡系统接口（Phase 2 增强版）"""
+"""打卡系统接口（Phase 3 增强：支持非对称打卡 + 个人情感日记）"""
 import asyncio
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,17 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import get_current_user
-from app.models import User, Pair, Checkin, Report, PairStatus, ReportType
+from app.models import User, Pair, Checkin, Report, PairStatus, ReportType, ReportStatus
 from app.schemas import CheckinRequest, CheckinResponse
 from app.ai import analyze_sentiment
-from app.ai.reporter import generate_daily_report
+from app.ai.reporter import generate_daily_report, generate_solo_report
 
 router = APIRouter(prefix="/checkins", tags=["打卡"])
 
 
 @router.post("/", response_model=CheckinResponse)
 async def create_checkin(req: CheckinRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """提交每日打卡（含自动AI情感分析 + 双方完成检测）"""
+    """提交每日打卡（含自动AI情感分析 + 双方完成检测 + 单方solo日记）"""
     # 验证配对存在且用户属于该配对
     result = await db.execute(select(Pair).where(Pair.id == req.pair_id, Pair.status == PairStatus.ACTIVE))
     pair = result.scalar_one_or_none()
@@ -52,7 +52,7 @@ async def create_checkin(req: CheckinRequest, user: User = Depends(get_current_u
     # 异步执行 AI 情感分析（不阻塞响应）
     asyncio.create_task(_run_sentiment_analysis(str(checkin.id), req.content))
 
-    # 检查对方是否也打卡完毕 → 自动生成日报
+    # 检查对方是否也打卡完毕
     partner_result = await db.execute(
         select(Checkin).where(
             Checkin.pair_id == req.pair_id,
@@ -70,6 +70,21 @@ async def create_checkin(req: CheckinRequest, user: User = Depends(get_current_u
             checkin_a_content=checkin.content if user.id == pair.user_a_id else partner_checkin.content,
             checkin_b_content=partner_checkin.content if user.id == pair.user_a_id else checkin.content,
         ))
+    else:
+        # 仅单方打卡 → 生成个人情感日记
+        asyncio.create_task(_auto_generate_solo(
+            pair_id=str(req.pair_id),
+            pair_type=pair.type.value,
+            content=checkin.content,
+        ))
+
+    # 关系树成长
+    from app.api.v1.tree import grow_tree_on_checkin
+    asyncio.create_task(grow_tree_on_checkin(
+        pair_id=str(req.pair_id),
+        both_done=partner_checkin is not None,
+        streak=0,  # 简化处理，streak 由后台函数内部查询
+    ))
 
     return checkin
 
@@ -97,12 +112,23 @@ async def get_today_status(pair_id: str, user: User = Depends(get_current_user),
     )
     has_report = report_result.scalar_one_or_none() is not None
 
+    # 检查是否已有 solo 日记
+    solo_result = await db.execute(
+        select(Report).where(
+            Report.pair_id == pair_id,
+            Report.report_date == today,
+            Report.type == ReportType.SOLO,
+        )
+    )
+    has_solo_report = solo_result.scalar_one_or_none() is not None
+
     return {
         "date": str(today),
         "my_done": my_done,
         "partner_done": partner_done,
         "both_done": both_done,
         "has_report": has_report,
+        "has_solo_report": has_solo_report,
     }
 
 
@@ -151,7 +177,6 @@ async def _run_sentiment_analysis(checkin_id: str, content: str):
     """后台 AI 情感分析（更新 sentiment_score）"""
     try:
         result = await analyze_sentiment(content)
-        # 这里简化处理，生产环境应该用独立的数据库会话
         from app.core.database import async_session
         async with async_session() as db:
             from sqlalchemy import update
@@ -170,23 +195,61 @@ async def _auto_generate_daily(pair_id: str, pair_type: str, checkin_a_content: 
     try:
         from app.core.database import async_session
         async with async_session() as db:
-            # 检查是否已有报告
             today = date.today()
             result = await db.execute(
                 select(Report).where(Report.pair_id == pair_id, Report.report_date == today, Report.type == ReportType.DAILY)
             )
             if result.scalar_one_or_none():
-                return  # 已有报告
+                return
 
-            report_content = await generate_daily_report(pair_type, checkin_a_content, checkin_b_content)
             report = Report(
                 pair_id=pair_id,
                 type=ReportType.DAILY,
-                content=report_content,
-                health_score=report_content.get("health_score"),
+                status=ReportStatus.PENDING,
+                content=None,
                 report_date=today,
             )
             db.add(report)
             await db.commit()
+            await db.refresh(report)
+
+            report_content = await generate_daily_report(pair_type, checkin_a_content, checkin_b_content)
+            report.content = report_content
+            report.health_score = report_content.get("health_score")
+            report.status = ReportStatus.COMPLETED
+            await db.commit()
     except Exception as e:
         print(f"自动生成日报失败: {e}")
+
+
+async def _auto_generate_solo(pair_id: str, pair_type: str, content: str):
+    """后台自动生成个人情感日记（单方打卡时）"""
+    try:
+        from app.core.database import async_session
+        async with async_session() as db:
+            today = date.today()
+            # 检查是否已有
+            result = await db.execute(
+                select(Report).where(Report.pair_id == pair_id, Report.report_date == today, Report.type == ReportType.SOLO)
+            )
+            if result.scalar_one_or_none():
+                return
+
+            report = Report(
+                pair_id=pair_id,
+                type=ReportType.SOLO,
+                status=ReportStatus.PENDING,
+                content=None,
+                report_date=today,
+            )
+            db.add(report)
+            await db.commit()
+            await db.refresh(report)
+
+            report_content = await generate_solo_report(pair_type, content)
+            report.content = report_content
+            report.health_score = report_content.get("health_score")
+            report.status = ReportStatus.COMPLETED
+            await db.commit()
+    except Exception as e:
+        print(f"自动生成个人日记失败: {e}")

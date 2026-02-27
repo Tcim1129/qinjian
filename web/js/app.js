@@ -147,6 +147,56 @@ async function loadHome() {
     } catch (err) {
         console.error('加载首页失败', err);
     }
+
+    // 关系树（独立加载，不阻塞主流程）
+    loadTree();
+}
+
+async function loadTree() {
+    if (!state.pair) return;
+    try {
+        const tree = await api.getTreeStatus(state.pair.id);
+        renderTree(tree);
+    } catch { /* 静默失败 */ }
+}
+
+function renderTree(tree) {
+    const card = document.getElementById('tree-card');
+    if (!card) return;
+    card.style.display = 'block';
+
+    document.getElementById('tree-visual').textContent = tree.level_emoji || '🌰';
+    document.getElementById('tree-level').textContent = tree.level_name || '种子';
+    document.getElementById('tree-points').textContent = tree.growth_points || 0;
+
+    const bar = document.getElementById('tree-progress-bar');
+    bar.style.width = `${tree.progress_percent || 0}%`;
+
+    const btn = document.getElementById('tree-water-btn');
+    if (tree.can_water) {
+        btn.disabled = false;
+        btn.textContent = '💧 浇水';
+        btn.onclick = waterTree;
+    } else {
+        btn.disabled = true;
+        btn.textContent = '✅ 今日已浇水';
+    }
+}
+
+async function waterTree() {
+    if (!state.pair) return;
+    const btn = document.getElementById('tree-water-btn');
+    btn.disabled = true;
+    btn.textContent = '浇水中...';
+    try {
+        const result = await api.waterTree(state.pair.id);
+        showToast(`${result.level_emoji} +${result.points_added} 成长值${result.level_up ? ' 🎉 升级了！' : ''}`);
+        loadTree();
+    } catch (err) {
+        showToast(err.message);
+        btn.disabled = false;
+        btn.textContent = '💧 浇水';
+    }
 }
 
 function renderHomeStatus(status, streak) {
@@ -172,16 +222,26 @@ function renderHomeStatus(status, streak) {
     const streakEl = document.getElementById('streak-count');
     if (streakEl) streakEl.textContent = streak.streak || 0;
 
-    // 双方都完成 → 显示报告按钮
+    // 报告按钮逻辑
     const reportBtn = document.getElementById('home-report-btn');
     if (status.both_done) {
         reportBtn.style.display = 'block';
         if (status.has_report) {
             reportBtn.textContent = '查看今日报告 📊';
+            reportBtn.onclick = () => showPage('report');
         } else {
             reportBtn.textContent = 'AI 正在生成报告...✨';
-            // 轮询检查报告
             _pollForReport();
+        }
+    } else if (status.my_done && !status.partner_done) {
+        // 单方打卡 → 显示个人情感日记入口
+        reportBtn.style.display = 'block';
+        if (status.has_solo_report) {
+            reportBtn.textContent = '查看个人情感日记 📖';
+            reportBtn.onclick = () => { state.viewSolo = true; showPage('report'); };
+        } else {
+            reportBtn.textContent = '个人日记生成中...📖';
+            _pollForSoloReport();
         }
     } else {
         reportBtn.style.display = 'none';
@@ -196,7 +256,24 @@ async function _pollForReport() {
             if (status.has_report) {
                 const btn = document.getElementById('home-report-btn');
                 btn.textContent = '查看今日报告 📊';
+                btn.onclick = () => showPage('report');
                 showToast('AI 报告已生成 🎉');
+                return;
+            }
+        } catch { break; }
+    }
+}
+
+async function _pollForSoloReport() {
+    for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+            const status = await api.getTodayStatus(state.pair.id);
+            if (status.has_solo_report) {
+                const btn = document.getElementById('home-report-btn');
+                btn.textContent = '查看个人情感日记 📖';
+                btn.onclick = () => { state.viewSolo = true; showPage('report'); };
+                showToast('你的个人日记已生成 📖');
                 return;
             }
         } catch { break; }
@@ -284,24 +361,38 @@ async function loadReports() {
     if (!state.pair) return;
     const container = document.getElementById('report-content');
 
+    // 如果从首页点击了 solo 日记入口
+    if (state.viewSolo) {
+        state.viewSolo = false;
+        try {
+            const soloReport = await api.getLatestReport(state.pair.id, 'solo').catch(() => null);
+            if (soloReport && soloReport.status === 'completed') {
+                renderSoloReport(soloReport);
+                return;
+            }
+        } catch { }
+    }
+
     try {
-        const [dailyReport, trendData] = await Promise.all([
+        const [dailyReport, soloReport, trendData] = await Promise.all([
             api.getLatestReport(state.pair.id, 'daily').catch(() => null),
+            api.getLatestReport(state.pair.id, 'solo').catch(() => null),
             api.getHealthTrend(state.pair.id, 14).catch(() => ({ trend: [], direction: 'insufficient_data' })),
         ]);
 
-        if (!dailyReport) {
+        if (dailyReport && dailyReport.status === 'completed') {
+            state.latestReport = dailyReport;
+            renderReport(dailyReport, trendData);
+        } else if (soloReport && soloReport.status === 'completed') {
+            renderSoloReport(soloReport);
+        } else {
             container.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">📊</div>
           <div class="empty-title">暂无报告</div>
-          <div class="empty-desc">双方完成打卡后即可生成 AI 健康报告</div>
+          <div class="empty-desc">每次打卡即可生成个人日记，双方完成后还有关系健康报告</div>
         </div>`;
-            return;
         }
-
-        state.latestReport = dailyReport;
-        renderReport(dailyReport, trendData);
     } catch (err) {
         console.error('加载报告失败', err);
     }
@@ -408,6 +499,49 @@ function getMoodEmoji(score) {
     if (score >= 4) return '😐';
     if (score >= 2) return '😔';
     return '😢';
+}
+
+function renderSoloReport(report) {
+    const c = report.content;
+    const container = document.getElementById('report-content');
+
+    container.innerHTML = `
+    <div style="text-align:center;margin-bottom:16px">
+      <span class="btn-sm btn-secondary" onclick="state.viewSolo=false;loadReports()" style="cursor:pointer;border-radius:var(--radius-full);padding:6px 16px;font-size:12px">← 查看关系报告</span>
+    </div>
+
+    <div class="health-gauge">
+      <div class="gauge-circle" style="--score: ${c.health_score || 50}">
+        <span class="gauge-score">${c.health_score || '--'}</span>
+        <span class="gauge-label">个人情绪指数</span>
+      </div>
+    </div>
+
+    <div class="card card-accent" style="text-align:center;">
+      <div style="font-size:28px;margin-bottom:8px">${getMoodEmoji(c.mood?.score)} ${c.mood?.label || ''}</div>
+      <div style="font-size:14px;opacity:0.9">情绪得分 ${c.mood?.score || '--'}/10</div>
+    </div>
+
+    ${c.self_insight ? `<div class="report-insight">${c.self_insight}</div>` : ''}
+
+    ${c.emotional_pattern ? `
+    <div class="card">
+      <h3 style="font-size: 15px; margin-bottom: 8px">🧠 情绪模式解读</h3>
+      <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6">${c.emotional_pattern}</p>
+      ${c.theory_tag ? `<div style="font-size:12px;color:var(--text-muted);margin-top:8px">📚 ${c.theory_tag}</div>` : ''}
+    </div>` : ''}
+
+    ${c.self_care_tip ? `<div class="report-suggestion">${c.self_care_tip}</div>` : ''}
+
+    ${c.relationship_note ? `
+    <div class="card" style="text-align:center">
+      <div style="font-size:14px;line-height:1.6;color:var(--text-secondary)">💕 ${c.relationship_note}</div>
+    </div>` : ''}
+
+    <div style="text-align: center; margin-top: 16px">
+      <span class="privacy-badge">🔒 仅你可见 · 对方无法查看你的个人日记</span>
+    </div>
+  `;
 }
 
 // ── 报告生成 ──
