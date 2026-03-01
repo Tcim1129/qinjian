@@ -1,10 +1,12 @@
 """Pydantic 请求/响应模型"""
+
 import uuid
 from datetime import date, datetime
 from pydantic import BaseModel
 
 
 # ── 认证 ──
+
 
 class RegisterRequest(BaseModel):
     email: str
@@ -24,6 +26,7 @@ class TokenResponse(BaseModel):
 
 # ── 用户 ──
 
+
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -35,6 +38,7 @@ class UserResponse(BaseModel):
 
 
 # ── 配对 ──
+
 
 class PairCreateRequest(BaseModel):
     type: str  # couple / spouse / bestfriend
@@ -51,6 +55,8 @@ class PairResponse(BaseModel):
     type: str
     status: str
     invite_code: str
+    unbind_requested_by: uuid.UUID | None = None
+    unbind_requested_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -58,12 +64,19 @@ class PairResponse(BaseModel):
 
 # ── 打卡 ──
 
+
 class CheckinRequest(BaseModel):
     pair_id: uuid.UUID
     content: str
     mood_tags: list[str] | None = None
     image_url: str | None = None
     voice_url: str | None = None
+    # 结构化四步打卡（计划书§4.1.2 表9）
+    mood_score: int | None = None  # 1-4
+    interaction_freq: int | None = None  # 0-10+
+    interaction_initiative: str | None = None  # "me"/"partner"/"equal"
+    deep_conversation: bool | None = None
+    task_completed: bool | None = None
 
 
 class CheckinResponse(BaseModel):
@@ -75,6 +88,11 @@ class CheckinResponse(BaseModel):
     voice_url: str | None = None
     mood_tags: dict | None = None
     sentiment_score: float | None = None
+    mood_score: int | None = None
+    interaction_freq: int | None = None
+    interaction_initiative: str | None = None
+    deep_conversation: bool | None = None
+    task_completed: bool | None = None
     checkin_date: date
     created_at: datetime
 
@@ -82,6 +100,7 @@ class CheckinResponse(BaseModel):
 
 
 # ── 报告 ──
+
 
 class ReportResponse(BaseModel):
     id: uuid.UUID

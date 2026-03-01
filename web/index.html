@@ -50,7 +50,19 @@
 
     <!-- ═══ 配对页 ═══ -->
     <div id="page-pair" class="page">
-      <div style="text-align: center; padding: 40px 0 30px">
+      <!-- 已有配对列表 -->
+      <div id="existing-pairs" style="display: none">
+        <div style="text-align: center; padding: 20px 0 16px">
+          <h2 style="font-size: 18px; margin-bottom: 4px">你的关系</h2>
+          <p style="font-size: 13px; color: var(--text-muted)">点击切换到对应关系</p>
+        </div>
+        <div id="pairs-list" style="margin-bottom: 16px">
+          <!-- 动态填充 -->
+        </div>
+        <div style="text-align: center; color: var(--text-muted); margin: 16px 0; font-size: 14px">── 或新建关系 ──</div>
+      </div>
+
+      <div style="text-align: center; padding: 40px 0 30px" id="pair-create-header">
         <div style="font-size: 48px; margin-bottom: 12px">🤝</div>
         <h2 style="font-size: 20px; margin-bottom: 8px">建立你们的专属空间</h2>
         <p style="font-size: 14px; color: var(--text-muted)">选择关系类型，邀请你的另一半</p>
@@ -85,8 +97,8 @@
 
       <div class="card">
         <h3 style="font-size: 15px; margin-bottom: 14px">加入已有配对</h3>
-        <input id="pair-join-code" class="form-input" type="text" placeholder="输入8位邀请码" maxlength="8"
-          style="text-align: center; letter-spacing: 4px; font-size: 18px; text-transform: uppercase">
+        <input id="pair-join-code" class="form-input" type="text" placeholder="输入6位数字邀请码" maxlength="6"
+          style="text-align: center; letter-spacing: 4px; font-size: 18px" inputmode="numeric" pattern="[0-9]*">
         <button id="pair-join-btn" class="btn btn-secondary btn-block" style="margin-top: 14px">加入配对</button>
       </div>
     </div>
@@ -104,10 +116,21 @@
 
     <!-- ═══ 首页 ═══ -->
     <div id="page-home" class="page">
+      <!-- 配对选择器 -->
+      <div id="pair-selector" class="card" style="padding: 12px; margin-bottom: 12px; display: none;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px; color: var(--text-muted);">当前关系</span>
+          <select id="pair-select" class="form-input" style="flex: 1; margin-left: 12px; padding: 8px 12px; font-size: 14px;">
+            <!-- 动态填充 -->
+          </select>
+        </div>
+      </div>
+
       <div class="header">
         <div>
           <div class="header-title">亲健</div>
           <div class="header-subtitle">今天也要好好经营关系哦 ✨</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px">⏰ 每日 21:00 打卡提醒</div>
         </div>
         <div class="avatar" onclick="showPage('profile')">我</div>
       </div>
@@ -176,6 +199,84 @@
       </div>
 
       <form id="checkin-form">
+        <div class="card">
+          <!-- Step 1: 情绪评分（计划书§4.1.2） -->
+          <div class="form-group">
+            <label class="form-label">Step 1 · 今天的整体情绪</label>
+            <div class="mood-score-options" style="display:flex;gap:8px;margin-top:8px">
+              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="4">
+                <input type="radio" name="mood-score" value="4" style="display:none">
+                <div style="font-size:20px">😊</div><div style="font-size:12px;margin-top:4px">非常好</div>
+              </label>
+              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="3">
+                <input type="radio" name="mood-score" value="3" style="display:none">
+                <div style="font-size:20px">🙂</div><div style="font-size:12px;margin-top:4px">好</div>
+              </label>
+              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="2">
+                <input type="radio" name="mood-score" value="2" style="display:none">
+                <div style="font-size:20px">😐</div><div style="font-size:12px;margin-top:4px">一般</div>
+              </label>
+              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="1">
+                <input type="radio" name="mood-score" value="1" style="display:none">
+                <div style="font-size:20px">😔</div><div style="font-size:12px;margin-top:4px">不好</div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 2: 互动频率 + 主动方 -->
+          <div class="form-group">
+            <label class="form-label">Step 2 · 今日互动</label>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+              <span style="font-size:13px;color:var(--text-secondary);white-space:nowrap">互动次数</span>
+              <input id="checkin-interaction-freq" class="form-input" type="number" min="0" max="99" placeholder="0" style="width:70px;text-align:center;padding:8px">
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="me">
+                <input type="radio" name="initiative" value="me" style="display:none">
+                <div style="font-size:12px">我主动多</div>
+              </label>
+              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="equal">
+                <input type="radio" name="initiative" value="equal" style="display:none">
+                <div style="font-size:12px">差不多</div>
+              </label>
+              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="partner">
+                <input type="radio" name="initiative" value="partner" style="display:none">
+                <div style="font-size:12px">对方主动多</div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 3: 深度对话 -->
+          <div class="form-group">
+            <label class="form-label">Step 3 · 今天有没有深度对话？</label>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <label class="mood-tag deep-conv-option" style="flex:1;text-align:center;padding:10px 0" data-val="true">
+                <input type="radio" name="deep-conv" value="true" style="display:none">
+                <div style="font-size:12px">有 💬</div>
+              </label>
+              <label class="mood-tag deep-conv-option" style="flex:1;text-align:center;padding:10px 0" data-val="false">
+                <input type="radio" name="deep-conv" value="false" style="display:none">
+                <div style="font-size:12px">没有</div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 4: 任务完成 -->
+          <div class="form-group">
+            <label class="form-label">Step 4 · 完成了上次的关系建议吗？</label>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <label class="mood-tag task-option" style="flex:1;text-align:center;padding:10px 0" data-val="true">
+                <input type="radio" name="task-done" value="true" style="display:none">
+                <div style="font-size:12px">完成了 ✅</div>
+              </label>
+              <label class="mood-tag task-option" style="flex:1;text-align:center;padding:10px 0" data-val="false">
+                <input type="radio" name="task-done" value="false" style="display:none">
+                <div style="font-size:12px">还没有</div>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="form-group">
             <label class="form-label">今天想说什么？</label>
@@ -266,6 +367,13 @@
             <span class="privacy-badge">🔒 已开启</span>
           </div>
         </div>
+      </div>
+
+      <!-- 解绑区域（计划书§9.1） -->
+      <div id="unbind-section" class="card" style="display:none">
+        <h3 style="font-size:15px;margin-bottom:12px;color:var(--text-secondary)">解绑管理</h3>
+        <div id="unbind-status-text" style="font-size:13px;color:var(--text-muted);margin-bottom:12px"></div>
+        <div id="unbind-actions" style="display:flex;gap:8px"></div>
       </div>
 
       <button onclick="api.logout(); showPage('auth'); document.getElementById('tab-bar').style.display='none'"

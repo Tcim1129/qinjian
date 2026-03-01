@@ -1,4 +1,5 @@
 """数据模型 - SQLAlchemy ORM"""
+
 import uuid
 from datetime import date, datetime, timezone
 from enum import Enum as PyEnum
@@ -12,9 +13,10 @@ from app.core.database import Base
 
 # ── 枚举 ──
 
+
 class PairType(str, PyEnum):
-    COUPLE = "couple"       # 情侣
-    SPOUSE = "spouse"       # 夫妻
+    COUPLE = "couple"  # 情侣
+    SPOUSE = "spouse"  # 夫妻
     BESTFRIEND = "bestfriend"  # 挚友
 
 
@@ -28,7 +30,7 @@ class ReportType(str, PyEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"
-    SOLO = "solo"        # 单方打卡的个人情感日记
+    SOLO = "solo"  # 单方打卡的个人情感日记
 
 
 class ReportStatus(str, PyEnum):
@@ -39,15 +41,20 @@ class ReportStatus(str, PyEnum):
 
 # ── 模型 ──
 
+
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     nickname: Mapped[str] = mapped_column(String(50))
     password_hash: Mapped[str] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # 关系
     checkins: Mapped[list["Checkin"]] = relationship(back_populates="user")
@@ -56,13 +63,42 @@ class User(Base):
 class Pair(Base):
     __tablename__ = "pairs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     user_a_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    user_b_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_b_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     type: Mapped[PairType] = mapped_column(Enum(PairType))
-    status: Mapped[PairStatus] = mapped_column(Enum(PairStatus), default=PairStatus.PENDING)
-    invite_code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    status: Mapped[PairStatus] = mapped_column(
+        Enum(PairStatus), default=PairStatus.PENDING
+    )
+    invite_code: Mapped[str] = mapped_column(
+        String(6), unique=True, index=True
+    )  # 6位数字绑定码（计划书§4.1.1）
+    # ── 解绑字段（计划书§9.1：双方确认或7天冷静期）──
+    unbind_requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    unbind_requested_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    user_a_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    user_b_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    type: Mapped[PairType] = mapped_column(Enum(PairType))
+    status: Mapped[PairStatus] = mapped_column(
+        Enum(PairStatus), default=PairStatus.PENDING
+    )
+    invite_code: Mapped[str] = mapped_column(
+        String(6), unique=True, index=True
+    )  # 6位数字绑定码
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # 关系
     checkins: Mapped[list["Checkin"]] = relationship(back_populates="pair")
@@ -72,7 +108,9 @@ class Pair(Base):
 class Checkin(Base):
     __tablename__ = "checkins"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     content: Mapped[str] = mapped_column(Text)  # 打卡文字内容
@@ -80,8 +118,28 @@ class Checkin(Base):
     voice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # 语音URL
     mood_tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # 情绪标签
     sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # ── 结构化四步打卡字段（计划书§4.1.2 表9）──
+    mood_score: Mapped[int | None] = mapped_column(
+        nullable=True
+    )  # 情绪评分 1-4（非常好/好/一般/不好）
+    interaction_freq: Mapped[int | None] = mapped_column(
+        nullable=True
+    )  # 今日互动次数 0-10+
+    interaction_initiative: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )  # 主动方: "me"/"partner"/"equal"
+    deep_conversation: Mapped[bool | None] = mapped_column(
+        nullable=True
+    )  # 今日是否有深度对话
+    task_completed: Mapped[bool | None] = mapped_column(
+        nullable=True
+    )  # 是否完成关系任务
+
     checkin_date: Mapped[date] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # 关系
     user: Mapped["User"] = relationship(back_populates="checkins")
@@ -91,14 +149,22 @@ class Checkin(Base):
 class Report(Base):
     __tablename__ = "reports"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
     type: Mapped[ReportType] = mapped_column(Enum(ReportType))
-    status: Mapped[ReportStatus] = mapped_column(Enum(ReportStatus), default=ReportStatus.COMPLETED)
-    content: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # AI生成的报告JSON，可能为空
+    status: Mapped[ReportStatus] = mapped_column(
+        Enum(ReportStatus), default=ReportStatus.COMPLETED
+    )
+    content: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True
+    )  # AI生成的报告JSON，可能为空
     health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     report_date: Mapped[date] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # 关系
     pair: Mapped["Pair"] = relationship(back_populates="reports")
@@ -106,12 +172,14 @@ class Report(Base):
 
 # ── 关系树（游戏化） ──
 
+
 class TreeLevel(str, PyEnum):
-    SEED = "seed"           # 种子  0-49
-    SPROUT = "sprout"       # 嫩芽  50-149
-    SAPLING = "sapling"     # 树苗  150-349
-    TREE = "tree"           # 小树  350-699
-    BLOSSOM = "blossom"     # 花开  700+
+    SEED = "seed"  # 种子  0-49      （计划书§4.4 六级成长体系）
+    SPROUT = "sprout"  # 萌芽  50-149
+    SAPLING = "sapling"  # 幼苗  150-349
+    TREE = "tree"  # 小树  350-699
+    BIG_TREE = "big_tree"  # 大树  700-1199
+    FOREST = "forest"  # 森林  1200+
 
 
 TREE_LEVEL_THRESHOLDS = [
@@ -119,7 +187,8 @@ TREE_LEVEL_THRESHOLDS = [
     (50, TreeLevel.SPROUT),
     (150, TreeLevel.SAPLING),
     (350, TreeLevel.TREE),
-    (700, TreeLevel.BLOSSOM),
+    (700, TreeLevel.BIG_TREE),
+    (1200, TreeLevel.FOREST),
 ]
 
 
@@ -135,13 +204,19 @@ def calc_tree_level(points: int) -> TreeLevel:
 class RelationshipTree(Base):
     __tablename__ = "relationship_trees"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"), unique=True)
     growth_points: Mapped[int] = mapped_column(default=0)
     level: Mapped[TreeLevel] = mapped_column(Enum(TreeLevel), default=TreeLevel.SEED)
-    milestones: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=lambda: [])
+    milestones: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, default=lambda: []
+    )
     last_watered: Mapped[date | None] = mapped_column(Date, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # 关系
     pair: Mapped["Pair"] = relationship()

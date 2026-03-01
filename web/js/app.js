@@ -5,7 +5,8 @@
 // ── 状态管理 ──
 const state = {
     currentPage: 'auth',
-    pair: null,
+    pairs: [],           // 所有配对列表
+    currentPair: null,   // 当前选中的配对
     todayStatus: null,
     latestReport: null,
     selectedMoods: [],
@@ -27,6 +28,7 @@ function showPage(pageId) {
 
     if (pageId === 'home') loadHome();
     if (pageId === 'report') loadReports();
+    if (pageId === 'profile') loadProfile();
 }
 
 // ── Toast ──
@@ -83,14 +85,23 @@ function initAuth() {
 // ── 路由 ──
 async function checkPairAndRoute() {
     try {
-        const pair = await api.getMyPair();
-        state.pair = pair;
-        if (pair && pair.status === 'active') {
+        const pairs = await api.getMyPair();
+        state.currentPairs = pairs || [];
+        
+        // 有活跃配对
+        const activePairs = state.currentPairs.filter(p => p.status === 'active');
+        const pendingPairs = state.currentPairs.filter(p => p.status === 'pending');
+        
+        if (activePairs.length > 0) {
+            // 默认选择第一个活跃配对，或恢复上次选择的
+            state.currentPair = activePairs[0];
             document.getElementById('tab-bar').style.display = 'flex';
             showPage('home');
-        } else if (pair && pair.status === 'pending') {
+        } else if (pendingPairs.length > 0) {
+            // 有待处理的配对
+            state.currentPair = pendingPairs[0];
             showPage('pair-waiting');
-            document.getElementById('waiting-invite-code').textContent = pair.invite_code;
+            document.getElementById('waiting-invite-code').textContent = state.currentPair.invite_code;
         } else {
             showPage('pair');
         }
@@ -101,6 +112,9 @@ async function checkPairAndRoute() {
 
 // ── 配对 ──
 function initPair() {
+    // 渲染已有配对列表
+    renderExistingPairs();
+
     // 关系类型选择
     document.querySelectorAll('input[name="pair-type"]').forEach(radio => {
         radio.addEventListener('change', () => {
@@ -113,7 +127,7 @@ function initPair() {
         const type = document.querySelector('input[name="pair-type"]:checked')?.value || 'couple';
         try {
             const pair = await api.createPair(type);
-            state.pair = pair;
+            state.currentPair = pair;
             showPage('pair-waiting');
             document.getElementById('waiting-invite-code').textContent = pair.invite_code;
             showToast('配对已创建，分享邀请码给对方');
@@ -125,7 +139,7 @@ function initPair() {
         if (!code) { showToast('请输入邀请码'); return; }
         try {
             const pair = await api.joinPair(code);
-            state.pair = pair;
+            state.currentPair = pair;
             document.getElementById('tab-bar').style.display = 'flex';
             showPage('home');
             showToast('配对成功！🎉');
@@ -133,14 +147,60 @@ function initPair() {
     });
 }
 
+function renderExistingPairs() {
+    const existingSection = document.getElementById('existing-pairs');
+    const pairsList = document.getElementById('pairs-list');
+    const createHeader = document.getElementById('pair-create-header');
+
+    if (!existingSection || !pairsList) return;
+
+    const activePairs = state.pairs.filter(p => p.status === 'active');
+
+    if (activePairs.length === 0) {
+        existingSection.style.display = 'none';
+        if (createHeader) createHeader.style.display = 'block';
+        return;
+    }
+
+    // 有配对时显示列表
+    existingSection.style.display = 'block';
+    if (createHeader) createHeader.style.display = 'none';
+
+    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友' };
+
+    pairsList.innerHTML = activePairs.map(p => `
+        <div class="card" style="padding: 14px; margin-bottom: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+             onclick="switchPair('${p.id}')">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 20px;">${typeMap[p.type] === '情侣' ? '💕' : typeMap[p.type] === '夫妻' ? '💍' : '🤜🤛'}</span>
+                <span style="font-weight: 500;">${typeMap[p.type] || p.type}</span>
+            </div>
+            <span style="font-size: 13px; color: var(--text-muted);">${p.id === state.currentPair?.id ? '当前' : '切换 →'}</span>
+        </div>
+    `).join('');
+}
+
+function switchPair(pairId) {
+    const pair = state.pairs.find(p => p.id === pairId);
+    if (pair) {
+        state.currentPair = pair;
+        document.getElementById('tab-bar').style.display = 'flex';
+        showPage('home');
+        showToast('已切换关系');
+    }
+}
+
 // ── 首页 ──
 async function loadHome() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
+
+    // 渲染配对选择器
+    renderPairSelector();
 
     try {
         const [status, streak] = await Promise.all([
-            api.getTodayStatus(state.pair.id),
-            api.getCheckinStreak(state.pair.id).catch(() => ({ streak: 0 })),
+            api.getTodayStatus(state.currentPair.id),
+            api.getCheckinStreak(state.currentPair.id).catch(() => ({ streak: 0 })),
         ]);
         state.todayStatus = status;
         renderHomeStatus(status, streak);
@@ -152,10 +212,39 @@ async function loadHome() {
     loadTree();
 }
 
+function renderPairSelector() {
+    const selector = document.getElementById('pair-selector');
+    const select = document.getElementById('pair-select');
+    if (!selector || !select) return;
+
+    // 只有多个配对时才显示选择器
+    const activePairs = state.pairs.filter(p => p.status === 'active');
+    if (activePairs.length <= 1) {
+        selector.style.display = 'none';
+        return;
+    }
+
+    selector.style.display = 'block';
+
+    // 填充选项
+    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友' };
+    select.innerHTML = activePairs.map(p =>
+        `<option value="${p.id}" ${p.id === state.currentPair?.id ? 'selected' : ''}>${typeMap[p.type] || p.type}</option>`
+    ).join('');
+
+    // 监听切换
+    select.onchange = (e) => {
+        const selectedId = e.target.value;
+        state.currentPair = state.pairs.find(p => p.id === selectedId);
+        loadHome();
+        showToast('已切换关系');
+    };
+}
+
 async function loadTree() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
     try {
-        const tree = await api.getTreeStatus(state.pair.id);
+        const tree = await api.getTreeStatus(state.currentPair.id);
         renderTree(tree);
     } catch { /* 静默失败 */ }
 }
@@ -184,12 +273,12 @@ function renderTree(tree) {
 }
 
 async function waterTree() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
     const btn = document.getElementById('tree-water-btn');
     btn.disabled = true;
     btn.textContent = '浇水中...';
     try {
-        const result = await api.waterTree(state.pair.id);
+        const result = await api.waterTree(state.currentPair.id);
         showToast(`${result.level_emoji} +${result.points_added} 成长值${result.level_up ? ' 🎉 升级了！' : ''}`);
         loadTree();
     } catch (err) {
@@ -252,7 +341,7 @@ async function _pollForReport() {
     for (let i = 0; i < 10; i++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-            const status = await api.getTodayStatus(state.pair.id);
+            const status = await api.getTodayStatus(state.currentPair.id);
             if (status.has_report) {
                 const btn = document.getElementById('home-report-btn');
                 btn.textContent = '查看今日报告 📊';
@@ -268,7 +357,7 @@ async function _pollForSoloReport() {
     for (let i = 0; i < 10; i++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-            const status = await api.getTodayStatus(state.pair.id);
+            const status = await api.getTodayStatus(state.currentPair.id);
             if (status.has_solo_report) {
                 const btn = document.getElementById('home-report-btn');
                 btn.textContent = '查看个人情感日记 📖';
@@ -282,6 +371,24 @@ async function _pollForSoloReport() {
 
 // ── 打卡 ──
 function initCheckin() {
+    // 结构化选项通用处理（单选组）
+    const radioGroups = [
+        { selector: '.mood-score-option', groupClass: 'mood-score-option' },
+        { selector: '.initiative-option', groupClass: 'initiative-option' },
+        { selector: '.deep-conv-option', groupClass: 'deep-conv-option' },
+        { selector: '.task-option', groupClass: 'task-option' },
+    ];
+    radioGroups.forEach(({ selector, groupClass }) => {
+        document.querySelectorAll(selector).forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll(`.${groupClass}`).forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                const radio = opt.querySelector('input[type="radio"]');
+                if (radio) radio.checked = true;
+            });
+        });
+    });
+
     // 情绪标签
     document.querySelectorAll('.mood-tag').forEach(tag => {
         tag.addEventListener('click', () => {
@@ -334,21 +441,39 @@ function initCheckin() {
         const content = document.getElementById('checkin-content').value.trim();
         if (!content) { showToast('写点什么吧 ✍️'); return; }
 
+        // 收集结构化字段
+        const moodScoreEl = document.querySelector('input[name="mood-score"]:checked');
+        const initiativeEl = document.querySelector('input[name="initiative"]:checked');
+        const deepConvEl = document.querySelector('input[name="deep-conv"]:checked');
+        const taskDoneEl = document.querySelector('input[name="task-done"]:checked');
+        const interactionFreq = parseInt(document.getElementById('checkin-interaction-freq')?.value) || null;
+
         const btn = document.getElementById('checkin-submit-btn');
         btn.disabled = true;
         btn.textContent = '提交中...';
 
         try {
-            await api.submitCheckin(state.pair.id, content, state.selectedMoods, state.uploadedImageUrl, state.uploadedVoiceUrl);
+            await api.submitCheckin(
+                state.currentPair.id, content, state.selectedMoods,
+                state.uploadedImageUrl, state.uploadedVoiceUrl,
+                moodScoreEl ? parseInt(moodScoreEl.value) : null,
+                interactionFreq,
+                initiativeEl ? initiativeEl.value : null,
+                deepConvEl ? deepConvEl.value === 'true' : null,
+                taskDoneEl ? taskDoneEl.value === 'true' : null,
+            );
             showToast('打卡成功！💪');
             // 重置表单
             state.selectedMoods = [];
             state.uploadedImageUrl = null;
             state.uploadedVoiceUrl = null;
             document.querySelectorAll('.mood-tag').forEach(t => t.classList.remove('selected'));
+            document.querySelectorAll('.mood-score-option, .initiative-option, .deep-conv-option, .task-option').forEach(t => t.classList.remove('selected'));
+            document.querySelectorAll('#checkin-form input[type="radio"]').forEach(r => r.checked = false);
             document.getElementById('checkin-content').value = '';
             document.getElementById('checkin-image-preview').innerHTML = '';
             document.getElementById('checkin-voice-preview').innerHTML = '';
+            if (document.getElementById('checkin-interaction-freq')) document.getElementById('checkin-interaction-freq').value = '';
             showPage('home');
         } catch (err) { showToast(err.message); }
         btn.disabled = false;
@@ -358,14 +483,14 @@ function initCheckin() {
 
 // ── 报告 ──
 async function loadReports() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
     const container = document.getElementById('report-content');
 
     // 如果从首页点击了 solo 日记入口
     if (state.viewSolo) {
         state.viewSolo = false;
         try {
-            const soloReport = await api.getLatestReport(state.pair.id, 'solo').catch(() => null);
+            const soloReport = await api.getLatestReport(state.currentPair.id, 'solo').catch(() => null);
             if (soloReport && soloReport.status === 'completed') {
                 renderSoloReport(soloReport);
                 return;
@@ -375,9 +500,9 @@ async function loadReports() {
 
     try {
         const [dailyReport, soloReport, trendData] = await Promise.all([
-            api.getLatestReport(state.pair.id, 'daily').catch(() => null),
-            api.getLatestReport(state.pair.id, 'solo').catch(() => null),
-            api.getHealthTrend(state.pair.id, 14).catch(() => ({ trend: [], direction: 'insufficient_data' })),
+            api.getLatestReport(state.currentPair.id, 'daily').catch(() => null),
+            api.getLatestReport(state.currentPair.id, 'solo').catch(() => null),
+            api.getHealthTrend(state.currentPair.id, 14).catch(() => ({ trend: [], direction: 'insufficient_data' })),
         ]);
 
         if (dailyReport && dailyReport.status === 'completed') {
@@ -468,16 +593,46 @@ function renderReport(report, trendData) {
       </div>
     </div>
 
-    ${c.communication_quality ? `
+${c.communication_quality ? `
     <div class="card">
       <h3 style="font-size: 15px; margin-bottom: 8px">💬 沟通质量 ${c.communication_quality.score || '--'}/10</h3>
       <p style="font-size: 14px; color: var(--text-secondary)">${c.communication_quality.note || ''}</p>
+    </div>` : ''}
+
+    ${c.emotional_sync ? `
+    <div class="card">
+      <h3 style="font-size: 15px; margin-bottom: 8px">💫 情绪同步度 ${c.emotional_sync.score || '--'}/100</h3>
+      <p style="font-size: 14px; color: var(--text-secondary)">${c.emotional_sync.note || ''}</p>
+    </div>` : ''}
+
+    ${c.interaction_balance ? `
+    <div class="card">
+      <h3 style="font-size: 15px; margin-bottom: 8px">⚖️ 互动平衡度 ${c.interaction_balance.score || '--'}/100</h3>
+      <p style="font-size: 14px; color: var(--text-secondary)">${c.interaction_balance.note || ''}</p>
     </div>` : ''}
 
     ${c.highlights?.length ? `
     <div class="card">
       <h3 style="font-size: 15px; margin-bottom: 10px">🌟 今日亮点</h3>
       ${c.highlights.map(h => `<div style="font-size: 14px; color: var(--text-secondary); padding: 4px 0">• ${h}</div>`).join('')}
+    </div>` : ''}
+
+    ${c.concerns?.length ? `
+    <div class="card" style="border-left: 3px solid var(--warm-yellow)">
+      <h3 style="font-size: 15px; margin-bottom: 10px; color: #8B6914">⚠️ 需要关注</h3>
+      ${c.concerns.map(con => `<div style="font-size: 14px; color: var(--text-secondary); padding: 4px 0">• ${con}</div>`).join('')}
+    </div>` : ''}
+
+    ${c.risk_signals?.length ? `
+    <div class="card" style="border-left: 3px solid var(--coral-500); background: var(--coral-50)">
+      <h3 style="font-size: 15px; margin-bottom: 10px; color: var(--coral-600)">🚨 风险信号</h3>
+      ${c.risk_signals.map(r => `<div style="font-size: 14px; color: var(--coral-600); padding: 4px 0">• ${r}</div>`).join('')}
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px">建议关注戈特曼「末日四骑士」模型，必要时寻求专业咨询</p>
+    </div>` : ''}
+
+    ${c.theory_tag ? `
+    <div style="text-align: center; margin: 12px 0">
+      <span style="font-size: 12px; color: var(--text-muted); background: var(--bg-primary); padding: 4px 12px; border-radius: var(--radius-full)">📚 ${c.theory_tag}</span>
     </div>` : ''}
 
     <!-- 周报/月报按钮 -->
@@ -488,6 +643,9 @@ function renderReport(report, trendData) {
 
     <div style="text-align: center; margin-top: 16px">
       <span class="privacy-badge">🔒 数据已加密 · 仅AI可见原始内容</span>
+    </div>
+    <div style="text-align: center; margin-top: 8px">
+      <span style="font-size: 11px; color: var(--text-muted)">🤖 本报告由AI生成，仅供参考</span>
     </div>
   `;
 }
@@ -538,21 +696,24 @@ function renderSoloReport(report) {
       <div style="font-size:14px;line-height:1.6;color:var(--text-secondary)">💕 ${c.relationship_note}</div>
     </div>` : ''}
 
-    <div style="text-align: center; margin-top: 16px">
+<div style="text-align: center; margin-top: 16px">
       <span class="privacy-badge">🔒 仅你可见 · 对方无法查看你的个人日记</span>
+    </div>
+    <div style="text-align: center; margin-top: 8px">
+      <span style="font-size: 11px; color: var(--text-muted)">🤖 本日记由AI生成，仅供参考</span>
     </div>
   `;
 }
 
 // ── 报告生成 ──
 async function triggerReport() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
     const btn = document.getElementById('home-report-btn');
     btn.disabled = true;
     btn.textContent = '深度分析中...';
 
     try {
-        const report = await api.generateDailyReport(state.pair.id);
+        const report = await api.generateDailyReport(state.currentPair.id);
         if (report.status === 'pending') {
             showToast('AI生成中，预计需等几十秒 ⏳', 5000);
             _pollReportStatus('daily', btn, '查看今日报告 📊', () => showPage('report'));
@@ -570,10 +731,10 @@ async function triggerReport() {
 }
 
 async function generateWeekly() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
     try {
         showToast('提取周报特征...');
-        const report = await api.generateWeeklyReport(state.pair.id);
+        const report = await api.generateWeeklyReport(state.currentPair.id);
         if (report.status === 'pending') {
             showToast('大模型深入汇总中，请耐心等候...⏳', 5000);
             _pollReportStatus('weekly', null, null, showWeeklyReport);
@@ -584,10 +745,10 @@ async function generateWeekly() {
 }
 
 async function generateMonthly() {
-    if (!state.pair) return;
+    if (!state.currentPair) return;
     try {
         showToast('提取月报特征...');
-        const report = await api.generateMonthlyReport(state.pair.id);
+        const report = await api.generateMonthlyReport(state.currentPair.id);
         if (report.status === 'pending') {
             showToast('计算月度长周期趋势，请稍候...⏳', 5000);
             _pollReportStatus('monthly', null, null, showMonthlyReport);
@@ -602,7 +763,7 @@ function _pollReportStatus(type, btn, btnText, callback) {
     const interval = setInterval(async () => {
         attempts++;
         try {
-            const r = await api.getLatestReport(state.pair.id, type);
+            const r = await api.getLatestReport(state.currentPair.id, type);
             if (r && r.status === 'completed') {
                 clearInterval(interval);
                 showToast(`分析完成 🎉`);
@@ -657,11 +818,14 @@ function showWeeklyReport(report) {
       <h3 style="font-size:15px;margin-bottom:10px">🌟 本周亮点</h3>
       ${c.weekly_highlights.map(h => `<div style="font-size:14px;color:var(--text-secondary);padding:4px 0">• ${h}</div>`).join('')}
     </div>` : ''}
-    ${c.action_plan?.length ? `
+${c.action_plan?.length ? `
     <div class="card">
       <h3 style="font-size:15px;margin-bottom:10px">✨ 行动建议</h3>
       ${c.action_plan.map(a => `<div class="report-suggestion" style="margin:6px 0">${a}</div>`).join('')}
     </div>` : ''}
+    <div style="text-align: center; margin-top: 16px">
+      <span style="font-size: 11px; color: var(--text-muted)">🤖 本周报由AI生成，仅供参考</span>
+    </div>
   `;
 }
 
@@ -695,8 +859,97 @@ function showMonthlyReport(report) {
       <h3 style="font-size:15px;margin-bottom:10px">🎯 下月目标</h3>
       ${c.next_month_goals.map(g => `<div class="report-suggestion" style="margin:6px 0">${g}</div>`).join('')}
     </div>` : ''}
-    ${c.professional_note ? `<div class="report-insight">${c.professional_note}</div>` : ''}
-  `;
+${c.professional_note ? `<div class="report-insight">${c.professional_note}</div>` : ''}
+    <div style="text-align: center; margin-top: 16px">
+      <span style="font-size: 11px; color: var(--text-muted)">🤖 本月报由AI生成，仅供参考</span>
+    </div>
+`;
+}
+
+// ── 个人中心 ──
+async function loadProfile() {
+    if (!state.currentPair) return;
+
+    // 显示昵称（Mod 8）
+    const nicknameEl = document.querySelector('#page-profile .card:first-of-type div[style*="font-size: 18px"]');
+    if (nicknameEl) {
+        try {
+            const me = await api.request('GET', '/auth/me');
+            nicknameEl.textContent = me.nickname || '用户';
+        } catch { /* ignore */ }
+    }
+
+    // 配对类型显示
+    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友' };
+    document.getElementById('profile-pair-type').textContent = typeMap[state.currentPair.type] || state.currentPair.type;
+    document.getElementById('profile-pair-status').textContent = '已配对';
+
+    // 解绑状态（Mod 5）
+    await loadUnbindStatus();
+}
+
+async function loadUnbindStatus() {
+    const section = document.getElementById('unbind-section');
+    const statusText = document.getElementById('unbind-status-text');
+    const actions = document.getElementById('unbind-actions');
+    if (!section || !state.currentPair) return;
+
+    try {
+        const status = await api.getUnbindStatus();
+        if (!status.has_request) {
+            section.style.display = 'block';
+            statusText.textContent = '解除配对后双方将无法继续打卡和查看报告';
+            actions.innerHTML = `<button class="btn btn-outline btn-sm" style="color:var(--coral-500);border-color:var(--coral-400)" onclick="handleRequestUnbind()">发起解绑</button>`;
+        } else {
+            section.style.display = 'block';
+            if (status.requested_by_me) {
+                statusText.textContent = `你已发起解绑请求，冷静期剩余 ${status.days_remaining} 天。对方确认后立即生效，或冷静期结束后你可强制解绑。`;
+                if (status.can_force_unbind) {
+                    actions.innerHTML = `
+                        <button class="btn btn-outline btn-sm" style="color:var(--coral-500)" onclick="handleConfirmUnbind()">确认解绑</button>
+                        <button class="btn btn-outline btn-sm" onclick="handleCancelUnbind()">撤回请求</button>
+                    `;
+                } else {
+                    actions.innerHTML = `<button class="btn btn-outline btn-sm" onclick="handleCancelUnbind()">撤回请求</button>`;
+                }
+            } else {
+                statusText.textContent = '对方已发起解绑请求，确认后立即解除配对关系。';
+                actions.innerHTML = `
+                    <button class="btn btn-outline btn-sm" style="color:var(--coral-500)" onclick="handleConfirmUnbind()">确认解绑</button>
+                `;
+            }
+        }
+    } catch (err) {
+        console.error('加载解绑状态失败', err);
+    }
+}
+
+async function handleRequestUnbind() {
+    if (!confirm('确定要发起解绑吗？对方确认后立即生效，或等待7天冷静期后你可强制解绑。')) return;
+    try {
+        await api.requestUnbind();
+        showToast('解绑请求已发起');
+        loadUnbindStatus();
+    } catch (err) { showToast(err.message); }
+}
+
+async function handleConfirmUnbind() {
+    if (!confirm('确定要解除配对吗？此操作不可撤销。')) return;
+    try {
+        const result = await api.confirmUnbind();
+        showToast(result.message);
+        state.currentPair = null;
+        document.getElementById('tab-bar').style.display = 'none';
+        showPage('pair');
+    } catch (err) { showToast(err.message); }
+}
+
+async function handleCancelUnbind() {
+    try {
+        await api.cancelUnbind();
+        showToast('解绑请求已撤回');
+        loadUnbindStatus();
+    } catch (err) { showToast(err.message); }
 }
 
 // ── 初始化 ──

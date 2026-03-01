@@ -87,15 +87,38 @@ class ApiClient {
         return this.request('GET', '/pairs/me');
     }
 
+    // ── 解绑 ──
+    async requestUnbind(pairId) {
+        return this.request('POST', `/pairs/request-unbind?pair_id=${pairId}`);
+    }
+
+    async confirmUnbind(pairId) {
+        return this.request('POST', `/pairs/confirm-unbind?pair_id=${pairId}`);
+    }
+
+    async cancelUnbind(pairId) {
+        return this.request('POST', `/pairs/cancel-unbind?pair_id=${pairId}`);
+    }
+
+    async getUnbindStatus(pairId) {
+        return this.request('GET', `/pairs/unbind-status?pair_id=${pairId}`);
+    }
+
     // ── 打卡 ──
-    async submitCheckin(pairId, content, moodTags = [], imageUrl = null, voiceUrl = null) {
-        return this.request('POST', '/checkins/', {
+    async submitCheckin(pairId, content, moodTags = [], imageUrl = null, voiceUrl = null, moodScore = null, interactionFreq = null, interactionInitiative = null, deepConversation = null, taskCompleted = null) {
+        const body = {
             pair_id: pairId,
             content,
             mood_tags: moodTags.length ? moodTags : null,
             image_url: imageUrl,
             voice_url: voiceUrl,
-        });
+        };
+        if (moodScore != null) body.mood_score = moodScore;
+        if (interactionFreq != null) body.interaction_freq = interactionFreq;
+        if (interactionInitiative != null) body.interaction_initiative = interactionInitiative;
+        if (deepConversation != null) body.deep_conversation = deepConversation;
+        if (taskCompleted != null) body.task_completed = taskCompleted;
+        return this.request('POST', '/checkins/', body);
     }
 
     async getTodayStatus(pairId) {
