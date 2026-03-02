@@ -18,6 +18,7 @@ class PairType(str, PyEnum):
     COUPLE = "couple"  # 情侣
     SPOUSE = "spouse"  # 夫妻
     BESTFRIEND = "bestfriend"  # 挚友
+    PARENT = "parent"  # 夫妻（育儿阶段）
 
 
 class PairStatus(str, PyEnum):
@@ -37,6 +38,12 @@ class ReportStatus(str, PyEnum):
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class TaskStatus(str, PyEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
 
 
 # ── 模型 ──
@@ -76,8 +83,8 @@ class Pair(Base):
     )
     invite_code: Mapped[str] = mapped_column(
         String(6), unique=True, index=True
-    )  # 6位数字绑定码（计划书§4.1.1）
-    # ── 解绑字段（计划书§9.1：双方确认或7天冷静期）──
+    )  # 6位数字绑定码
+    # ── 解绑字段 ──
     unbind_requested_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
@@ -85,20 +92,13 @@ class Pair(Base):
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
-    user_a_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    user_b_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    type: Mapped[PairType] = mapped_column(Enum(PairType))
-    status: Mapped[PairStatus] = mapped_column(
-        Enum(PairStatus), default=PairStatus.PENDING
-    )
-    invite_code: Mapped[str] = mapped_column(
-        String(6), unique=True, index=True
-    )  # 6位数字绑定码
-    created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
-    )
+
+    # ── 依恋类型（Phase 4 新增）──
+    attachment_style_a: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    attachment_style_b: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    attachment_analyzed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # ── 异地标记（Phase 4 新增）──
+    is_long_distance: Mapped[bool | None] = mapped_column(default=False, nullable=True)
 
     # 关系
     checkins: Mapped[list["Checkin"]] = relationship(back_populates="pair")
@@ -114,27 +114,17 @@ class Checkin(Base):
     pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     content: Mapped[str] = mapped_column(Text)  # 打卡文字内容
-    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # 图片URL
-    voice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # 语音URL
-    mood_tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # 情绪标签
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    voice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    mood_tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # ── 结构化四步打卡字段（计划书§4.1.2 表9）──
-    mood_score: Mapped[int | None] = mapped_column(
-        nullable=True
-    )  # 情绪评分 1-4（非常好/好/一般/不好）
-    interaction_freq: Mapped[int | None] = mapped_column(
-        nullable=True
-    )  # 今日互动次数 0-10+
-    interaction_initiative: Mapped[str | None] = mapped_column(
-        String(10), nullable=True
-    )  # 主动方: "me"/"partner"/"equal"
-    deep_conversation: Mapped[bool | None] = mapped_column(
-        nullable=True
-    )  # 今日是否有深度对话
-    task_completed: Mapped[bool | None] = mapped_column(
-        nullable=True
-    )  # 是否完成关系任务
+    # ── 结构化四步打卡字段 ──
+    mood_score: Mapped[int | None] = mapped_column(nullable=True)
+    interaction_freq: Mapped[int | None] = mapped_column(nullable=True)
+    interaction_initiative: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    deep_conversation: Mapped[bool | None] = mapped_column(nullable=True)
+    task_completed: Mapped[bool | None] = mapped_column(nullable=True)
 
     checkin_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
@@ -157,9 +147,7 @@ class Report(Base):
     status: Mapped[ReportStatus] = mapped_column(
         Enum(ReportStatus), default=ReportStatus.COMPLETED
     )
-    content: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True
-    )  # AI生成的报告JSON，可能为空
+    content: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     report_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
@@ -174,12 +162,12 @@ class Report(Base):
 
 
 class TreeLevel(str, PyEnum):
-    SEED = "seed"  # 种子  0-49      （计划书§4.4 六级成长体系）
-    SPROUT = "sprout"  # 萌芽  50-149
-    SAPLING = "sapling"  # 幼苗  150-349
-    TREE = "tree"  # 小树  350-699
-    BIG_TREE = "big_tree"  # 大树  700-1199
-    FOREST = "forest"  # 森林  1200+
+    SEED = "seed"
+    SPROUT = "sprout"
+    SAPLING = "sapling"
+    TREE = "tree"
+    BIG_TREE = "big_tree"
+    FOREST = "forest"
 
 
 TREE_LEVEL_THRESHOLDS = [
@@ -220,3 +208,104 @@ class RelationshipTree(Base):
 
     # 关系
     pair: Mapped["Pair"] = relationship()
+
+
+# ── 关系任务（Phase 4：依恋模式适配） ──
+
+
+class RelationshipTask(Base):
+    __tablename__ = "relationship_tasks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )  # None = 双方共同任务
+    title: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(Text, default="")
+    category: Mapped[str] = mapped_column(String(30), default="activity")
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus), default=TaskStatus.PENDING
+    )
+    due_date: Mapped[date] = mapped_column(Date)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+# ── 异地互动活动（Phase 4：场景延伸） ──
+
+
+class LongDistanceActivity(Base):
+    __tablename__ = "long_distance_activities"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
+    type: Mapped[str] = mapped_column(String(30))  # movie/meal/chat/gift/exercise
+    title: Mapped[str] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+# ── 关系里程碑（Phase 4：关键节点服务） ──
+
+
+class Milestone(Base):
+    __tablename__ = "milestones"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
+    type: Mapped[str] = mapped_column(String(30))
+    title: Mapped[str] = mapped_column(String(100))
+    date: Mapped[date] = mapped_column(Date)
+    reminder_sent: Mapped[bool | None] = mapped_column(default=False, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+# ── 社群技巧（Phase 4：体验升级） ──
+
+
+class CommunityTip(Base):
+    __tablename__ = "community_tips"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    target_pair_type: Mapped[str] = mapped_column(String(20), default="couple")
+    title: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text)
+    ai_generated: Mapped[bool | None] = mapped_column(default=False, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+# ── 用户通知（Phase 4：体验升级） ──
+
+
+class UserNotification(Base):
+    __tablename__ = "user_notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    type: Mapped[str] = mapped_column(String(30))  # crisis/task/tip/milestone
+    content: Mapped[str] = mapped_column(Text)
+    is_read: Mapped[bool | None] = mapped_column(default=False, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

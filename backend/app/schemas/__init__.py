@@ -113,3 +113,32 @@ class ReportResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── 关系任务 ──
+
+
+class TaskResponse(BaseModel):
+    id: uuid.UUID
+    pair_id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    title: str
+    description: str
+    category: str
+    status: str
+    due_date: date
+    completed_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── 依恋类型 ──
+
+
+class AttachmentStyleResponse(BaseModel):
+    type: str
+    label: str
+    confidence: float | None = None
+    analysis: str | None = None
+    growth_suggestion: str | None = None

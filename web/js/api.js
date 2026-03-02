@@ -1,5 +1,5 @@
 /**
- * 亲健 API 客户端 (Phase 2 增强)
+ * 亲健 API 客户端 (Phase 4 增强：危机预警 + 任务)
  */
 const API_BASE = window.location.hostname === 'localhost'
     ? 'http://localhost:8000/api/v1'
@@ -165,6 +165,75 @@ class ApiClient {
 
     async waterTree(pairId) {
         return this.request('POST', `/tree/water?pair_id=${pairId}`);
+    }
+
+    // ── 危机预警（Phase 4） ──
+    async getCrisisStatus(pairId) {
+        return this.request('GET', `/crisis/status/${pairId}`);
+    }
+
+    async getCrisisHistory(pairId, limit = 30) {
+        return this.request('GET', `/crisis/history/${pairId}?limit=${limit}`);
+    }
+
+    // ── 关系任务（Phase 4） ──
+    async getDailyTasks(pairId) {
+        return this.request('GET', `/tasks/daily/${pairId}`);
+    }
+
+    async completeTask(taskId) {
+        return this.request('POST', `/tasks/${taskId}/complete`);
+    }
+
+    async getAttachmentAnalysis(pairId) {
+        return this.request('GET', `/tasks/attachment/${pairId}`);
+    }
+
+    async triggerAttachmentAnalysis(pairId) {
+        return this.request('POST', `/tasks/attachment/${pairId}/analyze`);
+    }
+
+    // ── 异地互动（Phase 4） ──
+    async getLongDistanceDashboard(pairId) {
+        return this.request('GET', `/longdistance/dashboard/${pairId}`);
+    }
+
+    async suggestActivity(pairId) {
+        return this.request('POST', `/longdistance/suggest/${pairId}`);
+    }
+
+    async completeActivity(activityId) {
+        return this.request('POST', `/longdistance/activity/${activityId}/complete`);
+    }
+
+    // ── 里程碑（Phase 4） ──
+    async getMilestones(pairId) {
+        return this.request('GET', `/milestones/${pairId}`);
+    }
+
+    async createMilestone(pairId, data) {
+        return this.request('POST', `/milestones/${pairId}`, data);
+    }
+
+    async getMilestoneReport(milestoneId) {
+        return this.request('GET', `/milestones/${milestoneId}/report`);
+    }
+
+    // ── 社群（Phase 4） ──
+    async getCommunityTips(pairType) {
+        return this.request('GET', `/community/tips?pair_type=${pairType || 'couple'}`);
+    }
+
+    async generateTip(pairType) {
+        return this.request('POST', `/community/tips/generate?pair_type=${pairType || 'couple'}`);
+    }
+
+    async getNotifications() {
+        return this.request('GET', '/community/notifications');
+    }
+
+    async markNotificationsRead() {
+        return this.request('POST', '/community/notifications/read-all');
     }
 }
 

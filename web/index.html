@@ -89,6 +89,12 @@
             <span style="font-size: 20px">🤜🤛</span>
             <span>挚友</span>
           </label>
+          <label class="mood-tag pair-type-option"
+            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
+            <input type="radio" name="pair-type" value="parent" style="display: none">
+            <span style="font-size: 20px">👨‍👩‍👧</span>
+            <span>育儿夫妻</span>
+          </label>
         </div>
         <button id="pair-create-btn" class="btn btn-primary btn-block" style="margin-top: 20px">创建配对</button>
       </div>
@@ -120,7 +126,8 @@
       <div id="pair-selector" class="card" style="padding: 12px; margin-bottom: 12px; display: none;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
           <span style="font-size: 13px; color: var(--text-muted);">当前关系</span>
-          <select id="pair-select" class="form-input" style="flex: 1; margin-left: 12px; padding: 8px 12px; font-size: 14px;">
+          <select id="pair-select" class="form-input"
+            style="flex: 1; margin-left: 12px; padding: 8px 12px; font-size: 14px;">
             <!-- 动态填充 -->
           </select>
         </div>
@@ -178,6 +185,78 @@
         <button id="tree-water-btn" class="btn btn-sm btn-secondary" style="font-size: 13px">💧 浇水</button>
       </div>
 
+      <!-- 危机预警卡片（Phase 4 新增） -->
+      <div id="crisis-card" class="card" style="display: none">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+          <span style="font-size: 14px">⚠️ 关系预警</span>
+          <span id="crisis-badge"
+            style="font-size: 12px; padding: 2px 10px; border-radius: 20px; font-weight: 600">正常</span>
+        </div>
+        <div id="crisis-intervention" style="display: none">
+          <div id="crisis-intervention-title" style="font-size: 14px; font-weight: 600; margin-bottom: 6px"></div>
+          <div id="crisis-intervention-desc" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px">
+          </div>
+          <div id="crisis-action-items" style="font-size: 12px; color: var(--text-muted)"></div>
+        </div>
+      </div>
+
+      <!-- 每日任务卡片（Phase 4 新增） -->
+      <div id="tasks-card" class="card" style="display: none">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+          <span style="font-size: 14px">🎯 今日关系任务</span>
+          <span id="tasks-attachment-label" style="font-size: 11px; color: var(--text-muted)"></span>
+        </div>
+        <div id="tasks-list" style="display: flex; flex-direction: column; gap: 8px"></div>
+        <div id="tasks-insight" style="font-size: 12px; color: var(--text-muted); margin-top: 10px; font-style: italic">
+        </div>
+      </div>
+
+      <!-- 关系经营技巧（Phase 4 新增） -->
+      <div id="tips-card" class="card" style="display: none">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+          <span style="font-size: 14px">💡 关系经营小贴士</span>
+          <button id="tips-refresh-btn"
+            style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px">换一条
+            🔄</button>
+        </div>
+        <div id="tip-content"
+          style="padding: 12px; background: var(--bg-card); border-radius: 10px; border-left: 3px solid var(--primary)">
+          <div id="tip-title" style="font-weight: 600; margin-bottom: 6px"></div>
+          <div id="tip-text" style="font-size: 13px; color: var(--text-secondary); line-height: 1.6"></div>
+        </div>
+      </div>
+
+      <!-- 里程碑时间线（Phase 4 新增） -->
+      <div id="milestones-card" class="card" style="display: none">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+          <span style="font-size: 14px">🎉 关系里程碑</span>
+          <button id="add-milestone-btn"
+            style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px">+
+            新增</button>
+        </div>
+        <div id="milestones-list" style="display: flex; flex-direction: column; gap: 8px"></div>
+      </div>
+
+      <!-- 通知中心（Phase 4 新增） -->
+      <div id="notification-bell" style="position: fixed; top: 16px; right: 16px; z-index: 100; display: none">
+        <button id="notification-btn"
+          style="background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; font-size: 18px; cursor: pointer; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.2)">
+          🔔
+          <span id="notification-badge"
+            style="display: none; position: absolute; top: -2px; right: -2px; background: var(--danger); color: white; font-size: 10px; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center"></span>
+        </button>
+      </div>
+
+      <!-- 通知面板 -->
+      <div id="notification-panel" class="card" style="display: none; max-height: 300px; overflow-y: auto">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+          <span style="font-size: 14px">🔔 通知</span>
+          <button id="read-all-btn"
+            style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px">全部已读</button>
+        </div>
+        <div id="notification-list" style="display: flex; flex-direction: column; gap: 6px"></div>
+      </div>
+
       <!-- 生成报告按钮 -->
       <button id="home-report-btn" class="btn btn-secondary btn-block" style="display: none; margin-bottom: 16px">
         查看今日报告 📊
@@ -206,19 +285,23 @@
             <div class="mood-score-options" style="display:flex;gap:8px;margin-top:8px">
               <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="4">
                 <input type="radio" name="mood-score" value="4" style="display:none">
-                <div style="font-size:20px">😊</div><div style="font-size:12px;margin-top:4px">非常好</div>
+                <div style="font-size:20px">😊</div>
+                <div style="font-size:12px;margin-top:4px">非常好</div>
               </label>
               <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="3">
                 <input type="radio" name="mood-score" value="3" style="display:none">
-                <div style="font-size:20px">🙂</div><div style="font-size:12px;margin-top:4px">好</div>
+                <div style="font-size:20px">🙂</div>
+                <div style="font-size:12px;margin-top:4px">好</div>
               </label>
               <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="2">
                 <input type="radio" name="mood-score" value="2" style="display:none">
-                <div style="font-size:20px">😐</div><div style="font-size:12px;margin-top:4px">一般</div>
+                <div style="font-size:20px">😐</div>
+                <div style="font-size:12px;margin-top:4px">一般</div>
               </label>
               <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="1">
                 <input type="radio" name="mood-score" value="1" style="display:none">
-                <div style="font-size:20px">😔</div><div style="font-size:12px;margin-top:4px">不好</div>
+                <div style="font-size:20px">😔</div>
+                <div style="font-size:12px;margin-top:4px">不好</div>
               </label>
             </div>
           </div>
@@ -228,18 +311,21 @@
             <label class="form-label">Step 2 · 今日互动</label>
             <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
               <span style="font-size:13px;color:var(--text-secondary);white-space:nowrap">互动次数</span>
-              <input id="checkin-interaction-freq" class="form-input" type="number" min="0" max="99" placeholder="0" style="width:70px;text-align:center;padding:8px">
+              <input id="checkin-interaction-freq" class="form-input" type="number" min="0" max="99" placeholder="0"
+                style="width:70px;text-align:center;padding:8px">
             </div>
             <div style="display:flex;gap:8px;margin-top:10px">
               <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="me">
                 <input type="radio" name="initiative" value="me" style="display:none">
                 <div style="font-size:12px">我主动多</div>
               </label>
-              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="equal">
+              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0"
+                data-val="equal">
                 <input type="radio" name="initiative" value="equal" style="display:none">
                 <div style="font-size:12px">差不多</div>
               </label>
-              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="partner">
+              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0"
+                data-val="partner">
                 <input type="radio" name="initiative" value="partner" style="display:none">
                 <div style="font-size:12px">对方主动多</div>
               </label>

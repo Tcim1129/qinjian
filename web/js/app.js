@@ -87,11 +87,11 @@ async function checkPairAndRoute() {
     try {
         const pairs = await api.getMyPair();
         state.currentPairs = pairs || [];
-        
+
         // 有活跃配对
         const activePairs = state.currentPairs.filter(p => p.status === 'active');
         const pendingPairs = state.currentPairs.filter(p => p.status === 'pending');
-        
+
         if (activePairs.length > 0) {
             // 默认选择第一个活跃配对，或恢复上次选择的
             state.currentPair = activePairs[0];
@@ -166,7 +166,7 @@ function renderExistingPairs() {
     existingSection.style.display = 'block';
     if (createHeader) createHeader.style.display = 'none';
 
-    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友' };
+    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
 
     pairsList.innerHTML = activePairs.map(p => `
         <div class="card" style="padding: 14px; margin-bottom: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
@@ -208,8 +208,13 @@ async function loadHome() {
         console.error('加载首页失败', err);
     }
 
-    // 关系树（独立加载，不阻塞主流程）
+    // 独立加载，不阻塞主流程
     loadTree();
+    loadCrisisStatus();
+    loadDailyTasks();
+    loadTips();
+    loadMilestones();
+    loadNotifications();
 }
 
 function renderPairSelector() {
@@ -227,7 +232,7 @@ function renderPairSelector() {
     selector.style.display = 'block';
 
     // 填充选项
-    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友' };
+    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
     select.innerHTML = activePairs.map(p =>
         `<option value="${p.id}" ${p.id === state.currentPair?.id ? 'selected' : ''}>${typeMap[p.type] || p.type}</option>`
     ).join('');
@@ -286,6 +291,214 @@ async function waterTree() {
         btn.disabled = false;
         btn.textContent = '💧 浇水';
     }
+}
+
+// ── 危机预警（Phase 4） ──
+async function loadCrisisStatus() {
+    if (!state.currentPair) return;
+    try {
+        const crisis = await api.getCrisisStatus(state.currentPair.id);
+        renderCrisisCard(crisis);
+    } catch { /* 静默失败 */ }
+}
+
+function renderCrisisCard(crisis) {
+    const card = document.getElementById('crisis-card');
+    if (!card) return;
+
+    const level = crisis.crisis_level || 'none';
+    if (level === 'none') {
+        card.style.display = 'none';
+        return;
+    }
+
+    card.style.display = 'block';
+    const badge = document.getElementById('crisis-badge');
+    const levelMap = {
+        mild: { text: '轻度预警', color: '#F59E0B', bg: '#FEF3C7' },
+        moderate: { text: '中度预警', color: '#F97316', bg: '#FFF7ED' },
+        severe: { text: '重度预警', color: '#EF4444', bg: '#FEF2F2' },
+    };
+    const info = levelMap[level] || levelMap.mild;
+    badge.textContent = info.text;
+    badge.style.background = info.bg;
+    badge.style.color = info.color;
+    card.style.borderLeft = `3px solid ${info.color}`;
+
+    const intervention = crisis.intervention;
+    const interventionDiv = document.getElementById('crisis-intervention');
+    if (intervention && intervention.type !== 'none') {
+        interventionDiv.style.display = 'block';
+        document.getElementById('crisis-intervention-title').textContent = intervention.title || '干预建议';
+        document.getElementById('crisis-intervention-desc').textContent = intervention.description || '';
+        const items = intervention.action_items || [];
+        document.getElementById('crisis-action-items').innerHTML = items.map(i => `<div>• ${i}</div>`).join('');
+    } else {
+        interventionDiv.style.display = 'none';
+    }
+}
+
+// ── 每日任务（Phase 4） ──
+async function loadDailyTasks() {
+    if (!state.currentPair) return;
+    try {
+        const data = await api.getDailyTasks(state.currentPair.id);
+        renderDailyTasks(data);
+    } catch { /* 静默失败 */ }
+}
+
+function renderDailyTasks(data) {
+    const card = document.getElementById('tasks-card');
+    if (!card) return;
+
+    const tasks = data.tasks || [];
+    if (tasks.length === 0) {
+        card.style.display = 'none';
+        return;
+    }
+
+    card.style.display = 'block';
+
+    // 依恋类型标签
+    const attachLabel = document.getElementById('tasks-attachment-label');
+    const typeLabels = { secure: '安全型', anxious: '焦虑型', avoidant: '回避型', fearful: '恐惧型' };
+    if (data.attachment_a || data.attachment_b) {
+        attachLabel.textContent = `${typeLabels[data.attachment_a] || '待分析'} + ${typeLabels[data.attachment_b] || '待分析'}`;
+    }
+
+    // 任务列表
+    const list = document.getElementById('tasks-list');
+    const categoryIcons = { communication: '💬', activity: '🎮', reflection: '🧘' };
+    list.innerHTML = tasks.map(t => `
+        <div id="task-${t.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-primary);border-radius:var(--radius-md);cursor:pointer;
+            ${t.status === 'completed' ? 'opacity:0.6;' : ''}" onclick="completeTaskItem('${t.id}')">
+            <span style="font-size:18px">${t.status === 'completed' ? '✅' : (categoryIcons[t.category] || '🎯')}</span>
+            <div style="flex:1">
+                <div style="font-size:14px;font-weight:500;${t.status === 'completed' ? 'text-decoration:line-through;' : ''}">${t.title}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${t.description}</div>
+            </div>
+        </div>
+    `).join('');
+
+    // 组合洞察
+    const insight = document.getElementById('tasks-insight');
+    if (data.combination_insight) {
+        insight.textContent = `💡 ${data.combination_insight}`;
+    }
+}
+
+async function completeTaskItem(taskId) {
+    try {
+        await api.completeTask(taskId);
+        const el = document.getElementById(`task-${taskId}`);
+        if (el) {
+            el.style.opacity = '0.6';
+            el.querySelector('span').textContent = '✅';
+            const title = el.querySelector('div > div');
+            if (title) title.style.textDecoration = 'line-through';
+        }
+        showToast('任务完成 🎉');
+    } catch (err) { showToast(err.message); }
+}
+
+// ── 社群技巧（Phase 4） ──
+async function loadTips() {
+    if (!state.currentPair) return;
+    try {
+        const data = await api.getCommunityTips(state.currentPair.type);
+        renderTips(data.tips || []);
+    } catch { /* 静默 */ }
+}
+
+function renderTips(tips) {
+    const card = document.getElementById('tips-card');
+    if (!card || !tips.length) return;
+    card.style.display = 'block';
+    const tip = tips[Math.floor(Math.random() * tips.length)];
+    document.getElementById('tip-title').textContent = tip.title;
+    document.getElementById('tip-text').textContent = tip.content;
+}
+
+// ── 里程碑（Phase 4） ──
+async function loadMilestones() {
+    if (!state.currentPair) return;
+    try {
+        const data = await api.getMilestones(state.currentPair.id);
+        renderMilestones(data.milestones || []);
+    } catch { /* 静默 */ }
+}
+
+function renderMilestones(milestones) {
+    const card = document.getElementById('milestones-card');
+    if (!card) return;
+    card.style.display = 'block';
+    const list = document.getElementById('milestones-list');
+    if (!milestones.length) {
+        list.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:12px">还没有里程碑，点击右上角添加一个吧 🌟</div>';
+        return;
+    }
+    const typeEmoji = { anniversary: '💑', proposal: '💍', wedding: '💒', friendship_day: '🤝', custom: '⭐' };
+    list.innerHTML = milestones.map(m => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-card);border-radius:10px;cursor:pointer" onclick="viewMilestoneReport('${m.id}')">
+            <span style="font-size:24px">${typeEmoji[m.type] || '⭐'}</span>
+            <div style="flex:1">
+                <div style="font-weight:500;font-size:13px">${m.title}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${m.date}</div>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted)">查看回顾 →</span>
+        </div>
+    `).join('');
+}
+
+async function viewMilestoneReport(milestoneId) {
+    try {
+        showToast('正在生成回顾报告...');
+        const data = await api.getMilestoneReport(milestoneId);
+        const r = data.report || {};
+        const msg = `📖 ${r.growth_story || '回忆正在生成中...'}\n\n🎯 优势: ${(r.strengths_discovered || []).join('、')}\n\n💌 ${r.blessing || ''}`;
+        alert(msg);
+    } catch (err) { showToast(err.message); }
+}
+
+// ── 通知中心（Phase 4） ──
+async function loadNotifications() {
+    const bell = document.getElementById('notification-bell');
+    if (!bell) return;
+    try {
+        const data = await api.getNotifications();
+        const notifications = data || [];
+        if (notifications.length > 0) {
+            bell.style.display = 'block';
+            const unread = notifications.filter(n => !n.is_read).length;
+            const badge = document.getElementById('notification-badge');
+            if (unread > 0 && badge) {
+                badge.style.display = 'flex';
+                badge.textContent = unread > 9 ? '9+' : unread;
+            }
+            state.notifications = notifications;
+        }
+    } catch { /* 静默 */ }
+}
+
+function renderNotificationPanel() {
+    const panel = document.getElementById('notification-panel');
+    if (!panel) return;
+    const isVisible = panel.style.display !== 'none';
+    panel.style.display = isVisible ? 'none' : 'block';
+    if (isVisible) return;
+    const list = document.getElementById('notification-list');
+    const notifications = state.notifications || [];
+    if (!notifications.length) {
+        list.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:12px">暂无通知 🔕</div>';
+        return;
+    }
+    const typeIcon = { crisis: '⚠️', task: '🎯', tip: '💡', milestone: '🎉' };
+    list.innerHTML = notifications.slice(0, 20).map(n => `
+        <div style="padding:8px 10px;border-radius:8px;background:${n.is_read ? 'transparent' : 'rgba(79,172,254,0.08)'};font-size:13px">
+            <span>${typeIcon[n.type] || '📌'}</span> ${n.content}
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${new Date(n.created_at).toLocaleDateString()}</div>
+        </div>
+    `).join('');
 }
 
 function renderHomeStatus(status, streak) {
@@ -971,6 +1184,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('home-checkin-btn')?.addEventListener('click', () => showPage('checkin'));
     document.getElementById('home-report-btn')?.addEventListener('click', triggerReport);
+    // Phase 4 事件绑定
+    document.getElementById('notification-btn')?.addEventListener('click', renderNotificationPanel);
+    document.getElementById('read-all-btn')?.addEventListener('click', async () => {
+        await api.markNotificationsRead(); showToast('已全部标记为已读'); loadNotifications();
+    });
+    document.getElementById('tips-refresh-btn')?.addEventListener('click', loadTips);
+    document.getElementById('add-milestone-btn')?.addEventListener('click', () => {
+        const title = prompt('里程碑名称（如：在一起100天）');
+        if (!title) return;
+        const dateStr = prompt('日期（YYYY-MM-DD）', new Date().toISOString().split('T')[0]);
+        if (!dateStr) return;
+        api.createMilestone(state.currentPair.id, { title, date: dateStr, type: 'custom' })
+            .then(() => { showToast('里程碑已添加 🎉'); loadMilestones(); })
+            .catch(err => showToast(err.message));
+    });
 
     if (api.isLoggedIn()) {
         checkPairAndRoute();

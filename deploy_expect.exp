@@ -1,0 +1,41 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set host "143.198.110.145"
+set username "root"
+set password "7507906119HJL"
+
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $username@$host
+
+expect "password:"
+send "$password\r"
+
+expect "#"
+send "cd /opt/qinjian\r"
+
+expect "#"
+send "echo '[1/5] 拉取最新代码...'\r"
+send "git pull origin main\r"
+
+expect "#"
+send "echo '[2/5] 停止现有服务...'\r"
+send "docker-compose down 2>/dev/null || true\r"
+
+expect "#"
+send "echo '[3/5] 构建并启动服务...'\r"
+send "docker-compose up -d --build\r"
+
+expect "#"
+send "echo '[4/5] 等待服务启动...'\r"
+send "sleep 15\r"
+
+expect "#"
+send "echo '[5/5] 检查服务状态...'\r"
+send "docker-compose ps\r"
+
+expect "#"
+send "echo '✅ 部署完成！'\r"
+send "echo '访问: http://143.198.110.145:8080'\r"
+send "exit\r"
+
+interact
