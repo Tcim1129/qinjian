@@ -46,6 +46,20 @@ class TaskStatus(str, PyEnum):
     SKIPPED = "skipped"
 
 
+class CrisisLevel(str, PyEnum):
+    NONE = "none"
+    MILD = "mild"
+    MODERATE = "moderate"
+    SEVERE = "severe"
+
+
+class CrisisAlertStatus(str, PyEnum):
+    ACTIVE = "active"  # 当前生效
+    ACKNOWLEDGED = "acknowledged"  # 用户已确认查看
+    RESOLVED = "resolved"  # 已解决/降级
+    ESCALATED = "escalated"  # 已升级至专业帮助
+
+
 # ── 模型 ──
 
 
@@ -122,7 +136,9 @@ class Checkin(Base):
     # ── 结构化四步打卡字段 ──
     mood_score: Mapped[int | None] = mapped_column(nullable=True)
     interaction_freq: Mapped[int | None] = mapped_column(nullable=True)
-    interaction_initiative: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    interaction_initiative: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )
     deep_conversation: Mapped[bool | None] = mapped_column(nullable=True)
     task_completed: Mapped[bool | None] = mapped_column(nullable=True)
 
@@ -309,3 +325,49 @@ class UserNotification(Base):
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
+
+
+# ── 危机预警记录（Crisis Level Grading System） ──
+
+
+class CrisisAlert(Base):
+    __tablename__ = "crisis_alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"), index=True)
+    report_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("reports.id"), nullable=True
+    )  # 触发此预警的报告
+    level: Mapped[CrisisLevel] = mapped_column(
+        Enum(CrisisLevel), default=CrisisLevel.NONE
+    )
+    previous_level: Mapped[CrisisLevel | None] = mapped_column(
+        Enum(CrisisLevel), nullable=True
+    )  # 上一次的等级，用于趋势对比
+    status: Mapped[CrisisAlertStatus] = mapped_column(
+        Enum(CrisisAlertStatus), default=CrisisAlertStatus.ACTIVE
+    )
+    # 干预方案（从 AI 报告中提取）
+    intervention_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    intervention_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    intervention_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    action_items: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # 健康分数快照
+    health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # 用户操作记录
+    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    resolve_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 时间戳
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    # 关系
+    pair: Mapped["Pair"] = relationship()
+    report: Mapped["Report"] = relationship()

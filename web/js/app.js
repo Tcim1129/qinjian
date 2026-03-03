@@ -384,11 +384,12 @@ async function waterTree() {
     }
 }
 
-// ── 危机预警（Phase 4） ──
+// ── 危机预警（Phase 4 + 分级系统） ──
 async function loadCrisisStatus() {
     if (!state.currentPair) return;
     try {
         const crisis = await api.getCrisisStatus(state.currentPair.id);
+        state.crisisStatus = crisis;
         renderCrisisCard(crisis);
     } catch { /* 静默失败 */ }
 }
@@ -427,6 +428,203 @@ function renderCrisisCard(crisis) {
     } else {
         interventionDiv.style.display = 'none';
     }
+
+    // 操作按钮状态
+    const ackBtn = document.getElementById('crisis-ack-btn');
+    const actionsDiv = document.getElementById('crisis-actions');
+    if (actionsDiv) actionsDiv.style.display = 'flex';
+    if (ackBtn) {
+        if (crisis.alert_status === 'acknowledged' || crisis.alert_status === 'resolved') {
+            ackBtn.textContent = '已确认';
+            ackBtn.disabled = true;
+        } else {
+            ackBtn.textContent = '已知悉';
+            ackBtn.disabled = false;
+        }
+    }
+}
+
+async function handleCrisisAcknowledge() {
+    const crisis = state.crisisStatus;
+    if (!crisis || !crisis.alert_id) { showToast('无可操作的预警'); return; }
+    try {
+        await api.acknowledgeCrisisAlert(crisis.alert_id);
+        showToast('已确认知悉预警');
+        const btn = document.getElementById('crisis-ack-btn');
+        if (btn) { btn.textContent = '已确认'; btn.disabled = true; }
+        state.crisisStatus.alert_status = 'acknowledged';
+    } catch (err) { showToast(err.message); }
+}
+
+async function showCrisisResources() {
+    try {
+        const data = await api.getCrisisResources();
+        const hotlines = (data.hotlines || []).map(h =>
+            `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light)">
+                <div>
+                    <div style="font-size:14px;font-weight:500">${h.name}</div>
+                    <div style="font-size:11px;color:var(--text-muted)">${h.hours}</div>
+                </div>
+                <a href="tel:${h.number}" style="color:var(--coral-500);font-weight:600;font-size:14px;text-decoration:none">${h.number}</a>
+            </div>`
+        ).join('');
+        const online = (data.online || []).map(o =>
+            `<div style="padding:8px 0;border-bottom:1px solid var(--border-light)">
+                <a href="${o.url}" target="_blank" style="color:var(--trust-blue);font-weight:500;text-decoration:none">${o.name}</a>
+                <span style="font-size:12px;color:var(--text-muted);margin-left:6px">${o.desc}</span>
+            </div>`
+        ).join('');
+        const tips = (data.tips || []).map(t => `<div style="font-size:13px;color:var(--text-secondary);padding:4px 0">• ${t}</div>`).join('');
+
+        openModal(`
+            <h3 style="font-size:17px;margin-bottom:16px;text-align:center">专业帮助资源</h3>
+            <div style="margin-bottom:16px">
+                <div style="font-size:14px;font-weight:600;margin-bottom:8px">热线电话</div>
+                ${hotlines}
+            </div>
+            <div style="margin-bottom:16px">
+                <div style="font-size:14px;font-weight:600;margin-bottom:8px">在线咨询平台</div>
+                ${online}
+            </div>
+            <div style="margin-bottom:16px">
+                <div style="font-size:14px;font-weight:600;margin-bottom:8px">温馨提示</div>
+                ${tips}
+            </div>
+            ${state.crisisStatus?.alert_id ? `<button class="btn btn-primary btn-block" style="margin-top:8px;font-size:13px" onclick="handleCrisisEscalate()">升级为专业求助</button>` : ''}
+            <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">关闭</button>
+        `);
+    } catch (err) { showToast(err.message); }
+}
+
+async function handleCrisisEscalate() {
+    const crisis = state.crisisStatus;
+    if (!crisis || !crisis.alert_id) return;
+    try {
+        await api.escalateCrisisAlert(crisis.alert_id, '用户主动寻求专业帮助');
+        showToast('已标记为专业求助');
+        closeModal();
+        loadCrisisStatus();
+    } catch (err) { showToast(err.message); }
+}
+
+async function showCrisisDetail() {
+    if (!state.currentPair) return;
+    try {
+        const [history, alerts] = await Promise.all([
+            api.getCrisisHistory(state.currentPair.id, 30).catch(() => ({ history: [] })),
+            api.getCrisisAlerts(state.currentPair.id, null, 10).catch(() => []),
+        ]);
+        renderCrisisDetailModal(history, alerts);
+    } catch (err) { showToast(err.message); }
+}
+
+function renderCrisisDetailModal(historyData, alerts) {
+    const history = historyData.history || [];
+    const crisis = state.crisisStatus || {};
+
+    const levelColor = { none: '#10B981', mild: '#F59E0B', moderate: '#F97316', severe: '#EF4444' };
+    const levelLabel = { none: '正常', mild: '轻度', moderate: '中度', severe: '重度' };
+    const statusLabel = { active: '活跃', acknowledged: '已确认', resolved: '已解决', escalated: '已升级' };
+
+    // 趋势图（简易SVG）
+    let trendSvg = '';
+    const validHistory = history.filter(h => h.health_score != null).slice(0, 14).reverse();
+    if (validHistory.length >= 2) {
+        const w = 300, h = 80, pad = 10;
+        const coords = validHistory.map((p, i) => {
+            const x = pad + (i / (validHistory.length - 1)) * (w - 2 * pad);
+            const y = h - pad - ((p.health_score || 50) / 100) * (h - 2 * pad);
+            return `${x},${y}`;
+        });
+        const levelDots = validHistory.map((p, i) => {
+            const [x, y] = coords[i].split(',');
+            const c = levelColor[p.crisis_level] || levelColor.none;
+            return `<circle cx="${x}" cy="${y}" r="4" fill="${c}" stroke="white" stroke-width="1.5"/>`;
+        }).join('');
+
+        trendSvg = `
+            <div style="margin-bottom:16px">
+                <div style="font-size:14px;font-weight:600;margin-bottom:8px">健康趋势 (近${validHistory.length}次)</div>
+                <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:80px;background:var(--bg-primary);border-radius:10px">
+                    <polyline points="${coords.join(' ')}" fill="none" stroke="var(--coral-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${levelDots}
+                </svg>
+                <div style="display:flex;gap:12px;justify-content:center;margin-top:6px">
+                    ${Object.entries(levelLabel).map(([k, v]) => `<span style="font-size:10px;color:${levelColor[k]}">● ${v}</span>`).join('')}
+                </div>
+            </div>`;
+    }
+
+    // 预警历史列表
+    const alertsList = alerts.length > 0
+        ? alerts.map(a => `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-primary);border-radius:10px;margin-bottom:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:${levelColor[a.level] || levelColor.none};flex-shrink:0"></div>
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:13px;font-weight:500">${levelLabel[a.level] || a.level}预警</div>
+                    <div style="font-size:11px;color:var(--text-muted)">${a.intervention_title || '无干预建议'}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                    <div style="font-size:11px;color:${levelColor[a.level]}">${statusLabel[a.status] || a.status}</div>
+                    <div style="font-size:10px;color:var(--text-muted)">${a.created_at ? new Date(a.created_at).toLocaleDateString() : ''}</div>
+                </div>
+            </div>
+        `).join('')
+        : '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:12px">暂无预警记录</div>';
+
+    // 当前状态
+    const currentLevel = crisis.crisis_level || 'none';
+    const currentInfo = { text: levelLabel[currentLevel] || '正常', color: levelColor[currentLevel] || levelColor.none };
+
+    // 操作区
+    let actionButtons = '';
+    if (crisis.alert_id && crisis.alert_status === 'active') {
+        actionButtons = `
+            <div style="display:flex;gap:8px;margin-top:16px">
+                <button class="btn btn-sm btn-secondary" style="flex:1;font-size:12px" onclick="handleCrisisAcknowledge();closeModal()">确认知悉</button>
+                <button class="btn btn-sm btn-outline" style="flex:1;font-size:12px" onclick="handleCrisisResolve()">标记解决</button>
+            </div>`;
+    } else if (crisis.alert_id && crisis.alert_status === 'acknowledged') {
+        actionButtons = `
+            <div style="display:flex;gap:8px;margin-top:16px">
+                <button class="btn btn-sm btn-outline" style="flex:1;font-size:12px" onclick="handleCrisisResolve()">标记解决</button>
+                <button class="btn btn-sm btn-outline" style="flex:1;font-size:12px;color:var(--coral-500)" onclick="showCrisisResources()">专业帮助</button>
+            </div>`;
+    }
+
+    openModal(`
+        <h3 style="font-size:17px;margin-bottom:16px;text-align:center">危机预警详情</h3>
+        <div style="text-align:center;margin-bottom:16px">
+            <div style="display:inline-block;width:60px;height:60px;border-radius:50%;background:${currentInfo.color}20;display:flex;align-items:center;justify-content:center;margin:0 auto 8px">
+                <span style="font-size:24px;line-height:60px">${currentLevel === 'severe' ? '🚨' : currentLevel === 'moderate' ? '⚠️' : currentLevel === 'mild' ? '💛' : '✅'}</span>
+            </div>
+            <div style="font-size:16px;font-weight:600;color:${currentInfo.color}">${currentInfo.text}${currentLevel !== 'none' ? '预警' : ''}</div>
+            ${crisis.health_score != null ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">健康指数 ${crisis.health_score}</div>` : ''}
+            ${crisis.previous_level && crisis.previous_level !== currentLevel ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">上次: ${levelLabel[crisis.previous_level] || crisis.previous_level}</div>` : ''}
+        </div>
+        ${trendSvg}
+        <div style="margin-bottom:8px">
+            <div style="font-size:14px;font-weight:600;margin-bottom:8px">预警记录</div>
+            ${alertsList}
+        </div>
+        ${actionButtons}
+        <button class="btn btn-secondary btn-block" style="margin-top:12px" onclick="closeModal()">关闭</button>
+    `);
+}
+
+async function handleCrisisResolve() {
+    const crisis = state.crisisStatus;
+    if (!crisis || !crisis.alert_id) { showToast('无可操作的预警'); return; }
+    closeModal();
+    const result = await openInputModal('标记预警已解决', [
+        { key: 'note', label: '解决备注（选填）', type: 'text', placeholder: '简要描述如何解决的' }
+    ]);
+    if (result === null) return;
+    try {
+        await api.resolveCrisisAlert(crisis.alert_id, result.note || '');
+        showToast('预警已标记为解决');
+        loadCrisisStatus();
+    } catch (err) { showToast(err.message); }
 }
 
 // ── 每日任务（Phase 4） ──

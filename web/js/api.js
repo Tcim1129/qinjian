@@ -167,13 +167,35 @@ class ApiClient {
         return this.request('POST', `/tree/water?pair_id=${pairId}`);
     }
 
-    // ── 危机预警（Phase 4） ──
+    // ── 危机预警（Phase 4 + 分级系统） ──
     async getCrisisStatus(pairId) {
         return this.request('GET', `/crisis/status/${pairId}`);
     }
 
     async getCrisisHistory(pairId, limit = 30) {
         return this.request('GET', `/crisis/history/${pairId}?limit=${limit}`);
+    }
+
+    async getCrisisAlerts(pairId, status = null, limit = 20) {
+        let path = `/crisis/alerts/${pairId}?limit=${limit}`;
+        if (status) path += `&status=${status}`;
+        return this.request('GET', path);
+    }
+
+    async acknowledgeCrisisAlert(alertId) {
+        return this.request('POST', `/crisis/alerts/${alertId}/acknowledge`);
+    }
+
+    async resolveCrisisAlert(alertId, note = '') {
+        return this.request('POST', `/crisis/alerts/${alertId}/resolve`, { note });
+    }
+
+    async escalateCrisisAlert(alertId, reason = '') {
+        return this.request('POST', `/crisis/alerts/${alertId}/escalate`, { reason });
+    }
+
+    async getCrisisResources() {
+        return this.request('GET', `/crisis/resources`);
     }
 
     // ── 关系任务（Phase 4） ──

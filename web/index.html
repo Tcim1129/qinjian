@@ -185,18 +185,26 @@
         <button id="tree-water-btn" class="btn btn-sm btn-secondary" style="font-size: 13px">💧 浇水</button>
       </div>
 
-      <!-- 危机预警卡片（Phase 4 新增） -->
+      <!-- 危机预警卡片（Phase 4 增强 — 分级系统） -->
       <div id="crisis-card" class="card" style="display: none">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
-          <span style="font-size: 14px">⚠️ 关系预警</span>
-          <span id="crisis-badge"
-            style="font-size: 12px; padding: 2px 10px; border-radius: 20px; font-weight: 600">正常</span>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 14px">⚠️ 关系预警</span>
+            <span id="crisis-badge"
+              style="font-size: 12px; padding: 2px 10px; border-radius: 20px; font-weight: 600">正常</span>
+          </div>
+          <button id="crisis-detail-btn" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px" onclick="showCrisisDetail()">详情 →</button>
         </div>
         <div id="crisis-intervention" style="display: none">
           <div id="crisis-intervention-title" style="font-size: 14px; font-weight: 600; margin-bottom: 6px"></div>
           <div id="crisis-intervention-desc" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px">
           </div>
           <div id="crisis-action-items" style="font-size: 12px; color: var(--text-muted)"></div>
+        </div>
+        <!-- 操作按钮区 -->
+        <div id="crisis-actions" style="display:flex;gap:8px;margin-top:12px">
+          <button id="crisis-ack-btn" class="btn btn-sm btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="handleCrisisAcknowledge()">已知悉</button>
+          <button id="crisis-help-btn" class="btn btn-sm btn-outline" style="flex:1;font-size:12px;padding:8px" onclick="showCrisisResources()">专业帮助</button>
         </div>
       </div>
 

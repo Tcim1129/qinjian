@@ -28,6 +28,7 @@ from app.models import (
     Milestone,
     CommunityTip,
     UserNotification,
+    CrisisAlert,
 )
 
 config = context.config

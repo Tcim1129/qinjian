@@ -224,6 +224,7 @@ async def _auto_generate_daily(
     """后台自动生成每日报告"""
     try:
         from app.core.database import async_session
+        from app.services.crisis_processor import process_crisis_from_report
 
         async with async_session() as db:
             today = date.today()
@@ -254,6 +255,12 @@ async def _auto_generate_daily(
             report.content = report_content
             report.health_score = report_content.get("health_score")
             report.status = ReportStatus.COMPLETED
+
+            # 自动处理危机预警
+            pair = await db.get(Pair, pair_id)
+            if pair:
+                await process_crisis_from_report(db, report, pair)
+
             await db.commit()
     except Exception as e:
         print(f"自动生成日报失败: {e}")
@@ -293,5 +300,6 @@ async def _auto_generate_solo(pair_id: str, pair_type: str, content: str):
             report.health_score = report_content.get("health_score")
             report.status = ReportStatus.COMPLETED
             await db.commit()
+            # Solo 报告不触发 crisis 预警（单方数据不足以判断）
     except Exception as e:
         print(f"自动生成个人日记失败: {e}")
