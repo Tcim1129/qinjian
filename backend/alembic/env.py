@@ -10,11 +10,25 @@ from alembic import context
 # 修复 sys.path
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models import User, Pair, Checkin, Report
+
+# 导入所有模型，确保 Alembic 能检测到全部表
+from app.models import (
+    User,
+    Pair,
+    Checkin,
+    Report,
+    RelationshipTree,
+    RelationshipTask,
+    LongDistanceActivity,
+    Milestone,
+    CommunityTip,
+    UserNotification,
+)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
@@ -24,10 +38,12 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations() -> None:
     connectable = async_engine_from_config(
@@ -41,8 +57,10 @@ async def run_async_migrations() -> None:
 
     await connectable.dispose()
 
+
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
+
 
 if context.is_offline_mode():
     pass

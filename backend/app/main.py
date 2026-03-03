@@ -1,4 +1,5 @@
 """亲健 API 应用入口"""
+
 import os
 from contextlib import asynccontextmanager
 
@@ -8,12 +9,25 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.v1 import auth, pairs, checkins, reports, upload, tree, crisis, tasks, longdistance, milestones, community
+from app.api.v1 import (
+    auth,
+    pairs,
+    checkins,
+    reports,
+    upload,
+    tree,
+    crisis,
+    tasks,
+    longdistance,
+    milestones,
+    community,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时创建表（开发环境用，生产环境用 Alembic）
+    # Alembic 负责迁移；create_all 仅在表完全不存在时兜底
+    # 注意：create_all 不会修改已有表结构，所以不会和 Alembic 冲突
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     # 创建上传目录

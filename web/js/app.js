@@ -12,7 +12,57 @@ const state = {
     selectedMoods: [],
     uploadedImageUrl: null,
     uploadedVoiceUrl: null,
+    pairPollingTimer: null, // B6: 配对等待轮询定时器
 };
+
+// ── 通用模态框 ──
+function openModal(html) {
+    const overlay = document.getElementById('modal-overlay');
+    const body = document.getElementById('modal-body');
+    if (!overlay || !body) return;
+    body.innerHTML = html;
+    overlay.style.display = 'block';
+}
+function closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+/**
+ * 显示带输入框的模态框，返回 Promise<string|null>
+ * fields: [{ key, label, type, placeholder, defaultValue }]
+ */
+function openInputModal(title, fields) {
+    return new Promise(resolve => {
+        const fieldHtml = fields.map(f => `
+            <div style="margin-bottom:14px">
+                <label style="font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px">${f.label}</label>
+                <input id="modal-input-${f.key}" class="form-input" type="${f.type || 'text'}"
+                    placeholder="${f.placeholder || ''}" value="${f.defaultValue || ''}"
+                    style="width:100%;box-sizing:border-box">
+            </div>
+        `).join('');
+        openModal(`
+            <h3 style="font-size:17px;margin-bottom:16px;text-align:center">${title}</h3>
+            ${fieldHtml}
+            <div style="display:flex;gap:10px;margin-top:18px">
+                <button class="btn btn-secondary" style="flex:1" onclick="closeModal();window._modalResolve(null)">取消</button>
+                <button class="btn btn-primary" style="flex:1" onclick="
+                    var result = {};
+                    ${fields.map(f => `result['${f.key}'] = document.getElementById('modal-input-${f.key}').value;`).join('')}
+                    closeModal();
+                    window._modalResolve(result);
+                ">确认</button>
+            </div>
+        `);
+        window._modalResolve = resolve;
+        // 自动聚焦第一个输入框
+        setTimeout(() => {
+            const first = document.getElementById(`modal-input-${fields[0].key}`);
+            if (first) first.focus();
+        }, 100);
+    });
+}
 
 // ── 页面路由 ──
 function showPage(pageId) {
@@ -29,6 +79,40 @@ function showPage(pageId) {
     if (pageId === 'home') loadHome();
     if (pageId === 'report') loadReports();
     if (pageId === 'profile') loadProfile();
+
+    // B6: 配对等待页面轮询
+    if (pageId === 'pair-waiting') {
+        startPairPolling();
+    } else {
+        stopPairPolling();
+    }
+}
+
+// ── 配对等待轮询 (B6) ──
+function startPairPolling() {
+    stopPairPolling();
+    state.pairPollingTimer = setInterval(async () => {
+        try {
+            const pairs = await api.getMyPair();
+            const activePairs = (pairs || []).filter(p => p.status === 'active');
+            if (activePairs.length > 0) {
+                stopPairPolling();
+                state.currentPair = activePairs[0];
+                state.currentPairs = pairs;
+                document.getElementById('tab-bar').style.display = 'flex';
+                showPage('home');
+                showToast('对方已加入，配对成功！');
+            }
+        } catch (err) {
+            console.log('轮询配对状态失败:', err.message);
+        }
+    }, 5000); // 每5秒检查一次
+}
+function stopPairPolling() {
+    if (state.pairPollingTimer) {
+        clearInterval(state.pairPollingTimer);
+        state.pairPollingTimer = null;
+    }
 }
 
 // ── Toast ──
@@ -105,8 +189,15 @@ async function checkPairAndRoute() {
         } else {
             showPage('pair');
         }
-    } catch {
-        showPage('pair');
+    } catch (err) {
+        console.error('checkPairAndRoute 失败:', err);
+        // token 无效时清除并跳回登录
+        if (err.message && (err.message.includes('认证') || err.message.includes('401') || err.message.includes('无效'))) {
+            api.clearToken();
+            showPage('auth');
+        } else {
+            showPage('pair');
+        }
     }
 }
 
@@ -455,8 +546,14 @@ async function viewMilestoneReport(milestoneId) {
         showToast('正在生成回顾报告...');
         const data = await api.getMilestoneReport(milestoneId);
         const r = data.report || {};
-        const msg = `📖 ${r.growth_story || '回忆正在生成中...'}\n\n🎯 优势: ${(r.strengths_discovered || []).join('、')}\n\n💌 ${r.blessing || ''}`;
-        alert(msg);
+        const strengths = (r.strengths_discovered || []).map(s => `<div style="font-size:13px;color:var(--text-secondary);padding:2px 0">• ${s}</div>`).join('');
+        openModal(`
+            <h3 style="font-size:17px;margin-bottom:16px;text-align:center">📖 里程碑回顾</h3>
+            <div style="font-size:14px;line-height:1.7;color:var(--text-secondary);margin-bottom:16px">${r.growth_story || '回忆正在生成中...'}</div>
+            ${strengths ? `<div style="margin-bottom:16px"><div style="font-size:14px;font-weight:600;margin-bottom:8px">🎯 发现的优势</div>${strengths}</div>` : ''}
+            ${r.blessing ? `<div style="text-align:center;font-size:14px;color:var(--primary);font-style:italic;padding:12px;background:rgba(79,172,254,0.08);border-radius:12px">💌 ${r.blessing}</div>` : ''}
+            <button class="btn btn-secondary btn-block" style="margin-top:16px" onclick="closeModal()">关闭</button>
+        `);
     } catch (err) { showToast(err.message); }
 }
 
@@ -1081,15 +1178,22 @@ ${c.professional_note ? `<div class="report-insight">${c.professional_note}</div
 
 // ── 个人中心 ──
 async function loadProfile() {
-    if (!state.currentPair) return;
-
-    // 显示昵称（Mod 8）
+    // 显示昵称
     const nicknameEl = document.querySelector('#page-profile .card:first-of-type div[style*="font-size: 18px"]');
     if (nicknameEl) {
         try {
             const me = await api.request('GET', '/auth/me');
             nicknameEl.textContent = me.nickname || '用户';
         } catch { /* ignore */ }
+    }
+
+    if (!state.currentPair) {
+        // 无配对时显示基本信息
+        document.getElementById('profile-pair-type').textContent = '未配对';
+        document.getElementById('profile-pair-status').textContent = '去配对页面建立关系吧';
+        const unbindSection = document.getElementById('unbind-section');
+        if (unbindSection) unbindSection.style.display = 'none';
+        return;
     }
 
     // 配对类型显示
@@ -1108,7 +1212,7 @@ async function loadUnbindStatus() {
     if (!section || !state.currentPair) return;
 
     try {
-        const status = await api.getUnbindStatus();
+        const status = await api.getUnbindStatus(state.currentPair.id);
         if (!status.has_request) {
             section.style.display = 'block';
             statusText.textContent = '解除配对后双方将无法继续打卡和查看报告';
@@ -1140,7 +1244,7 @@ async function loadUnbindStatus() {
 async function handleRequestUnbind() {
     if (!confirm('确定要发起解绑吗？对方确认后立即生效，或等待7天冷静期后你可强制解绑。')) return;
     try {
-        await api.requestUnbind();
+        await api.requestUnbind(state.currentPair.id);
         showToast('解绑请求已发起');
         loadUnbindStatus();
     } catch (err) { showToast(err.message); }
@@ -1149,7 +1253,7 @@ async function handleRequestUnbind() {
 async function handleConfirmUnbind() {
     if (!confirm('确定要解除配对吗？此操作不可撤销。')) return;
     try {
-        const result = await api.confirmUnbind();
+        const result = await api.confirmUnbind(state.currentPair.id);
         showToast(result.message);
         state.currentPair = null;
         document.getElementById('tab-bar').style.display = 'none';
@@ -1159,7 +1263,7 @@ async function handleConfirmUnbind() {
 
 async function handleCancelUnbind() {
     try {
-        await api.cancelUnbind();
+        await api.cancelUnbind(state.currentPair.id);
         showToast('解绑请求已撤回');
         loadUnbindStatus();
     } catch (err) { showToast(err.message); }
@@ -1190,14 +1294,18 @@ document.addEventListener('DOMContentLoaded', () => {
         await api.markNotificationsRead(); showToast('已全部标记为已读'); loadNotifications();
     });
     document.getElementById('tips-refresh-btn')?.addEventListener('click', loadTips);
-    document.getElementById('add-milestone-btn')?.addEventListener('click', () => {
-        const title = prompt('里程碑名称（如：在一起100天）');
-        if (!title) return;
-        const dateStr = prompt('日期（YYYY-MM-DD）', new Date().toISOString().split('T')[0]);
-        if (!dateStr) return;
-        api.createMilestone(state.currentPair.id, { title, date: dateStr, type: 'custom' })
-            .then(() => { showToast('里程碑已添加 🎉'); loadMilestones(); })
-            .catch(err => showToast(err.message));
+    document.getElementById('add-milestone-btn')?.addEventListener('click', async () => {
+        const result = await openInputModal('添加里程碑', [
+            { key: 'title', label: '里程碑名称', type: 'text', placeholder: '如：在一起100天' },
+            { key: 'date', label: '日期', type: 'date', defaultValue: new Date().toISOString().split('T')[0] }
+        ]);
+        if (!result || !result.title) return;
+        const dateStr = result.date || new Date().toISOString().split('T')[0];
+        try {
+            await api.createMilestone(state.currentPair.id, { title: result.title, date: dateStr, type: 'custom' });
+            showToast('里程碑已添加');
+            loadMilestones();
+        } catch (err) { showToast(err.message); }
     });
 
     if (api.isLoggedIn()) {
