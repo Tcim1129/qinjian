@@ -3,502 +3,1568 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>亲健 · 亲密关系健康</title>
-  <meta name="description" content="亲健——让每一段关系都被温柔以待">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>亲健 · 亲密关系健康管理</title>
+  <meta name="description" content="亲健——中国首个AI亲密关系健康管理平台，让爱有据可循">
+  <meta name="theme-color" content="#C45C4A">
   <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
+  <!-- ═══ SVG 图标精灵表 ═══ -->
+  <div hidden>
+    <svg xmlns="http://www.w3.org/2000/svg">
+      <!-- 导航图标 -->
+      <symbol id="i-home" viewBox="0 0 24 24">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+        <polyline points="9 21 9 14 15 14 15 21"/>
+      </symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24">
+        <path d="M12 20h9"/>
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      </symbol>
+      <symbol id="i-bar-chart" viewBox="0 0 24 24">
+        <line x1="12" y1="20" x2="12" y2="10"/>
+        <line x1="18" y1="20" x2="18" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="16"/>
+      </symbol>
+      <symbol id="i-user" viewBox="0 0 24 24">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+      </symbol>
+      <!-- 核心功能图标 -->
+      <symbol id="i-heart" viewBox="0 0 24 24">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </symbol>
+      <symbol id="i-star" viewBox="0 0 24 24">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </symbol>
+      <symbol id="i-trophy" viewBox="0 0 24 24">
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+        <path d="M4 22h16"/>
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22"/>
+        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22"/>
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+      </symbol>
+      <symbol id="i-target" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="6"/>
+        <circle cx="12" cy="12" r="2"/>
+      </symbol>
+      <!-- 操作图标 -->
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <polyline points="20 6 9 17 4 12"/>
+      </symbol>
+      <symbol id="i-check-circle" viewBox="0 0 24 24">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </symbol>
+      <symbol id="i-x-circle" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24">
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24">
+        <polyline points="9 18 15 12 9 6"/>
+      </symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24">
+        <polyline points="15 18 9 12 15 6"/>
+      </symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+      </symbol>
+      <symbol id="i-external-link" viewBox="0 0 24 24">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </symbol>
+      <!-- 多媒体图标 -->
+      <symbol id="i-camera" viewBox="0 0 24 24">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </symbol>
+      <symbol id="i-image" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </symbol>
+      <!-- 时间/日历图标 -->
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </symbol>
+      <!-- 关系/社交图标 -->
+      <symbol id="i-users" viewBox="0 0 24 24">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </symbol>
+      <symbol id="i-link" viewBox="0 0 24 24">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </symbol>
+      <symbol id="i-message-circle" viewBox="0 0 24 24">
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+      </symbol>
+      <symbol id="i-handshake" viewBox="0 0 24 24">
+        <path d="M11 17l-1.5 1.5a2.12 2.12 0 0 1-3-3L8 14"/>
+        <path d="M16 7l1.5-1.5a2.12 2.12 0 0 1 3 3L19 10"/>
+        <path d="M7 8.5L2 12l4.5 3"/>
+        <path d="M17 15.5L22 12l-4.5-3"/>
+        <path d="M12 12L8 8"/>
+        <path d="M12 12l4 4"/>
+      </symbol>
+      <!-- 自然/成长图标 -->
+      <symbol id="i-tree" viewBox="0 0 24 24">
+        <path d="M12 22V13"/>
+        <path d="M8 22h8"/>
+        <path d="M12 3C8 3 5 7 5 10.5c0 2 .8 3.8 2 5 .5.5.5 1.5.5 2.5h9c0-1 0-2 .5-2.5 1.2-1.2 2-3 2-5C19 7 16 3 12 3z"/>
+      </symbol>
+      <symbol id="i-droplet" viewBox="0 0 24 24">
+        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+      </symbol>
+      <symbol id="i-sprout" viewBox="0 0 24 24">
+        <path d="M7 20h10"/>
+        <path d="M12 20v-8"/>
+        <path d="M12 12C12 8 8 6 4 6c0 4 2 8 8 8-2-6 2-10 8-10 0 4-2 8-8 8"/>
+      </symbol>
+      <!-- 状态/预警图标 -->
+      <symbol id="i-alert-triangle" viewBox="0 0 24 24">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </symbol>
+      <symbol id="i-alert-circle" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </symbol>
+      <symbol id="i-info" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </symbol>
+      <!-- 设置/系统图标 -->
+      <symbol id="i-settings" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </symbol>
+      <symbol id="i-log-out" viewBox="0 0 24 24">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24">
+        <polyline points="16 16 12 12 8 16"/>
+        <line x1="12" y1="12" x2="12" y2="21"/>
+        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+      </symbol>
+      <!-- 关系类型图标 -->
+      <symbol id="i-couple" viewBox="0 0 24 24">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </symbol>
+      <symbol id="i-ring" viewBox="0 0 24 24">
+        <circle cx="12" cy="14" r="7"/>
+        <path d="M12 7V2"/>
+        <path d="M8 4l4 3 4-3"/>
+      </symbol>
+      <symbol id="i-fist-bump" viewBox="0 0 24 24">
+        <path d="M4 12h3a2 2 0 0 0 2-2V8"/>
+        <path d="M20 12h-3a2 2 0 0 1-2-2V8"/>
+        <path d="M9 8V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"/>
+        <path d="M4 12v4a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-4"/>
+      </symbol>
+      <symbol id="i-baby" viewBox="0 0 24 24">
+        <circle cx="12" cy="10" r="7"/>
+        <path d="M8.5 10a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0"/>
+        <path d="M14.5 10a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0"/>
+        <path d="M10 13.5c.83.5 1.7.5 2 .5s1.17 0 2-.5"/>
+        <path d="M12 17v3"/>
+        <path d="M8 22h8"/>
+      </symbol>
+      <!-- 发现页模块图标 -->
+      <symbol id="i-map-pin" viewBox="0 0 24 24">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24">
+        <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.33.47 2.55 1.26 3.5H4.5a3.5 3.5 0 0 0-.79 6.91A3 3 0 0 0 6 21h1"/>
+        <path d="M14.5 2A5.5 5.5 0 0 1 20 7.5c0 1.33-.47 2.55-1.26 3.5h.76a3.5 3.5 0 0 1 .79 6.91A3 3 0 0 1 18 21h-1"/>
+        <path d="M12 2v19"/>
+      </symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24">
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+        <line x1="4" y1="22" x2="4" y2="15"/>
+      </symbol>
+      <symbol id="i-book-open" viewBox="0 0 24 24">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+      </symbol>
+      <symbol id="i-award" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="7"/>
+        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
+      </symbol>
+      <symbol id="i-headphones" viewBox="0 0 24 24">
+        <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+        <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+      </symbol>
+      <symbol id="i-crown" viewBox="0 0 24 24">
+        <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/>
+        <path d="M5 16h14v4H5z"/>
+      </symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </symbol>
+      <symbol id="i-video" viewBox="0 0 24 24">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </symbol>
+      <symbol id="i-gift" viewBox="0 0 24 24">
+        <polyline points="20 12 20 22 4 22 4 12"/>
+        <rect x="2" y="7" width="20" height="5"/>
+        <line x1="12" y1="22" x2="12" y2="7"/>
+        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+      </symbol>
+      <!-- 数据/报告图标 -->
+      <symbol id="i-trending-up" viewBox="0 0 24 24">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+        <polyline points="17 6 23 6 23 12"/>
+      </symbol>
+      <symbol id="i-trending-down" viewBox="0 0 24 24">
+        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+        <polyline points="17 18 23 18 23 12"/>
+      </symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </symbol>
+      <symbol id="i-pie-chart" viewBox="0 0 24 24">
+        <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+        <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+      </symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+      </symbol>
+      <!-- 表情符号替代 -->
+      <symbol id="i-smile" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+        <line x1="9" y1="9" x2="9.01" y2="9"/>
+        <line x1="15" y1="9" x2="15.01" y2="9"/>
+      </symbol>
+      <symbol id="i-meh" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="8" y1="15" x2="16" y2="15"/>
+        <line x1="9" y1="9" x2="9.01" y2="9"/>
+        <line x1="15" y1="9" x2="15.01" y2="9"/>
+      </symbol>
+      <symbol id="i-frown" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
+        <line x1="9" y1="9" x2="9.01" y2="9"/>
+        <line x1="15" y1="9" x2="15.01" y2="9"/>
+      </symbol>
+      <symbol id="i-fire" viewBox="0 0 24 24">
+        <path d="M12 22c4.97 0 8-3.58 8-8 0-3.5-2-6-4-8l-1 1c.5 1 1 2.5.5 4-1-3-4-4-6-6-1 2-1.5 4-1 6-.5-.5-1-1.5-1-3-2 2-4 5-4 8 0 4.42 3.03 8 8 8z"/>
+        <path d="M12 22c-2 0-3-1.5-3-3.5 0-1.5.5-2.5 1.5-3.5.5 1 1.5 1.5 2.5 1.5s1.5-.5 2-1.5c.5 1 .5 2 .5 3 0 2.5-1.5 4-3.5 4z"/>
+      </symbol>
+      <symbol id="i-lightbulb" viewBox="0 0 24 24">
+        <path d="M9 18h6"/>
+        <path d="M10 22h4"/>
+        <path d="M12 2a7 7 0 0 0-4 12.7V16a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-1.3A7 7 0 0 0 12 2z"/>
+      </symbol>
+      <!-- 额外图标 -->
+      <symbol id="i-send" viewBox="0 0 24 24">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </symbol>
+      <symbol id="i-share" viewBox="0 0 24 24">
+        <circle cx="18" cy="5" r="3"/>
+        <circle cx="6" cy="12" r="3"/>
+        <circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+        <line x1="1" y1="1" x2="23" y2="23"/>
+      </symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24">
+        <path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z"/>
+        <path d="M19 15l.75 2.25L22 18l-2.25.75L19 21l-.75-2.25L16 18l2.25-.75L19 15z"/>
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </symbol>
+    </svg>
+  </div>
 
   <div class="app">
     <div id="toast" class="toast"></div>
 
     <!-- ═══ 登录/注册页 ═══ -->
     <div id="page-auth" class="page auth-page active">
-      <div style="text-align: center; padding-top: 60px; margin-bottom: 60px;">
-        <div class="hero-visual" style="font-size: 88px; margin-bottom: 24px;">💑</div>
-        <h1 style="font-size: 40px; font-weight: 900; letter-spacing: -1.5px; color: var(--text-title);">亲健</h1>
-        <p style="font-size: 17px; font-weight: 500; color: var(--text-secondary); margin-top: 8px;">让每一段关系都被温柔以待</p>
+      <div class="auth-brand">
+        <div class="auth-brand__icon">
+          <svg class="icon icon-xl"><use href="#i-heart"/></svg>
+        </div>
+        <div class="auth-brand__title">亲健</div>
+        <div class="auth-brand__slogan">让爱有据可循</div>
       </div>
 
-      <form id="auth-form" style="padding: 0 10px;">
-        <h2 id="auth-title" style="font-size: 24px; font-weight: 800; margin-bottom: 24px;">登入账户</h2>
+      <form id="auth-form">
+        <h2 id="auth-title" class="auth-form__title">欢迎回来</h2>
 
-        <div class="form-group" id="auth-nickname-group" style="display: none; margin-bottom: 16px;">
-          <input id="auth-nickname" class="input-field" type="text" placeholder="你的专属昵称">
+        <div class="form-group hidden" id="auth-nickname-group">
+          <label class="form-label">昵称</label>
+          <input id="auth-nickname" class="form-input" type="text" placeholder="你希望对方怎么称呼你">
         </div>
 
-        <div class="form-group" style="margin-bottom: 16px;">
-          <input id="auth-email" class="input-field" type="email" placeholder="邮箱地址" required>
+        <div class="form-group">
+          <label class="form-label">邮箱</label>
+          <input id="auth-email" class="form-input" type="email" placeholder="your@email.com" required>
         </div>
 
-        <div class="form-group" style="margin-bottom: 32px;">
-          <input id="auth-password" class="input-field" type="password" placeholder="密码 (至少6位)" minlength="6" required>
+        <div class="form-group">
+          <label class="form-label">密码</label>
+          <input id="auth-password" class="form-input" type="password" placeholder="至少6位" minlength="6" required>
         </div>
 
-        <button id="auth-submit-btn" type="submit" class="btn btn-primary btn-block"
-          style="padding: 18px; font-size: 18px; border-radius: 20px;">继续</button>
+        <button id="auth-submit-btn" type="submit" class="btn btn-primary btn-block">登录</button>
 
-        <div class="auth-toggle" id="auth-toggle-text"
-          style="text-align: center; margin-top: 24px; font-size: 15px; color: var(--text-secondary); font-weight: 500;">
-          还没有账号？ <a href="#" id="auth-toggle-link" class="text-brand"
-            style="text-decoration: none; font-weight: 700;">注册新账户</a>
+        <div class="auth-toggle" id="auth-toggle-text">
+          还没有账号？<a href="#" id="auth-toggle-link">立即注册</a>
         </div>
       </form>
     </div>
 
-    <!-- ═══ 配对页 (Onboarding) ═══ -->
+    <!-- ═══ 配对页 ═══ -->
     <div id="page-pair" class="page">
-
-      <!-- 已有配对 -->
-      <div id="existing-pairs" style="display: none; margin-bottom: 40px;">
-        <div class="page-header">
-          <h1 class="page-title">你的关系</h1>
-          <p class="page-subtitle">选择要进入的空间</p>
+      <!-- 已有配对列表 -->
+      <section id="existing-pairs" class="hidden">
+        <div class="pair-hero pair-hero--compact">
+          <h2 class="text-xl font-semibold mb-1">你的关系</h2>
+          <p class="text-sm text-muted">点击切换到对应关系</p>
         </div>
-        <div id="pairs-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+        <div id="pairs-list" class="mb-4">
           <!-- 动态填充 -->
         </div>
-      </div>
+        <div class="divider">或新建关系</div>
+      </section>
 
-      <div class="page-header" id="pair-create-header">
-        <div class="hero-visual" style="font-size: 72px; margin-bottom: 24px;">🤝</div>
-        <h1 class="page-title">建立空间</h1>
-        <p class="page-subtitle">选择你们的关系形态</p>
-      </div>
-
-      <!-- Bento Grid for Pair Selection -->
-      <div class="bento-grid">
-        <label class="widget widget-half emotion-sphere selected" style="padding: 24px 10px;">
-          <input type="radio" name="pair-type" value="couple" checked style="display: none">
-          <span class="emoji" style="font-size: 36px;">💕</span>
-          <span class="label">情侣</span>
-        </label>
-        <label class="widget widget-half emotion-sphere" style="padding: 24px 10px;">
-          <input type="radio" name="pair-type" value="spouse" style="display: none">
-          <span class="emoji" style="font-size: 36px;">💍</span>
-          <span class="label">夫妻</span>
-        </label>
-        <label class="widget widget-half emotion-sphere" style="padding: 24px 10px;">
-          <input type="radio" name="pair-type" value="bestfriend" style="display: none">
-          <span class="emoji" style="font-size: 36px;">🤜🤛</span>
-          <span class="label">挚友</span>
-        </label>
-        <label class="widget widget-half emotion-sphere" style="padding: 24px 10px;">
-          <input type="radio" name="pair-type" value="parent" style="display: none">
-          <span class="emoji" style="font-size: 36px;">👨‍👩‍👧</span>
-          <span class="label">育儿夫妻</span>
-        </label>
-
-        <div class="widget widget-full" style="padding: 0; background: transparent; box-shadow: none;">
-          <button id="pair-create-btn" class="btn btn-primary btn-block"
-            style="padding: 18px; font-size: 18px; border-radius: 20px;">生成专属邀请码</button>
+      <div class="pair-hero" id="pair-create-header">
+        <div class="pair-hero__icon">
+          <svg class="icon icon-xl"><use href="#i-handshake"/></svg>
         </div>
+        <h2 class="pair-hero__title">建立你们的专属空间</h2>
+        <p class="pair-hero__desc">选择关系类型，邀请你的另一半</p>
       </div>
 
-      <div style="margin: 32px 0;">
-        <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">收到邀请了？</h2>
-        <div style="display: flex; gap: 12px;">
-          <input id="pair-join-code" class="input-field" type="text" placeholder="输入6位数字" maxlength="6"
-            inputmode="numeric" pattern="[0-9]*" style="font-size: 20px; letter-spacing: 2px; text-align: center;">
-          <button id="pair-join-btn" class="btn btn-secondary" style="border-radius: var(--radius-md);">加入</button>
+      <div class="card">
+        <h3 class="card__title">选择关系类型</h3>
+        <div class="pair-types">
+          <label class="option-card pair-type-option selected">
+            <input type="radio" name="pair-type" value="couple" checked>
+            <div class="option-card__icon">
+              <svg class="icon"><use href="#i-couple"/></svg>
+            </div>
+            <span class="option-card__label">情侣</span>
+          </label>
+          <label class="option-card pair-type-option">
+            <input type="radio" name="pair-type" value="spouse">
+            <div class="option-card__icon">
+              <svg class="icon"><use href="#i-ring"/></svg>
+            </div>
+            <span class="option-card__label">夫妻</span>
+          </label>
+          <label class="option-card pair-type-option">
+            <input type="radio" name="pair-type" value="bestfriend">
+            <div class="option-card__icon">
+              <svg class="icon"><use href="#i-fist-bump"/></svg>
+            </div>
+            <span class="option-card__label">挚友</span>
+          </label>
+          <label class="option-card pair-type-option">
+            <input type="radio" name="pair-type" value="parent">
+            <div class="option-card__icon">
+              <svg class="icon"><use href="#i-baby"/></svg>
+            </div>
+            <span class="option-card__label">育儿夫妻</span>
+          </label>
         </div>
+        <button id="pair-create-btn" class="btn btn-primary btn-block mt-4">创建配对</button>
+      </div>
+
+      <div class="divider">或</div>
+
+      <div class="card">
+        <h3 class="card__title">加入已有配对</h3>
+        <input id="pair-join-code" class="form-input form-input--code" type="text" placeholder="输入6位数字邀请码"
+          maxlength="6" inputmode="numeric" pattern="[0-9]*">
+        <button id="pair-join-btn" class="btn btn-secondary btn-block mt-3">加入配对</button>
       </div>
     </div>
-
 
     <!-- ═══ 等待配对页 ═══ -->
     <div id="page-pair-waiting" class="page">
-      <div style="text-align: center; padding-top: 80px;">
-        <div class="hero-visual" style="font-size: 80px; margin-bottom: 30px;">⏳</div>
-        <h1 class="page-title" style="margin-bottom: 12px;">等待对方加入</h1>
-        <p class="page-subtitle" style="margin-bottom: 40px;">将下方专属邀请码发送给另一半</p>
-
-        <div id="waiting-invite-code"
-          style="font-size: 48px; font-family: 'Inter', monospace; font-weight: 900; letter-spacing: 8px; color: var(--color-brand); margin-bottom: 24px;">
-          --------
+      <div class="waiting-hero">
+        <div class="waiting-hero__icon">
+          <svg class="icon icon-xl"><use href="#i-clock"/></svg>
         </div>
-
-        <p style="font-size: 15px; color: var(--text-tertiary); font-weight: 500;">对方在注册后输入此码即可完成绑定</p>
+        <h2 class="waiting-hero__title">等待对方加入</h2>
+        <p class="waiting-hero__desc">把下面的邀请码发给 TA</p>
+        <div id="waiting-invite-code" class="invite-code">--------</div>
+        <p class="waiting-hero__hint">对方输入此邀请码即可完成配对</p>
       </div>
     </div>
 
-
-    <!-- ═══ 首页仪表盘 (Bento Box Dashboard) ═══ -->
+    <!-- ═══ 首页 ═══ -->
     <div id="page-home" class="page">
+      <!-- 配对选择器 -->
+      <div id="pair-selector" class="card pair-selector hidden">
+        <div class="pair-selector__row">
+          <span class="pair-selector__label">当前关系</span>
+          <select id="pair-select" class="form-input pair-selector__select">
+            <!-- 动态填充 -->
+          </select>
+        </div>
+      </div>
 
-      <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+      <header class="header">
         <div>
-          <h1 class="page-title">概览</h1>
-          <p class="page-subtitle" id="home-date-subtitle">今天</p>
+          <div class="header-title">亲健</div>
+          <div class="header-subtitle flex items-center gap-1">
+            <svg class="icon icon-sm"><use href="#i-sparkles"/></svg>
+            今天也要好好经营关系哦
+          </div>
+          <div class="header-hint flex items-center gap-1">
+            <svg class="icon icon-xs"><use href="#i-clock"/></svg>
+            每日 21:00 打卡提醒
+          </div>
         </div>
-        <div class="avatar" style="width: 44px; height: 44px; font-size: 18px;" onclick="showPage('profile')">我</div>
+        <div class="avatar" onclick="showPage('profile')">我</div>
+      </header>
+
+      <!-- 连续打卡 -->
+      <div class="card streak-display">
+        <div class="streak-count" id="streak-count">0</div>
+        <div class="streak-label flex items-center justify-center gap-1">
+          <svg class="icon icon-sm text-warning"><use href="#i-fire"/></svg>
+          连续打卡天数
+        </div>
       </div>
 
-      <!-- 配对选择器 (Mini Widget) -->
-      <div id="pair-selector" class="widget widget-full"
-        style="display: none; padding: 12px 16px; margin-bottom: 16px; flex-direction: row; align-items: center; justify-content: space-between;">
-        <span style="font-size: 15px; font-weight: 600;">当前关系</span>
-        <select id="pair-select"
-          style="background: var(--bg-surface-secondary); border: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 15px; outline: none;">
-        </select>
+      <!-- 打卡状态卡片 -->
+      <div class="card checkin-accent">
+        <div class="checkin-accent__label">
+          <svg class="icon icon-sm"><use href="#i-edit"/></svg>
+          今日打卡
+        </div>
+        <div class="checkin-status">
+          <div class="status-item">
+            <div id="status-my-dot" class="status-dot"></div>
+            <div id="status-my-label" class="status-label">加载中...</div>
+          </div>
+          <div class="status-item">
+            <div id="status-partner-dot" class="status-dot"></div>
+            <div id="status-partner-label" class="status-label">加载中...</div>
+          </div>
+        </div>
+        <button id="home-checkin-btn" class="checkin-accent__btn">开始打卡</button>
       </div>
 
-      <div class="bento-grid">
-
-        <!-- 今日状态 (Widget 1 - Large) -->
-        <div class="widget widget-full" style="background: var(--gradient-main); color: white;">
-          <div class="widget-header">
-            <span class="widget-title" style="color: white;"><span class="widget-icon-bg"
-                style="background: rgba(255,255,255,0.2);">📝</span>今日打卡</span>
-          </div>
-          <div style="display: flex; justify-content: space-around; align-items: center; margin: 16px 0 24px;">
-            <div style="text-align: center;">
-              <div id="status-my-dot"
-                style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 auto 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
-              </div>
-              <div id="status-my-label" style="font-size: 13px; font-weight: 600;">我</div>
-            </div>
-            <div style="width: 40px; height: 2px; background: rgba(255,255,255,0.3); border-radius: 2px;"></div>
-            <div style="text-align: center;">
-              <div id="status-partner-dot"
-                style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 auto 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
-              </div>
-              <div id="status-partner-label" style="font-size: 13px; font-weight: 600;">对方</div>
-            </div>
-          </div>
-          <button id="home-checkin-btn" class="btn"
-            style="background: white; color: var(--color-brand); font-size: 16px; padding: 14px; width: 100%;">记录今天</button>
+      <!-- 关系树 -->
+      <div id="tree-card" class="card tree-card hidden">
+        <div id="tree-visual" class="tree-visual">
+          <svg class="icon icon-2xl"><use href="#i-sprout"/></svg>
         </div>
-
-        <!-- 连续打卡 (Widget 2 - Square) -->
-        <div class="widget widget-half" style="background: var(--color-orange-light);">
-          <div class="widget-header">
-            <span class="widget-title"><span class="widget-icon-bg bg-orange-light text-orange"
-                style="background: white;">🔥</span>坚持</span>
-          </div>
-          <div class="widget-value-large text-orange" id="streak-count">0</div>
-          <div class="widget-desc" style="color: #CC7700;">连续天数</div>
+        <div id="tree-level" class="tree-level">种子</div>
+        <div class="tree-points">
+          成长值 <span id="tree-points" class="mono">0</span>
         </div>
-
-        <!-- 关系树 (Widget 3 - Square) -->
-        <div id="tree-card" class="widget widget-half" style="background: var(--color-green-light); display: none;">
-          <div class="widget-header">
-            <span class="widget-title"><span class="widget-icon-bg" style="background: white;">🌱</span>树苗</span>
-            <span id="tree-level"
-              style="font-size: 12px; font-weight: 700; color: var(--color-green); background: white; padding: 4px 8px; border-radius: 10px;">种子</span>
-          </div>
-          <div class="widget-value-large text-green" id="tree-points" style="font-size: 36px;">0</div>
-          <div class="widget-desc" style="color: #248A3D; margin-bottom: 12px;">成长值收集</div>
-          <button id="tree-water-btn" class="btn btn-secondary"
-            style="background: white; color: var(--color-green); padding: 8px; font-size: 14px;">💧 浇水</button>
+        <div class="progress-bar">
+          <div id="tree-progress-bar" class="progress-bar__fill" style="width:0%"></div>
         </div>
+        <button id="tree-water-btn" class="btn btn-sm btn-accent">
+          <svg class="icon icon-sm"><use href="#i-droplet"/></svg>
+          浇水
+        </button>
+      </div>
 
-        <!-- 危机预警 (Widget 4 - Full) Phase 4 -->
-        <div id="crisis-card" class="widget widget-full"
-          style="display: none; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 16px 20px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div class="widget-icon-bg"
-              style="background: #FFE5E5; color: #FF3B30; width: 36px; height: 36px; font-size: 20px;">⚠️</div>
-            <div>
-              <div style="font-size: 16px; font-weight: 700;">关系雷达</div>
-              <div id="crisis-badge"
-                style="font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">正常</div>
-            </div>
+      <!-- 危机预警卡片 -->
+      <div id="crisis-card" class="card hidden">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-alert-triangle"/></svg>
+            关系预警
+            <span id="crisis-badge" class="crisis-badge crisis-badge--none">正常</span>
           </div>
-          <button id="crisis-detail-btn" class="btn btn-secondary"
-            style="padding: 10px 16px; font-size: 14px; border-radius: 16px;" onclick="showCrisisDetail()">查看</button>
-
-          <!-- Detail panel normally hidden inside the widget in Bento, handled by app.js modal conceptually now or expanded state -->
-        </div>
-
-        <!-- 每日任务 (Widget 5 - Full) Phase 4 -->
-        <div id="tasks-card" class="widget widget-full" style="display: none; background: #F2F2F7;">
-          <div class="widget-header">
-            <span class="widget-title"><span class="widget-icon-bg bg-blue-light text-blue">🎯</span>今日修课</span>
-            <span id="tasks-attachment-label"
-              style="font-size: 11px; font-weight: 700; color: var(--color-blue); background: white; padding: 4px 8px; border-radius: 10px;"></span>
-          </div>
-          <div id="tasks-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;"></div>
-        </div>
-
-        <!-- 经营小贴士 (Widget 6 - Full) Phase 4 -->
-        <div id="tips-card" class="widget widget-full" style="display: none;">
-          <div class="widget-header">
-            <span class="widget-title"><span class="widget-icon-bg bg-purple-light text-purple"
-                style="color: var(--color-purple);">💡</span>每日锦囊</span>
-            <button id="tips-refresh-btn"
-              style="background: none; border: none; font-size: 20px; color: var(--text-tertiary); cursor: pointer;">↻</button>
-          </div>
-          <div id="tip-title" style="font-weight: 700; font-size: 16px; margin: 8px 0 4px;"></div>
-          <div id="tip-text" style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; font-weight: 500;">
-          </div>
-        </div>
-
-        <!-- Generate Report Button -->
-        <div class="widget-full">
-          <button id="home-report-btn" class="btn btn-tint-blue btn-block"
-            style="display: none; padding: 18px; font-size: 17px; border-radius: 20px; font-weight: 700;">
-            查看深度健康报告 📊
+          <button id="crisis-detail-btn" class="card__header-action" onclick="showCrisisDetail()">
+            详情
+            <svg class="icon icon-xs"><use href="#i-chevron-right"/></svg>
           </button>
         </div>
+        <div id="crisis-intervention" class="hidden">
+          <div id="crisis-intervention-title" class="text-base font-semibold mb-1"></div>
+          <div id="crisis-intervention-desc" class="text-sm text-secondary mb-2"></div>
+          <div id="crisis-action-items" class="text-sm text-muted"></div>
+        </div>
+        <!-- 操作按钮区 -->
+        <div id="crisis-actions" class="flex gap-2 mt-3">
+          <button id="crisis-ack-btn" class="btn btn-sm btn-secondary flex-1" onclick="handleCrisisAcknowledge()">已知悉</button>
+          <button id="crisis-help-btn" class="btn btn-sm btn-outline flex-1" onclick="showCrisisResources()">专业帮助</button>
+        </div>
+      </div>
 
+      <!-- 每日任务卡片 -->
+      <div id="tasks-card" class="card hidden">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm"><use href="#i-target"/></svg>
+            今日关系任务
+          </div>
+          <span id="tasks-attachment-label" class="text-xs text-muted"></span>
+        </div>
+        <div id="tasks-list" class="flex flex-col gap-2"></div>
+        <div id="tasks-insight" class="text-sm text-muted mt-3 italic"></div>
+      </div>
+
+      <!-- 关系经营技巧 -->
+      <div id="tips-card" class="card hidden">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-lightbulb"/></svg>
+            关系经营小贴士
+          </div>
+          <button id="tips-refresh-btn" class="card__header-action">
+            换一条
+            <svg class="icon icon-xs"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+        <div class="tip-content">
+          <div id="tip-title" class="tip-title"></div>
+          <div id="tip-text" class="tip-text"></div>
+        </div>
+      </div>
+
+      <!-- 里程碑时间线 -->
+      <div id="milestones-card" class="card hidden">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-trophy"/></svg>
+            关系里程碑
+          </div>
+          <button id="add-milestone-btn" class="card__header-action">
+            <svg class="icon icon-xs"><use href="#i-plus"/></svg>
+            新增
+          </button>
+        </div>
+        <div id="milestones-list" class="flex flex-col gap-2"></div>
+      </div>
+
+      <!-- 通知中心 -->
+      <div id="notification-bell" class="notification-bell hidden">
+        <button id="notification-btn" class="notification-bell__btn">
+          <svg class="icon"><use href="#i-bell"/></svg>
+          <span id="notification-badge" class="notification-bell__badge hidden"></span>
+        </button>
+      </div>
+
+      <!-- 通知面板 -->
+      <div id="notification-panel" class="card notification-panel hidden">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm"><use href="#i-bell"/></svg>
+            通知
+          </div>
+          <button id="read-all-btn" class="card__header-action">全部已读</button>
+        </div>
+        <div id="notification-list" class="flex flex-col gap-1"></div>
+      </div>
+
+      <!-- 生成报告按钮 -->
+      <button id="home-report-btn" class="btn btn-secondary btn-block hidden mb-4">
+        <svg class="icon icon-sm"><use href="#i-bar-chart"/></svg>
+        查看今日报告
+      </button>
+
+      <!-- 隐私提示 -->
+      <div class="text-center mt-4">
+        <span class="privacy-badge">
+          <svg class="icon icon-sm"><use href="#i-lock"/></svg>
+          隐私沙盒 · 对方看不到你的原始打卡内容
+        </span>
       </div>
     </div>
 
-    <!-- ═══ 打卡页 (Check-in Flow) ═══ -->
+    <!-- ═══ 打卡页 ═══ -->
     <div id="page-checkin" class="page">
-      <div class="page-header">
-        <h1 class="page-title">日志</h1>
-        <p class="page-subtitle">沉淀今天的专属记忆</p>
-      </div>
+      <header class="header">
+        <div>
+          <div class="header-title">每日打卡</div>
+          <div class="header-subtitle">记录今天你们之间发生的事</div>
+        </div>
+      </header>
 
       <form id="checkin-form">
-        <div class="widget widget-full" style="margin-bottom: 16px;">
-          <span class="form-title">1. 今天心情如何？</span>
-          <div class="emotion-grid" style="margin-top: 16px;">
-            <label class="emotion-sphere" data-score="4">
-              <input type="radio" name="mood-score" value="4" style="display:none">
-              <span class="emoji">😊</span>
-              <span class="label">棒极了</span>
+        <div class="card">
+          <!-- Step 1: 情绪评分 -->
+          <div class="form-group">
+            <label class="form-label">
+              <span class="step-label">Step 1</span>
+              今天的整体情绪
             </label>
-            <label class="emotion-sphere" data-score="3">
-              <input type="radio" name="mood-score" value="3" style="display:none">
-              <span class="emoji">🙂</span>
-              <span class="label">还不错</span>
-            </label>
-            <label class="emotion-sphere" data-score="2">
-              <input type="radio" name="mood-score" value="2" style="display:none">
-              <span class="emoji">😐</span>
-              <span class="label">平平无奇</span>
-            </label>
-            <label class="emotion-sphere" data-score="1">
-              <input type="radio" name="mood-score" value="1" style="display:none">
-              <span class="emoji">😔</span>
-              <span class="label">有点低落</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="widget widget-full" style="margin-bottom: 16px;">
-          <span class="form-title">2. 互动质量诊断</span>
-
-          <div
-            style="background: var(--bg-surface-secondary); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-weight: 600; font-size: 16px;">互动频率 (次)</span>
-            <input id="checkin-interaction-freq" class="input-field" type="number" min="0" max="99" placeholder="0"
-              style="width: 80px; text-align: center; font-size: 20px; font-weight: 800; padding: 8px; margin: 0; background: white; box-shadow: var(--shadow-pressed);">
-          </div>
-
-          <span
-            style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">谁更主动？</span>
-          <div style="display:flex;gap:12px;margin-bottom: 24px;">
-            <label class="emotion-sphere initiative-option" style="flex:1;padding:16px 0;" data-val="me">
-              <input type="radio" name="initiative" value="me" style="display:none">
-              <span class="label">我</span>
-            </label>
-            <label class="emotion-sphere initiative-option" style="flex:1;padding:16px 0;" data-val="equal">
-              <input type="radio" name="initiative" value="equal" style="display:none">
-              <span class="label">差不多</span>
-            </label>
-            <label class="emotion-sphere initiative-option" style="flex:1;padding:16px 0;" data-val="partner">
-              <input type="radio" name="initiative" value="partner" style="display:none">
-              <span class="label">TA</span>
-            </label>
-          </div>
-
-          <span
-            style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">有
-            30 分钟深度交流吗？</span>
-          <div style="display:flex;gap:12px;margin-bottom: 24px;">
-            <label class="emotion-sphere deep-conv-option" style="flex:1;padding:16px 0;" data-val="true">
-              <input type="radio" name="deep-conv" value="true" style="display:none">
-              <span class="label">有 💬</span>
-            </label>
-            <label class="emotion-sphere deep-conv-option" style="flex:1;padding:16px 0;" data-val="false">
-              <input type="radio" name="deep-conv" value="false" style="display:none">
-              <span class="label">没有</span>
-            </label>
-          </div>
-
-          <span
-            style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">完成了上次规划的任务吗？</span>
-          <div style="display:flex;gap:12px;">
-            <label class="emotion-sphere task-option" style="flex:1;padding:16px 0;" data-val="true">
-              <input type="radio" name="task-done" value="true" style="display:none">
-              <span class="label">完成 ✅</span>
-            </label>
-            <label class="emotion-sphere task-option" style="flex:1;padding:16px 0;" data-val="false">
-              <input type="radio" name="task-done" value="false" style="display:none">
-              <span class="label">还没</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="widget widget-full" style="margin-bottom: 24px;">
-          <span class="form-title">3. 留给 AI 分析的话</span>
-          <textarea id="checkin-content" class="input-field" placeholder="记录今天的感受... 对方不可见，AI会借此生成趋势报告 💭"></textarea>
-
-          <div style="margin-top: 20px;">
-            <span
-              style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">附加回忆
-              (可选)</span>
-            <div style="display: flex; gap: 12px;">
-              <button type="button" id="checkin-image-btn" class="btn btn-secondary"
-                style="flex:1;font-size:15px;padding:12px;border-radius:16px;">📷 加图片</button>
-              <button type="button" id="checkin-voice-btn" class="btn btn-secondary"
-                style="flex:1;font-size:15px;padding:12px;border-radius:16px;">🎤 录语音</button>
+            <div class="score-options mt-2">
+              <label class="score-option mood-score-option" data-score="4">
+                <input type="radio" name="mood-score" value="4">
+                <span class="score-option__emoji">
+                  <svg class="icon icon-lg"><use href="#i-smile"/></svg>
+                </span>
+                <span class="score-option__text">非常好</span>
+              </label>
+              <label class="score-option mood-score-option" data-score="3">
+                <input type="radio" name="mood-score" value="3">
+                <span class="score-option__emoji">
+                  <svg class="icon icon-lg"><use href="#i-smile"/></svg>
+                </span>
+                <span class="score-option__text">好</span>
+              </label>
+              <label class="score-option mood-score-option" data-score="2">
+                <input type="radio" name="mood-score" value="2">
+                <span class="score-option__emoji">
+                  <svg class="icon icon-lg"><use href="#i-meh"/></svg>
+                </span>
+                <span class="score-option__text">一般</span>
+              </label>
+              <label class="score-option mood-score-option" data-score="1">
+                <input type="radio" name="mood-score" value="1">
+                <span class="score-option__emoji">
+                  <svg class="icon icon-lg"><use href="#i-frown"/></svg>
+                </span>
+                <span class="score-option__text">不好</span>
+              </label>
             </div>
-            <input type="file" id="checkin-image-input" accept="image/*" style="display:none">
-            <input type="file" id="checkin-voice-input" accept="audio/*" style="display:none">
-            <div id="checkin-image-preview" style="margin-top: 12px"></div>
-            <div id="checkin-voice-preview" style="margin-top: 12px"></div>
+          </div>
+
+          <!-- Step 2: 互动频率 + 主动方 -->
+          <div class="form-group">
+            <label class="form-label">
+              <span class="step-label">Step 2</span>
+              今日互动
+            </label>
+            <div class="interaction-row mt-2">
+              <span class="interaction-row__label">互动次数</span>
+              <input id="checkin-interaction-freq" class="form-input interaction-row__input" type="number" min="0" max="99" placeholder="0">
+            </div>
+            <div class="tri-options mt-3">
+              <label class="tri-option initiative-option" data-val="me">
+                <input type="radio" name="initiative" value="me">
+                我主动多
+              </label>
+              <label class="tri-option initiative-option" data-val="equal">
+                <input type="radio" name="initiative" value="equal">
+                差不多
+              </label>
+              <label class="tri-option initiative-option" data-val="partner">
+                <input type="radio" name="initiative" value="partner">
+                对方主动多
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 3: 深度对话 -->
+          <div class="form-group">
+            <label class="form-label">
+              <span class="step-label">Step 3</span>
+              今天有没有深度对话？
+            </label>
+            <div class="tri-options mt-2">
+              <label class="tri-option deep-conv-option" data-val="true">
+                <input type="radio" name="deep-conv" value="true">
+                <svg class="icon icon-sm"><use href="#i-message-circle"/></svg>
+                有
+              </label>
+              <label class="tri-option deep-conv-option" data-val="false">
+                <input type="radio" name="deep-conv" value="false">
+                没有
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 4: 任务完成 -->
+          <div class="form-group">
+            <label class="form-label">
+              <span class="step-label">Step 4</span>
+              完成了上次的关系建议吗？
+            </label>
+            <div class="tri-options mt-2">
+              <label class="tri-option task-option" data-val="true">
+                <input type="radio" name="task-done" value="true">
+                <svg class="icon icon-sm"><use href="#i-check-circle"/></svg>
+                完成了
+              </label>
+              <label class="tri-option task-option" data-val="false">
+                <input type="radio" name="task-done" value="false">
+                还没有
+              </label>
+            </div>
           </div>
         </div>
 
-        <button id="checkin-submit-btn" type="submit" class="btn btn-primary btn-block"
-          style="padding: 18px; font-size: 18px; border-radius: 20px;">封存今日日记</button>
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">今天想说什么？</label>
+            <textarea id="checkin-content" class="form-input"
+              placeholder="记录你今天的感受、你们之间的互动、或者任何想说的话...&#10;&#10;这些内容是隐私的，对方不会看到原文，只有AI会分析后给出洞察"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">今天的情绪</label>
+            <div class="mood-tags">
+              <span class="tag" data-mood="开心">
+                <svg class="icon icon-sm"><use href="#i-smile"/></svg> 开心
+              </span>
+              <span class="tag" data-mood="平静">
+                <svg class="icon icon-sm"><use href="#i-meh"/></svg> 平静
+              </span>
+              <span class="tag" data-mood="感动">
+                <svg class="icon icon-sm"><use href="#i-heart"/></svg> 感动
+              </span>
+              <span class="tag" data-mood="期待">
+                <svg class="icon icon-sm"><use href="#i-sparkles"/></svg> 期待
+              </span>
+              <span class="tag" data-mood="焦虑">
+                <svg class="icon icon-sm"><use href="#i-alert-circle"/></svg> 焦虑
+              </span>
+              <span class="tag" data-mood="委屈">
+                <svg class="icon icon-sm"><use href="#i-frown"/></svg> 委屈
+              </span>
+              <span class="tag" data-mood="生气">
+                <svg class="icon icon-sm"><use href="#i-zap"/></svg> 生气
+              </span>
+              <span class="tag" data-mood="疲惫">
+                <svg class="icon icon-sm"><use href="#i-meh"/></svg> 疲惫
+              </span>
+            </div>
+          </div>
+
+          <!-- 多媒体上传 -->
+          <div class="form-group">
+            <label class="form-label">添加图片/语音（可选）</label>
+            <div class="flex gap-3 mt-2">
+              <button type="button" id="checkin-image-btn" class="btn btn-outline btn-sm flex-1">
+                <svg class="icon icon-sm"><use href="#i-camera"/></svg>
+                添加图片
+              </button>
+              <button type="button" id="checkin-voice-btn" class="btn btn-outline btn-sm flex-1">
+                <svg class="icon icon-sm"><use href="#i-mic"/></svg>
+                添加语音
+              </button>
+            </div>
+            <input type="file" id="checkin-image-input" accept="image/*" class="hidden">
+            <input type="file" id="checkin-voice-input" accept="audio/*" class="hidden">
+            <div id="checkin-image-preview" class="media-preview"></div>
+            <div id="checkin-voice-preview" class="media-preview"></div>
+          </div>
+        </div>
+
+        <button id="checkin-submit-btn" type="submit" class="btn btn-primary btn-block">提交打卡</button>
       </form>
+    </div>
+
+    <!-- ═══ 发现页（Phase 2 占位） ═══ -->
+    <div id="page-discover" class="page">
+      <header class="header">
+        <div>
+          <div class="header-title">发现</div>
+          <div class="header-subtitle">探索更多关系经营工具</div>
+        </div>
+      </header>
+
+      <div class="discover-grid">
+        <div class="discover-item" onclick="showPage('longdistance')">
+          <div class="discover-item__icon discover-item__icon--primary">
+            <svg class="icon icon-lg"><use href="#i-map-pin"/></svg>
+          </div>
+          <div class="discover-item__title">异地恋模式</div>
+          <div class="discover-item__desc">专属异地互动方案</div>
+        </div>
+        <div class="discover-item" onclick="showPage('attachment-test')">
+          <div class="discover-item__icon discover-item__icon--accent">
+            <svg class="icon icon-lg"><use href="#i-brain"/></svg>
+          </div>
+          <div class="discover-item__title">依恋风格测试</div>
+          <div class="discover-item__desc">了解你的依恋类型</div>
+        </div>
+        <div class="discover-item" onclick="showPage('health-test')">
+          <div class="discover-item__icon discover-item__icon--success">
+            <svg class="icon icon-lg"><use href="#i-activity"/></svg>
+          </div>
+          <div class="discover-item__title">关系快速体检</div>
+          <div class="discover-item__desc">5分钟关系健康测评</div>
+        </div>
+        <div class="discover-item" onclick="showPage('challenges')">
+          <div class="discover-item__icon discover-item__icon--warning">
+            <svg class="icon icon-lg"><use href="#i-flag"/></svg>
+          </div>
+          <div class="discover-item__title">关系挑战赛</div>
+          <div class="discover-item__desc">21天亲密升级计划</div>
+        </div>
+        <div class="discover-item" onclick="showPage('courses')">
+          <div class="discover-item__icon discover-item__icon--accent">
+            <svg class="icon icon-lg"><use href="#i-book-open"/></svg>
+          </div>
+          <div class="discover-item__title">情感课程</div>
+          <div class="discover-item__desc">专家系列情感课</div>
+        </div>
+        <div class="discover-item" onclick="showPage('experts')">
+          <div class="discover-item__icon discover-item__icon--primary">
+            <svg class="icon icon-lg"><use href="#i-headphones"/></svg>
+          </div>
+          <div class="discover-item__title">专家咨询</div>
+          <div class="discover-item__desc">一对一专业指导</div>
+        </div>
+        <div class="discover-item" onclick="showPage('community')">
+          <div class="discover-item__icon discover-item__icon--success">
+            <svg class="icon icon-lg"><use href="#i-users"/></svg>
+          </div>
+          <div class="discover-item__title">关系社区</div>
+          <div class="discover-item__desc">和大家分享经验</div>
+        </div>
+        <div class="discover-item" onclick="showPage('membership')">
+          <div class="discover-item__icon discover-item__icon--warning">
+            <svg class="icon icon-lg"><use href="#i-crown"/></svg>
+          </div>
+          <div class="discover-item__title">会员中心</div>
+          <div class="discover-item__desc">解锁全部功能</div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ 报告页 ═══ -->
     <div id="page-report" class="page">
-      <div class="page-header">
-        <h1 class="page-title">档案</h1>
-        <p class="page-subtitle">健康趋势与分析</p>
-      </div>
+      <header class="header">
+        <div>
+          <div class="header-title">关系报告</div>
+          <div class="header-subtitle">AI 为你们生成的健康洞察</div>
+        </div>
+      </header>
 
-      <div id="report-content" class="bento-grid">
-        <div class="widget widget-full" style="padding: 40px 20px; text-align: center; align-items: center;">
-          <div class="hero-visual" style="font-size: 64px; margin-bottom: 20px;">📊</div>
-          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 10px;">积累中</h2>
-          <p style="font-size: 15px; color: var(--text-secondary); margin-bottom: 24px; max-width: 80%;">
-            坚持双方打卡，AI将在周末为你生成全面的关系体验诊断报告。</p>
-          <button class="btn btn-primary" style="padding: 14px 24px; border-radius: 16px;"
-            onclick="showPage('checkin')">去写日记</button>
+      <div id="report-content">
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg class="icon icon-xl"><use href="#i-bar-chart"/></svg>
+          </div>
+          <div class="empty-title">暂无报告</div>
+          <div class="empty-desc">每次打卡即可生成个人日记，双方完成后还有关系健康报告</div>
         </div>
       </div>
     </div>
 
     <!-- ═══ 个人中心页 ═══ -->
     <div id="page-profile" class="page">
-      <div class="page-header">
-        <h1 class="page-title">账户</h1>
+      <header class="header">
+        <div>
+          <div class="header-title">个人中心</div>
+        </div>
+      </header>
+
+      <div class="card profile-card">
+        <div class="avatar avatar--lg mb-3 mx-auto">我</div>
+        <div class="profile-card__name">用户</div>
+        <div class="profile-card__label">MVP 版本</div>
       </div>
 
-      <div class="bento-grid">
-        <div class="widget widget-full" style="flex-direction: row; align-items: center; gap: 16px; padding: 24px;">
-          <div class="avatar" style="width: 72px; height: 72px; font-size: 28px;">我</div>
-          <div>
-            <h2 style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">亲健用户</h2>
-            <p style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">Beta Version</p>
+      <div class="card">
+        <div class="settings-list">
+          <div class="settings-item">
+            <span class="settings-item__label">配对状态</span>
+            <span class="settings-item__value" id="profile-pair-status">--</span>
+          </div>
+          <div class="settings-item">
+            <span class="settings-item__label">关系类型</span>
+            <span class="settings-item__value" id="profile-pair-type">--</span>
+          </div>
+          <div class="settings-item">
+            <span class="settings-item__label">隐私保护</span>
+            <span class="privacy-badge">
+              <svg class="icon icon-xs"><use href="#i-lock"/></svg>
+              已开启
+            </span>
           </div>
         </div>
+      </div>
 
-        <div class="widget widget-full">
-          <span class="widget-title" style="margin-bottom: 20px;">系统设定</span>
+      <!-- 解绑区域 -->
+      <div id="unbind-section" class="card hidden">
+        <h3 class="unbind-section__title">解绑管理</h3>
+        <div id="unbind-status-text" class="unbind-section__desc"></div>
+        <div id="unbind-actions" class="unbind-section__actions"></div>
+      </div>
 
-          <div
-            style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--bg-surface-secondary)">
-            <span style="font-size: 16px; font-weight: 600;">配对状态</span>
-            <span style="font-size: 16px; font-weight: 700; color: var(--color-blue);"
-              id="profile-pair-status">检查中...</span>
-          </div>
+      <button onclick="api.logout(); showPage('auth'); hide(document.getElementById('tab-bar'))"
+        class="btn btn-danger btn-block mt-2">
+        <svg class="icon icon-sm"><use href="#i-log-out"/></svg>
+        退出登录
+      </button>
+    </div>
 
-          <div
-            style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--bg-surface-secondary)">
-            <span style="font-size: 16px; font-weight: 600;">关系类型</span>
-            <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);"
-              id="profile-pair-type">未知</span>
-          </div>
+    <!-- ═══ Phase 2 功能页面 ═══ -->
 
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0;">
-            <span style="font-size: 16px; font-weight: 600;">隐私保护</span>
-            <span
-              style="background: var(--color-green-light); color: var(--color-green); padding: 6px 12px; border-radius: 12px; font-size: 13px; font-weight: 700;">沙盒加密中
-              🔒</span>
-          </div>
+    <!-- ── 异地恋模式 ── -->
+    <div id="page-longdistance" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">异地恋模式</div>
+          <div class="header-subtitle">让距离不再是障碍</div>
         </div>
+      </header>
 
-        <div id="unbind-section" class="widget widget-full" style="display:none; background: #FFF0F0;">
-          <span class="widget-title" style="color: #FF3B30; margin-bottom: 12px;">关系解除</span>
-          <div id="unbind-status-text"
-            style="font-size: 14px; font-weight: 600; color: #FF3B30; margin-bottom: 16px; opacity: 0.8;"></div>
-          <div id="unbind-actions" style="display:flex;gap:12px;"></div>
+      <!-- 距离状态卡 -->
+      <div id="ld-status-card" class="card card--accent text-center">
+        <div class="flex items-center justify-center gap-3 mb-3">
+          <div class="avatar">我</div>
+          <div class="flex flex-col items-center">
+            <svg class="icon icon-sm text-muted"><use href="#i-link"/></svg>
+            <span id="ld-distance" class="text-xs text-muted mt-1">--</span>
+          </div>
+          <div class="avatar">TA</div>
         </div>
+        <div id="ld-days-apart" class="text-2xl font-bold mb-1">--</div>
+        <div class="text-sm opacity-90">距离上次见面</div>
+      </div>
 
-        <div class="widget-full">
-          <button onclick="api.logout(); showPage('auth'); document.getElementById('dock-nav').style.display='none'"
-            class="btn btn-secondary btn-block"
-            style="padding: 16px; background: #E5E5EA; color: var(--text-primary); border-radius: 20px;">
-            退出登录
+      <!-- 今日同步活动 -->
+      <div class="card">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-zap"/></svg>
+            今日同步活动
+          </div>
+          <button id="ld-suggest-btn" class="card__header-action">
+            换一个
+            <svg class="icon icon-xs"><use href="#i-refresh"/></svg>
           </button>
         </div>
+        <div id="ld-activity" class="empty-state">
+          <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-sparkles"/></svg></div>
+          <div class="empty-desc">点击"换一个"获取今日活动建议</div>
+        </div>
+      </div>
+
+      <!-- 已完成活动 -->
+      <div class="card">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-check-circle"/></svg>
+            最近完成
+          </div>
+        </div>
+        <div id="ld-completed" class="text-sm text-muted text-center p-3">加载中...</div>
       </div>
     </div>
 
-    <!-- ═══ 浮动毛玻璃 Bottom Dock ═══ -->
-    <div id="dock-nav" class="dock-wrapper" style="display: none;">
-      <nav class="dock">
-        <button class="dock-item active" data-page="home">
-          <span class="dock-icon" style="font-size: 26px;">🏠</span>
-          <span class="dock-label">主页</span>
-        </button>
-        <button class="dock-item" data-page="report">
-          <span class="dock-icon" style="font-size: 26px;">📊</span>
-          <span class="dock-label">档案</span>
-        </button>
-        <button class="dock-action-btn" data-page="checkin" style="margin: 0 10px;">
-          +
-        </button>
+    <!-- ── 依恋风格测试 ── -->
+    <div id="page-attachment-test" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">依恋风格测试</div>
+          <div class="header-subtitle">了解你的亲密关系模式</div>
+        </div>
+      </header>
 
-        <!-- Notification Integration in Dock -->
-        <button class="dock-item" id="dock-notification-btn" style="position: relative;">
-          <span class="dock-icon" style="font-size: 26px;">🔔</span>
-          <span class="dock-label">提醒</span>
-          <span id="notification-badge"
-            style="display: none; position: absolute; top: 4px; right: 12px; background: var(--color-brand); width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,0.8);"></span>
+      <!-- 测试介绍 -->
+      <div id="attachment-intro" class="card card--accent text-center">
+        <svg class="icon icon-xl mb-3"><use href="#i-brain"/></svg>
+        <div class="text-lg font-semibold mb-2">发现你的依恋风格</div>
+        <div class="text-sm opacity-90 mb-4">基于 Bartholomew 四类型依恋模型，通过AI分析你的打卡数据来判断依恋风格</div>
+        <button id="attachment-start-btn" class="btn btn-primary">
+          <svg class="icon icon-sm"><use href="#i-sparkles"/></svg>
+          开始AI分析
         </button>
+      </div>
 
-        <button class="dock-item" data-page="profile">
-          <span class="dock-icon" style="font-size: 26px;">👤</span>
-          <span class="dock-label">我</span>
-        </button>
-      </nav>
+      <!-- 分析结果 -->
+      <div id="attachment-result" class="hidden">
+        <div id="attachment-result-content"></div>
+      </div>
     </div>
 
+    <!-- ── 关系快速体检 ── -->
+    <div id="page-health-test" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">关系快速体检</div>
+          <div class="header-subtitle">5分钟了解关系现状</div>
+        </div>
+      </header>
+
+      <!-- 步骤指示 -->
+      <div id="ht-progress" class="flex items-center gap-2 mb-4">
+        <div class="text-xs text-muted">进度</div>
+        <div class="progress-bar flex-1">
+          <div id="ht-progress-bar" class="progress-bar__fill" style="width:0%"></div>
+        </div>
+        <div id="ht-progress-text" class="text-xs font-semibold">0/10</div>
+      </div>
+
+      <!-- 问卷区域 -->
+      <div id="ht-question-area" class="card">
+        <div id="ht-question-num" class="step-label">问题 1/10</div>
+        <div id="ht-question-text" class="text-base font-semibold mb-4"></div>
+        <div id="ht-options" class="flex flex-col gap-2"></div>
+      </div>
+
+      <!-- 结果区域 -->
+      <div id="ht-result" class="hidden">
+        <div class="health-gauge">
+          <div id="ht-gauge" class="gauge-circle" style="--score:50">
+            <span id="ht-score" class="gauge-score">--</span>
+            <span class="gauge-label">关系健康指数</span>
+          </div>
+        </div>
+        <div id="ht-summary" class="card card--accent text-center">
+          <div id="ht-level" class="text-lg font-semibold mb-2"></div>
+          <div id="ht-desc" class="text-sm opacity-90"></div>
+        </div>
+        <div id="ht-dimensions" class="flex flex-col gap-3 mb-4"></div>
+        <div id="ht-suggestions" class="card">
+          <div class="card__header-title mb-3">
+            <svg class="icon icon-sm text-warning"><use href="#i-lightbulb"/></svg>
+            改善建议
+          </div>
+          <div id="ht-suggestion-list"></div>
+        </div>
+        <button class="btn btn-secondary btn-block mt-4" onclick="resetHealthTest()">重新测评</button>
+      </div>
+    </div>
+
+    <!-- ── 关系社区 ── -->
+    <div id="page-community" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">关系社区</div>
+          <div class="header-subtitle">和大家分享关系经营的智慧</div>
+        </div>
+      </header>
+
+      <!-- 每日精选 -->
+      <div class="card">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-star"/></svg>
+            每日精选
+          </div>
+          <button id="community-refresh-btn" class="card__header-action">
+            换一批
+            <svg class="icon icon-xs"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+        <div id="community-tips-list" class="flex flex-col gap-3">
+          <div class="text-sm text-muted text-center p-3">加载中...</div>
+        </div>
+      </div>
+
+      <!-- AI 生成建议 -->
+      <div class="card">
+        <div class="card__header-title mb-3">
+          <svg class="icon icon-sm text-warning"><use href="#i-sparkles"/></svg>
+          AI 关系建议
+        </div>
+        <div class="text-sm text-muted mb-3">让AI根据你的关系数据生成个性化建议</div>
+        <button id="community-generate-btn" class="btn btn-primary btn-block">
+          <svg class="icon icon-sm"><use href="#i-sparkles"/></svg>
+          生成专属建议
+        </button>
+        <div id="community-generated" class="hidden mt-3"></div>
+      </div>
+    </div>
+
+    <!-- ── 关系挑战赛 ── -->
+    <div id="page-challenges" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">关系挑战赛</div>
+          <div class="header-subtitle">每天一个小任务，让关系持续升温</div>
+        </div>
+      </header>
+
+      <!-- 挑战进度 -->
+      <div class="card card--accent text-center">
+        <div class="text-2xl font-bold mb-1">
+          <svg class="icon icon-sm"><use href="#i-flag"/></svg>
+          21天亲密升级
+        </div>
+        <div id="challenge-progress-text" class="text-sm opacity-90 mb-3">加载中...</div>
+        <div class="progress-bar mb-2">
+          <div id="challenge-progress-bar" class="progress-bar__fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- 今日任务 -->
+      <div class="card">
+        <div class="card__header">
+          <div class="card__header-title">
+            <svg class="icon icon-sm text-warning"><use href="#i-target"/></svg>
+            今日任务
+          </div>
+        </div>
+        <div id="challenge-tasks" class="flex flex-col gap-2">
+          <div class="text-sm text-muted text-center p-3">加载中...</div>
+        </div>
+      </div>
+
+      <!-- 已完成统计 -->
+      <div class="card">
+        <div class="card__header-title mb-3">
+          <svg class="icon icon-sm text-warning"><use href="#i-trophy"/></svg>
+          完成统计
+        </div>
+        <div id="challenge-stats" class="flex justify-between text-center">
+          <div>
+            <div id="stat-total" class="text-2xl font-bold">--</div>
+            <div class="text-xs text-muted">总任务</div>
+          </div>
+          <div>
+            <div id="stat-completed" class="text-2xl font-bold text-brand">--</div>
+            <div class="text-xs text-muted">已完成</div>
+          </div>
+          <div>
+            <div id="stat-streak" class="text-2xl font-bold text-accent">--</div>
+            <div class="text-xs text-muted">连续天数</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 情感课程 ── -->
+    <div id="page-courses" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">情感课程</div>
+          <div class="header-subtitle">专家打造的系列课程</div>
+        </div>
+      </header>
+
+      <!-- 精选课程列表 -->
+      <div class="card">
+        <div class="card__header-title mb-3">
+          <svg class="icon icon-sm text-warning"><use href="#i-book-open"/></svg>
+          精选课程
+        </div>
+        <div class="flex flex-col gap-3">
+          <div class="notification-item cursor-pointer" onclick="showCourseDetail('communication')">
+            <div class="avatar avatar--sm avatar--primary">
+              <svg class="icon icon-sm"><use href="#i-message-circle"/></svg>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">高效沟通技巧</div>
+              <div class="text-xs text-muted">8节课 · 学会非暴力沟通</div>
+            </div>
+            <div class="text-sm font-semibold text-brand">¥99</div>
+          </div>
+          <div class="notification-item cursor-pointer" onclick="showCourseDetail('conflict')">
+            <div class="avatar avatar--sm avatar--warning">
+              <svg class="icon icon-sm"><use href="#i-shield"/></svg>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">冲突管理大师</div>
+              <div class="text-xs text-muted">6节课 · 化冲突为亲密</div>
+            </div>
+            <div class="text-sm font-semibold text-brand">¥99</div>
+          </div>
+          <div class="notification-item cursor-pointer" onclick="showCourseDetail('intimacy')">
+            <div class="avatar avatar--sm avatar--success">
+              <svg class="icon icon-sm"><use href="#i-heart"/></svg>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">亲密关系升级</div>
+              <div class="text-xs text-muted">10节课 · 从相爱到深爱</div>
+            </div>
+            <div class="text-sm font-semibold text-brand">¥99</div>
+          </div>
+          <div class="notification-item cursor-pointer" onclick="showCourseDetail('attachment')">
+            <div class="avatar avatar--sm avatar--accent">
+              <svg class="icon icon-sm"><use href="#i-brain"/></svg>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">依恋理论与实践</div>
+              <div class="text-xs text-muted">5节课 · 理解彼此的依恋模式</div>
+            </div>
+            <div class="text-sm font-semibold text-brand">¥99</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 免费专区 -->
+      <div class="card">
+        <div class="card__header-title mb-3">
+          <svg class="icon icon-sm text-warning"><use href="#i-gift"/></svg>
+          免费专区
+        </div>
+        <div class="flex flex-col gap-3">
+          <div class="notification-item cursor-pointer" onclick="showCourseDetail('intro')">
+            <div class="avatar avatar--sm avatar--muted">
+              <svg class="icon icon-sm"><use href="#i-play"/></svg>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">关系健康入门指南</div>
+              <div class="text-xs text-muted">3节课 · 关系经营基础知识</div>
+            </div>
+            <span class="tag tag--success">免费</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 专家咨询 ── -->
+    <div id="page-experts" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">专家咨询</div>
+          <div class="header-subtitle">持证心理咨询师一对一服务</div>
+        </div>
+      </header>
+
+      <!-- 咨询师列表 -->
+      <div class="card">
+        <div class="card__header-title mb-3">
+          <svg class="icon icon-sm text-warning"><use href="#i-award"/></svg>
+          推荐咨询师
+        </div>
+        <div class="flex flex-col gap-3">
+          <div class="notification-item cursor-pointer" onclick="showExpertDetail('zhang')">
+            <div class="avatar avatar--sm">张</div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">张心怡</div>
+              <div class="text-xs text-muted">国家二级心理咨询师 · 10年经验</div>
+              <div class="text-xs text-accent mt-1">擅长：婚恋关系、情感修复</div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-semibold text-brand">¥150</div>
+              <div class="text-xs text-muted">/50分钟</div>
+            </div>
+          </div>
+          <div class="notification-item cursor-pointer" onclick="showExpertDetail('li')">
+            <div class="avatar avatar--sm">李</div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">李明辉</div>
+              <div class="text-xs text-muted">家庭治疗师 · 8年经验</div>
+              <div class="text-xs text-accent mt-1">擅长：沟通障碍、亲子关系</div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-semibold text-brand">¥120</div>
+              <div class="text-xs text-muted">/50分钟</div>
+            </div>
+          </div>
+          <div class="notification-item cursor-pointer" onclick="showExpertDetail('wang')">
+            <div class="avatar avatar--sm">王</div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">王婷婷</div>
+              <div class="text-xs text-muted">情感教练 · 6年经验</div>
+              <div class="text-xs text-accent mt-1">擅长：恋爱指导、自我成长</div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-semibold text-brand">¥80</div>
+              <div class="text-xs text-muted">/50分钟</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 咨询须知 -->
+      <div class="card">
+        <div class="card__header-title mb-3">
+          <svg class="icon icon-sm text-warning"><use href="#i-info"/></svg>
+          咨询须知
+        </div>
+        <div class="flex flex-col gap-2 text-sm text-secondary">
+          <div class="py-1">1. 所有咨询师均持有国家认证资质</div>
+          <div class="py-1">2. 首次咨询可享 8 折优惠</div>
+          <div class="py-1">3. 咨询内容严格保密，平台不可见</div>
+          <div class="py-1">4. 不满意可在24小时内申请退款</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 会员中心 ── -->
+    <div id="page-membership" class="page">
+      <header class="header">
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('discover')">
+            <svg class="icon icon-sm"><use href="#i-arrow-left"/></svg> 返回
+          </button>
+          <div class="header-title mt-2">会员中心</div>
+          <div class="header-subtitle">解锁全部功能</div>
+        </div>
+      </header>
+
+      <!-- 当前状态 -->
+      <div class="card card--accent text-center">
+        <svg class="icon icon-lg mb-2"><use href="#i-crown"/></svg>
+        <div id="membership-status" class="text-lg font-semibold mb-1">免费用户</div>
+        <div class="text-sm opacity-90">升级会员，享受完整的关系健康管理</div>
+      </div>
+
+      <!-- 方案对比 -->
+      <div class="flex flex-col gap-3">
+        <!-- 免费方案 -->
+        <div class="card">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="icon icon-sm text-muted"><use href="#i-star"/></svg>
+            <span class="text-base font-semibold">基础版</span>
+            <span class="tag tag--muted ml-auto">当前</span>
+          </div>
+          <div class="text-2xl font-bold mb-3">免费</div>
+          <div class="flex flex-col gap-2 text-sm text-secondary">
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              每日情感打卡
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              AI 每日简报
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              关系树成长
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-muted"><use href="#i-x"/></svg>
+              <span class="text-muted">深度周报/月报</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-muted"><use href="#i-x"/></svg>
+              <span class="text-muted">专家咨询</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 周报版 -->
+        <div class="card">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="icon icon-sm text-accent"><use href="#i-trending-up"/></svg>
+            <span class="text-base font-semibold">周报深度版</span>
+          </div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl font-bold">¥29</span>
+            <span class="text-sm text-muted">/月</span>
+          </div>
+          <div class="flex flex-col gap-2 text-sm text-secondary mb-4">
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              基础版全部功能
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              7天趋势深度分析
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              关系阶段判断
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              同龄对比数据
+            </div>
+          </div>
+          <button class="btn btn-outline btn-block" onclick="showToast('功能开发中，敬请期待')">升级</button>
+        </div>
+
+        <!-- 月报版 -->
+        <div class="card card--featured">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="icon icon-sm text-brand"><use href="#i-award"/></svg>
+            <span class="text-base font-semibold">月报专业版</span>
+            <span class="tag tag--primary ml-auto">推荐</span>
+          </div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl font-bold">¥29.9</span>
+            <span class="text-sm text-muted">/月</span>
+          </div>
+          <div class="flex flex-col gap-2 text-sm text-secondary mb-4">
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              周报版全部功能
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              90天趋势深度分析
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              个性化改善计划
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              专家咨询入口
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block" onclick="showToast('功能开发中，敬请期待')">升级</button>
+        </div>
+
+        <!-- 年度版 -->
+        <div class="card">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="icon icon-sm text-warning"><use href="#i-crown"/></svg>
+            <span class="text-base font-semibold">年度会员</span>
+            <span class="tag tag--warning ml-auto">最划算</span>
+          </div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-2xl font-bold">¥199</span>
+            <span class="text-sm text-muted">/年</span>
+          </div>
+          <div class="text-xs text-muted mb-3">折合 ¥16.6/月，省 ¥159.8</div>
+          <div class="flex flex-col gap-2 text-sm text-secondary mb-4">
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              全功能永久解锁
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              专属客服通道
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="icon icon-xs text-brand"><use href="#i-check"/></svg>
+              线下活动邀请
+            </div>
+          </div>
+          <button class="btn btn-outline btn-block" onclick="showToast('功能开发中，敬请期待')">升级</button>
+        </div>
+      </div>
+
+      <div class="text-center mt-4 mb-4">
+        <span class="text-xs text-muted">会员权益说明 · 支持随时取消 · 7天无理由退款</span>
+      </div>
+    </div>
+
+    <!-- ═══ 底部导航栏（5 tabs） ═══ -->
+    <nav id="tab-bar" class="tab-bar hidden">
+      <button class="tab-item active" data-page="home">
+        <span class="tab-icon">
+          <svg class="icon"><use href="#i-home"/></svg>
+        </span>
+        <span class="tab-label">首页</span>
+      </button>
+      <button class="tab-item" data-page="checkin">
+        <span class="tab-icon">
+          <svg class="icon"><use href="#i-edit"/></svg>
+        </span>
+        <span class="tab-label">打卡</span>
+      </button>
+      <button class="tab-item" data-page="discover">
+        <span class="tab-icon">
+          <svg class="icon"><use href="#i-compass"/></svg>
+        </span>
+        <span class="tab-label">发现</span>
+      </button>
+      <button class="tab-item" data-page="report">
+        <span class="tab-icon">
+          <svg class="icon"><use href="#i-bar-chart"/></svg>
+        </span>
+        <span class="tab-label">报告</span>
+      </button>
+      <button class="tab-item" data-page="profile">
+        <span class="tab-icon">
+          <svg class="icon"><use href="#i-user"/></svg>
+        </span>
+        <span class="tab-label">我的</span>
+      </button>
+    </nav>
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
 
-  <!-- Notification Panel Modal injected by app.js conceptually -->
-  <div id="notification-panel" class="widget widget-full"
-    style="display: none; position: fixed; top: 10%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; max-height: 70vh; overflow-y: auto;">
-    <div class="widget-header">
-      <span class="widget-title">系统提醒</span>
-      <button id="read-all-btn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">标为已读</button>
-      <button onclick="document.getElementById('notification-panel').style.display='none'" class="btn"
-        style="background: none; font-size: 20px;">✕</button>
-    </div>
-    <div id="notification-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;"></div>
-  </div>
-
-  <!-- 通用模态框 (Apple Style Action Sheet) -->
-  <div id="modal-overlay"
-    style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1001;transition:opacity 0.3s;"
-    onclick="closeModal()">
-    <div id="modal-content"
-      style="position:absolute;bottom:0;left:0;right:0;max-height:85vh;overflow-y:auto;transition: transform 0.4s var(--spring);"
-      onclick="event.stopPropagation()">
-      <div style="width: 40px; height: 5px; border-radius: 5px; background: rgba(0,0,0,0.1); margin: 0 auto 20px;">
-      </div>
+  <!-- 通用模态框 -->
+  <div id="modal-overlay" class="modal-overlay" onclick="closeModal()">
+    <div id="modal-content" class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
       <div id="modal-body"></div>
     </div>
   </div>
-
 </body>
 
 </html>
