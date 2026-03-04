@@ -3,9 +3,10 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>亲健 · 亲密关系健康管理</title>
-  <meta name="description" content="亲健——中国首个AI亲密关系健康管理平台，为你的关系提供科学评估与个性化改善方案">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>亲健 · 亲密关系健康</title>
+  <meta name="description" content="亲健——让每一段关系都被温柔以待">
   <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -16,499 +17,488 @@
 
     <!-- ═══ 登录/注册页 ═══ -->
     <div id="page-auth" class="page auth-page active">
-      <div class="auth-logo">
-        <div class="auth-logo-icon">💑</div>
-        <div class="auth-logo-title">亲健</div>
-        <div class="auth-logo-desc">让每一段关系都被温柔以待</div>
+      <div style="text-align: center; padding-top: 60px; margin-bottom: 60px;">
+        <div class="hero-visual" style="font-size: 88px; margin-bottom: 24px;">💑</div>
+        <h1 style="font-size: 40px; font-weight: 900; letter-spacing: -1.5px; color: var(--text-title);">亲健</h1>
+        <p style="font-size: 17px; font-weight: 500; color: var(--text-secondary); margin-top: 8px;">让每一段关系都被温柔以待</p>
       </div>
 
-      <form id="auth-form">
-        <h2 id="auth-title" style="font-size: 20px; margin-bottom: 24px; text-align: center;">欢迎回来</h2>
+      <form id="auth-form" style="padding: 0 10px;">
+        <h2 id="auth-title" style="font-size: 24px; font-weight: 800; margin-bottom: 24px;">登入账户</h2>
 
-        <div class="form-group" id="auth-nickname-group" style="display: none">
-          <label class="form-label">昵称</label>
-          <input id="auth-nickname" class="form-input" type="text" placeholder="你希望对方怎么称呼你">
+        <div class="form-group" id="auth-nickname-group" style="display: none; margin-bottom: 16px;">
+          <input id="auth-nickname" class="input-field" type="text" placeholder="你的专属昵称">
         </div>
 
-        <div class="form-group">
-          <label class="form-label">邮箱</label>
-          <input id="auth-email" class="form-input" type="email" placeholder="your@email.com" required>
+        <div class="form-group" style="margin-bottom: 16px;">
+          <input id="auth-email" class="input-field" type="email" placeholder="邮箱地址" required>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">密码</label>
-          <input id="auth-password" class="form-input" type="password" placeholder="至少6位" minlength="6" required>
+        <div class="form-group" style="margin-bottom: 32px;">
+          <input id="auth-password" class="input-field" type="password" placeholder="密码 (至少6位)" minlength="6" required>
         </div>
 
-        <button id="auth-submit-btn" type="submit" class="btn btn-primary btn-block">登录</button>
+        <button id="auth-submit-btn" type="submit" class="btn btn-primary btn-block"
+          style="padding: 18px; font-size: 18px; border-radius: 20px;">继续</button>
 
-        <div class="auth-toggle" id="auth-toggle-text">
-          还没有账号？<a href="#" id="auth-toggle-link">立即注册</a>
+        <div class="auth-toggle" id="auth-toggle-text"
+          style="text-align: center; margin-top: 24px; font-size: 15px; color: var(--text-secondary); font-weight: 500;">
+          还没有账号？ <a href="#" id="auth-toggle-link" class="text-brand"
+            style="text-decoration: none; font-weight: 700;">注册新账户</a>
         </div>
       </form>
     </div>
 
-    <!-- ═══ 配对页 ═══ -->
+    <!-- ═══ 配对页 (Onboarding) ═══ -->
     <div id="page-pair" class="page">
-      <!-- 已有配对列表 -->
-      <div id="existing-pairs" style="display: none">
-        <div style="text-align: center; padding: 20px 0 16px">
-          <h2 style="font-size: 18px; margin-bottom: 4px">你的关系</h2>
-          <p style="font-size: 13px; color: var(--text-muted)">点击切换到对应关系</p>
+
+      <!-- 已有配对 -->
+      <div id="existing-pairs" style="display: none; margin-bottom: 40px;">
+        <div class="page-header">
+          <h1 class="page-title">你的关系</h1>
+          <p class="page-subtitle">选择要进入的空间</p>
         </div>
-        <div id="pairs-list" style="margin-bottom: 16px">
+        <div id="pairs-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
           <!-- 动态填充 -->
         </div>
-        <div style="text-align: center; color: var(--text-muted); margin: 16px 0; font-size: 14px">── 或新建关系 ──</div>
       </div>
 
-      <div style="text-align: center; padding: 40px 0 30px" id="pair-create-header">
-        <div style="font-size: 48px; margin-bottom: 12px">🤝</div>
-        <h2 style="font-size: 20px; margin-bottom: 8px">建立你们的专属空间</h2>
-        <p style="font-size: 14px; color: var(--text-muted)">选择关系类型，邀请你的另一半</p>
+      <div class="page-header" id="pair-create-header">
+        <div class="hero-visual" style="font-size: 72px; margin-bottom: 24px;">🤝</div>
+        <h1 class="page-title">建立空间</h1>
+        <p class="page-subtitle">选择你们的关系形态</p>
       </div>
 
-      <div class="card">
-        <h3 style="font-size: 15px; margin-bottom: 14px">选择关系类型</h3>
-        <div style="display: flex; flex-direction: column; gap: 10px">
-          <label class="mood-tag pair-type-option selected"
-            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
-            <input type="radio" name="pair-type" value="couple" checked style="display: none">
-            <span style="font-size: 20px">💕</span>
-            <span>情侣</span>
-          </label>
-          <label class="mood-tag pair-type-option"
-            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
-            <input type="radio" name="pair-type" value="spouse" style="display: none">
-            <span style="font-size: 20px">💍</span>
-            <span>夫妻</span>
-          </label>
-          <label class="mood-tag pair-type-option"
-            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
-            <input type="radio" name="pair-type" value="bestfriend" style="display: none">
-            <span style="font-size: 20px">🤜🤛</span>
-            <span>挚友</span>
-          </label>
-          <label class="mood-tag pair-type-option"
-            style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-md);">
-            <input type="radio" name="pair-type" value="parent" style="display: none">
-            <span style="font-size: 20px">👨‍👩‍👧</span>
-            <span>育儿夫妻</span>
-          </label>
+      <!-- Bento Grid for Pair Selection -->
+      <div class="bento-grid">
+        <label class="widget widget-half emotion-sphere selected" style="padding: 24px 10px;">
+          <input type="radio" name="pair-type" value="couple" checked style="display: none">
+          <span class="emoji" style="font-size: 36px;">💕</span>
+          <span class="label">情侣</span>
+        </label>
+        <label class="widget widget-half emotion-sphere" style="padding: 24px 10px;">
+          <input type="radio" name="pair-type" value="spouse" style="display: none">
+          <span class="emoji" style="font-size: 36px;">💍</span>
+          <span class="label">夫妻</span>
+        </label>
+        <label class="widget widget-half emotion-sphere" style="padding: 24px 10px;">
+          <input type="radio" name="pair-type" value="bestfriend" style="display: none">
+          <span class="emoji" style="font-size: 36px;">🤜🤛</span>
+          <span class="label">挚友</span>
+        </label>
+        <label class="widget widget-half emotion-sphere" style="padding: 24px 10px;">
+          <input type="radio" name="pair-type" value="parent" style="display: none">
+          <span class="emoji" style="font-size: 36px;">👨‍👩‍👧</span>
+          <span class="label">育儿夫妻</span>
+        </label>
+
+        <div class="widget widget-full" style="padding: 0; background: transparent; box-shadow: none;">
+          <button id="pair-create-btn" class="btn btn-primary btn-block"
+            style="padding: 18px; font-size: 18px; border-radius: 20px;">生成专属邀请码</button>
         </div>
-        <button id="pair-create-btn" class="btn btn-primary btn-block" style="margin-top: 20px">创建配对</button>
       </div>
 
-      <div style="text-align: center; color: var(--text-muted); margin: 20px 0; font-size: 14px">── 或 ──</div>
-
-      <div class="card">
-        <h3 style="font-size: 15px; margin-bottom: 14px">加入已有配对</h3>
-        <input id="pair-join-code" class="form-input" type="text" placeholder="输入6位数字邀请码" maxlength="6"
-          style="text-align: center; letter-spacing: 4px; font-size: 18px" inputmode="numeric" pattern="[0-9]*">
-        <button id="pair-join-btn" class="btn btn-secondary btn-block" style="margin-top: 14px">加入配对</button>
+      <div style="margin: 32px 0;">
+        <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">收到邀请了？</h2>
+        <div style="display: flex; gap: 12px;">
+          <input id="pair-join-code" class="input-field" type="text" placeholder="输入6位数字" maxlength="6"
+            inputmode="numeric" pattern="[0-9]*" style="font-size: 20px; letter-spacing: 2px; text-align: center;">
+          <button id="pair-join-btn" class="btn btn-secondary" style="border-radius: var(--radius-md);">加入</button>
+        </div>
       </div>
     </div>
+
 
     <!-- ═══ 等待配对页 ═══ -->
     <div id="page-pair-waiting" class="page">
-      <div style="text-align: center; padding: 60px 0 30px">
-        <div style="font-size: 48px; margin-bottom: 16px">⏳</div>
-        <h2 style="font-size: 20px; margin-bottom: 8px">等待对方加入</h2>
-        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px">把下面的邀请码发给 TA</p>
-        <div id="waiting-invite-code" class="invite-code">--------</div>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: 16px">对方输入此邀请码即可完成配对</p>
+      <div style="text-align: center; padding-top: 80px;">
+        <div class="hero-visual" style="font-size: 80px; margin-bottom: 30px;">⏳</div>
+        <h1 class="page-title" style="margin-bottom: 12px;">等待对方加入</h1>
+        <p class="page-subtitle" style="margin-bottom: 40px;">将下方专属邀请码发送给另一半</p>
+
+        <div id="waiting-invite-code"
+          style="font-size: 48px; font-family: 'Inter', monospace; font-weight: 900; letter-spacing: 8px; color: var(--color-brand); margin-bottom: 24px;">
+          --------
+        </div>
+
+        <p style="font-size: 15px; color: var(--text-tertiary); font-weight: 500;">对方在注册后输入此码即可完成绑定</p>
       </div>
     </div>
 
-    <!-- ═══ 首页 ═══ -->
+
+    <!-- ═══ 首页仪表盘 (Bento Box Dashboard) ═══ -->
     <div id="page-home" class="page">
-      <!-- 配对选择器 -->
-      <div id="pair-selector" class="card" style="padding: 12px; margin-bottom: 12px; display: none;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <span style="font-size: 13px; color: var(--text-muted);">当前关系</span>
-          <select id="pair-select" class="form-input"
-            style="flex: 1; margin-left: 12px; padding: 8px 12px; font-size: 14px;">
-            <!-- 动态填充 -->
-          </select>
-        </div>
-      </div>
 
-      <div class="header">
+      <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
         <div>
-          <div class="header-title">亲健</div>
-          <div class="header-subtitle">今天也要好好经营关系哦 ✨</div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px">⏰ 每日 21:00 打卡提醒</div>
+          <h1 class="page-title">概览</h1>
+          <p class="page-subtitle" id="home-date-subtitle">今天</p>
         </div>
-        <div class="avatar" onclick="showPage('profile')">我</div>
+        <div class="avatar" style="width: 44px; height: 44px; font-size: 18px;" onclick="showPage('profile')">我</div>
       </div>
 
-      <!-- 连续打卡 -->
-      <div class="card" style="text-align: center; padding: 16px">
-        <div
-          style="font-size: 32px; font-weight: 700; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent"
-          id="streak-count">0</div>
-        <div style="font-size: 12px; color: var(--text-muted)">连续打卡天数 🔥</div>
+      <!-- 配对选择器 (Mini Widget) -->
+      <div id="pair-selector" class="widget widget-full"
+        style="display: none; padding: 12px 16px; margin-bottom: 16px; flex-direction: row; align-items: center; justify-content: space-between;">
+        <span style="font-size: 15px; font-weight: 600;">当前关系</span>
+        <select id="pair-select"
+          style="background: var(--bg-surface-secondary); border: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 15px; outline: none;">
+        </select>
       </div>
 
-      <!-- 打卡状态卡片 -->
-      <div class="card card-accent">
-        <div style="font-size: 14px; opacity: 0.9; margin-bottom: 10px">📝 今日打卡</div>
-        <div class="checkin-status">
-          <div class="status-item" style="background: rgba(255,255,255,0.15); border-radius: var(--radius-md)">
-            <div id="status-my-dot" class="status-dot" style="background: rgba(255,255,255,0.3)"></div>
-            <div id="status-my-label" class="status-label" style="color: rgba(255,255,255,0.9)">加载中...</div>
+      <div class="bento-grid">
+
+        <!-- 今日状态 (Widget 1 - Large) -->
+        <div class="widget widget-full" style="background: var(--gradient-main); color: white;">
+          <div class="widget-header">
+            <span class="widget-title" style="color: white;"><span class="widget-icon-bg"
+                style="background: rgba(255,255,255,0.2);">📝</span>今日打卡</span>
           </div>
-          <div class="status-item" style="background: rgba(255,255,255,0.15); border-radius: var(--radius-md)">
-            <div id="status-partner-dot" class="status-dot" style="background: rgba(255,255,255,0.3)"></div>
-            <div id="status-partner-label" class="status-label" style="color: rgba(255,255,255,0.9)">加载中...</div>
+          <div style="display: flex; justify-content: space-around; align-items: center; margin: 16px 0 24px;">
+            <div style="text-align: center;">
+              <div id="status-my-dot"
+                style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 auto 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
+              </div>
+              <div id="status-my-label" style="font-size: 13px; font-weight: 600;">我</div>
+            </div>
+            <div style="width: 40px; height: 2px; background: rgba(255,255,255,0.3); border-radius: 2px;"></div>
+            <div style="text-align: center;">
+              <div id="status-partner-dot"
+                style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 0 auto 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);">
+              </div>
+              <div id="status-partner-label" style="font-size: 13px; font-weight: 600;">对方</div>
+            </div>
+          </div>
+          <button id="home-checkin-btn" class="btn"
+            style="background: white; color: var(--color-brand); font-size: 16px; padding: 14px; width: 100%;">记录今天</button>
+        </div>
+
+        <!-- 连续打卡 (Widget 2 - Square) -->
+        <div class="widget widget-half" style="background: var(--color-orange-light);">
+          <div class="widget-header">
+            <span class="widget-title"><span class="widget-icon-bg bg-orange-light text-orange"
+                style="background: white;">🔥</span>坚持</span>
+          </div>
+          <div class="widget-value-large text-orange" id="streak-count">0</div>
+          <div class="widget-desc" style="color: #CC7700;">连续天数</div>
+        </div>
+
+        <!-- 关系树 (Widget 3 - Square) -->
+        <div id="tree-card" class="widget widget-half" style="background: var(--color-green-light); display: none;">
+          <div class="widget-header">
+            <span class="widget-title"><span class="widget-icon-bg" style="background: white;">🌱</span>树苗</span>
+            <span id="tree-level"
+              style="font-size: 12px; font-weight: 700; color: var(--color-green); background: white; padding: 4px 8px; border-radius: 10px;">种子</span>
+          </div>
+          <div class="widget-value-large text-green" id="tree-points" style="font-size: 36px;">0</div>
+          <div class="widget-desc" style="color: #248A3D; margin-bottom: 12px;">成长值收集</div>
+          <button id="tree-water-btn" class="btn btn-secondary"
+            style="background: white; color: var(--color-green); padding: 8px; font-size: 14px;">💧 浇水</button>
+        </div>
+
+        <!-- 危机预警 (Widget 4 - Full) Phase 4 -->
+        <div id="crisis-card" class="widget widget-full"
+          style="display: none; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 16px 20px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="widget-icon-bg"
+              style="background: #FFE5E5; color: #FF3B30; width: 36px; height: 36px; font-size: 20px;">⚠️</div>
+            <div>
+              <div style="font-size: 16px; font-weight: 700;">关系雷达</div>
+              <div id="crisis-badge"
+                style="font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">正常</div>
+            </div>
+          </div>
+          <button id="crisis-detail-btn" class="btn btn-secondary"
+            style="padding: 10px 16px; font-size: 14px; border-radius: 16px;" onclick="showCrisisDetail()">查看</button>
+
+          <!-- Detail panel normally hidden inside the widget in Bento, handled by app.js modal conceptually now or expanded state -->
+        </div>
+
+        <!-- 每日任务 (Widget 5 - Full) Phase 4 -->
+        <div id="tasks-card" class="widget widget-full" style="display: none; background: #F2F2F7;">
+          <div class="widget-header">
+            <span class="widget-title"><span class="widget-icon-bg bg-blue-light text-blue">🎯</span>今日修课</span>
+            <span id="tasks-attachment-label"
+              style="font-size: 11px; font-weight: 700; color: var(--color-blue); background: white; padding: 4px 8px; border-radius: 10px;"></span>
+          </div>
+          <div id="tasks-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;"></div>
+        </div>
+
+        <!-- 经营小贴士 (Widget 6 - Full) Phase 4 -->
+        <div id="tips-card" class="widget widget-full" style="display: none;">
+          <div class="widget-header">
+            <span class="widget-title"><span class="widget-icon-bg bg-purple-light text-purple"
+                style="color: var(--color-purple);">💡</span>每日锦囊</span>
+            <button id="tips-refresh-btn"
+              style="background: none; border: none; font-size: 20px; color: var(--text-tertiary); cursor: pointer;">↻</button>
+          </div>
+          <div id="tip-title" style="font-weight: 700; font-size: 16px; margin: 8px 0 4px;"></div>
+          <div id="tip-text" style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; font-weight: 500;">
           </div>
         </div>
-        <button id="home-checkin-btn" class="btn"
-          style="width: 100%; background: rgba(255,255,255,0.95); color: var(--coral-500); font-weight: 600; margin-top: 8px">
-          开始打卡
-        </button>
-      </div>
 
-      <!-- 关系树 -->
-      <div id="tree-card" class="card" style="text-align: center; padding: 24px; display: none">
-        <div id="tree-visual" style="font-size: 56px; margin-bottom: 8px">🌰</div>
-        <div id="tree-level" style="font-size: 16px; font-weight: 600; margin-bottom: 4px">种子</div>
-        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px">
-          成长值 <span id="tree-points">0</span>
+        <!-- Generate Report Button -->
+        <div class="widget-full">
+          <button id="home-report-btn" class="btn btn-tint-blue btn-block"
+            style="display: none; padding: 18px; font-size: 17px; border-radius: 20px; font-weight: 700;">
+            查看深度健康报告 📊
+          </button>
         </div>
-        <div
-          style="background: var(--border-light); border-radius: var(--radius-full); height: 8px; overflow: hidden; margin-bottom: 14px">
-          <div id="tree-progress-bar"
-            style="height: 100%; background: var(--gradient-primary); border-radius: var(--radius-full); transition: width 0.6s ease; width: 0%">
-          </div>
-        </div>
-        <button id="tree-water-btn" class="btn btn-sm btn-secondary" style="font-size: 13px">💧 浇水</button>
-      </div>
 
-      <!-- 危机预警卡片（Phase 4 增强 — 分级系统） -->
-      <div id="crisis-card" class="card" style="display: none">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
-          <div style="display: flex; align-items: center; gap: 8px">
-            <span style="font-size: 14px">⚠️ 关系预警</span>
-            <span id="crisis-badge"
-              style="font-size: 12px; padding: 2px 10px; border-radius: 20px; font-weight: 600">正常</span>
-          </div>
-          <button id="crisis-detail-btn" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px" onclick="showCrisisDetail()">详情 →</button>
-        </div>
-        <div id="crisis-intervention" style="display: none">
-          <div id="crisis-intervention-title" style="font-size: 14px; font-weight: 600; margin-bottom: 6px"></div>
-          <div id="crisis-intervention-desc" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px">
-          </div>
-          <div id="crisis-action-items" style="font-size: 12px; color: var(--text-muted)"></div>
-        </div>
-        <!-- 操作按钮区 -->
-        <div id="crisis-actions" style="display:flex;gap:8px;margin-top:12px">
-          <button id="crisis-ack-btn" class="btn btn-sm btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="handleCrisisAcknowledge()">已知悉</button>
-          <button id="crisis-help-btn" class="btn btn-sm btn-outline" style="flex:1;font-size:12px;padding:8px" onclick="showCrisisResources()">专业帮助</button>
-        </div>
-      </div>
-
-      <!-- 每日任务卡片（Phase 4 新增） -->
-      <div id="tasks-card" class="card" style="display: none">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-          <span style="font-size: 14px">🎯 今日关系任务</span>
-          <span id="tasks-attachment-label" style="font-size: 11px; color: var(--text-muted)"></span>
-        </div>
-        <div id="tasks-list" style="display: flex; flex-direction: column; gap: 8px"></div>
-        <div id="tasks-insight" style="font-size: 12px; color: var(--text-muted); margin-top: 10px; font-style: italic">
-        </div>
-      </div>
-
-      <!-- 关系经营技巧（Phase 4 新增） -->
-      <div id="tips-card" class="card" style="display: none">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-          <span style="font-size: 14px">💡 关系经营小贴士</span>
-          <button id="tips-refresh-btn"
-            style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px">换一条
-            🔄</button>
-        </div>
-        <div id="tip-content"
-          style="padding: 12px; background: var(--bg-card); border-radius: 10px; border-left: 3px solid var(--primary)">
-          <div id="tip-title" style="font-weight: 600; margin-bottom: 6px"></div>
-          <div id="tip-text" style="font-size: 13px; color: var(--text-secondary); line-height: 1.6"></div>
-        </div>
-      </div>
-
-      <!-- 里程碑时间线（Phase 4 新增） -->
-      <div id="milestones-card" class="card" style="display: none">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-          <span style="font-size: 14px">🎉 关系里程碑</span>
-          <button id="add-milestone-btn"
-            style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px">+
-            新增</button>
-        </div>
-        <div id="milestones-list" style="display: flex; flex-direction: column; gap: 8px"></div>
-      </div>
-
-      <!-- 通知中心（Phase 4 新增） -->
-      <div id="notification-bell" style="position: fixed; top: 16px; right: 16px; z-index: 100; display: none">
-        <button id="notification-btn"
-          style="background: var(--bg-card); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; font-size: 18px; cursor: pointer; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.2)">
-          🔔
-          <span id="notification-badge"
-            style="display: none; position: absolute; top: -2px; right: -2px; background: var(--danger); color: white; font-size: 10px; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center"></span>
-        </button>
-      </div>
-
-      <!-- 通知面板 -->
-      <div id="notification-panel" class="card" style="display: none; max-height: 300px; overflow-y: auto">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-          <span style="font-size: 14px">🔔 通知</span>
-          <button id="read-all-btn"
-            style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px">全部已读</button>
-        </div>
-        <div id="notification-list" style="display: flex; flex-direction: column; gap: 6px"></div>
-      </div>
-
-      <!-- 生成报告按钮 -->
-      <button id="home-report-btn" class="btn btn-secondary btn-block" style="display: none; margin-bottom: 16px">
-        查看今日报告 📊
-      </button>
-
-      <!-- 隐私提示 -->
-      <div style="text-align: center; margin-top: 20px">
-        <span class="privacy-badge">🔒 隐私沙盒 · 对方看不到你的原始打卡内容</span>
       </div>
     </div>
 
-    <!-- ═══ 打卡页 ═══ -->
+    <!-- ═══ 打卡页 (Check-in Flow) ═══ -->
     <div id="page-checkin" class="page">
-      <div class="header">
-        <div>
-          <div class="header-title">每日打卡</div>
-          <div class="header-subtitle">记录今天你们之间发生的事</div>
-        </div>
+      <div class="page-header">
+        <h1 class="page-title">日志</h1>
+        <p class="page-subtitle">沉淀今天的专属记忆</p>
       </div>
 
       <form id="checkin-form">
-        <div class="card">
-          <!-- Step 1: 情绪评分（计划书§4.1.2） -->
-          <div class="form-group">
-            <label class="form-label">Step 1 · 今天的整体情绪</label>
-            <div class="mood-score-options" style="display:flex;gap:8px;margin-top:8px">
-              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="4">
-                <input type="radio" name="mood-score" value="4" style="display:none">
-                <div style="font-size:20px">😊</div>
-                <div style="font-size:12px;margin-top:4px">非常好</div>
-              </label>
-              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="3">
-                <input type="radio" name="mood-score" value="3" style="display:none">
-                <div style="font-size:20px">🙂</div>
-                <div style="font-size:12px;margin-top:4px">好</div>
-              </label>
-              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="2">
-                <input type="radio" name="mood-score" value="2" style="display:none">
-                <div style="font-size:20px">😐</div>
-                <div style="font-size:12px;margin-top:4px">一般</div>
-              </label>
-              <label class="mood-tag mood-score-option" style="flex:1;text-align:center;padding:12px 0" data-score="1">
-                <input type="radio" name="mood-score" value="1" style="display:none">
-                <div style="font-size:20px">😔</div>
-                <div style="font-size:12px;margin-top:4px">不好</div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Step 2: 互动频率 + 主动方 -->
-          <div class="form-group">
-            <label class="form-label">Step 2 · 今日互动</label>
-            <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
-              <span style="font-size:13px;color:var(--text-secondary);white-space:nowrap">互动次数</span>
-              <input id="checkin-interaction-freq" class="form-input" type="number" min="0" max="99" placeholder="0"
-                style="width:70px;text-align:center;padding:8px">
-            </div>
-            <div style="display:flex;gap:8px;margin-top:10px">
-              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0" data-val="me">
-                <input type="radio" name="initiative" value="me" style="display:none">
-                <div style="font-size:12px">我主动多</div>
-              </label>
-              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0"
-                data-val="equal">
-                <input type="radio" name="initiative" value="equal" style="display:none">
-                <div style="font-size:12px">差不多</div>
-              </label>
-              <label class="mood-tag initiative-option" style="flex:1;text-align:center;padding:10px 0"
-                data-val="partner">
-                <input type="radio" name="initiative" value="partner" style="display:none">
-                <div style="font-size:12px">对方主动多</div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Step 3: 深度对话 -->
-          <div class="form-group">
-            <label class="form-label">Step 3 · 今天有没有深度对话？</label>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <label class="mood-tag deep-conv-option" style="flex:1;text-align:center;padding:10px 0" data-val="true">
-                <input type="radio" name="deep-conv" value="true" style="display:none">
-                <div style="font-size:12px">有 💬</div>
-              </label>
-              <label class="mood-tag deep-conv-option" style="flex:1;text-align:center;padding:10px 0" data-val="false">
-                <input type="radio" name="deep-conv" value="false" style="display:none">
-                <div style="font-size:12px">没有</div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Step 4: 任务完成 -->
-          <div class="form-group">
-            <label class="form-label">Step 4 · 完成了上次的关系建议吗？</label>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <label class="mood-tag task-option" style="flex:1;text-align:center;padding:10px 0" data-val="true">
-                <input type="radio" name="task-done" value="true" style="display:none">
-                <div style="font-size:12px">完成了 ✅</div>
-              </label>
-              <label class="mood-tag task-option" style="flex:1;text-align:center;padding:10px 0" data-val="false">
-                <input type="radio" name="task-done" value="false" style="display:none">
-                <div style="font-size:12px">还没有</div>
-              </label>
-            </div>
+        <div class="widget widget-full" style="margin-bottom: 16px;">
+          <span class="form-title">1. 今天心情如何？</span>
+          <div class="emotion-grid" style="margin-top: 16px;">
+            <label class="emotion-sphere" data-score="4">
+              <input type="radio" name="mood-score" value="4" style="display:none">
+              <span class="emoji">😊</span>
+              <span class="label">棒极了</span>
+            </label>
+            <label class="emotion-sphere" data-score="3">
+              <input type="radio" name="mood-score" value="3" style="display:none">
+              <span class="emoji">🙂</span>
+              <span class="label">还不错</span>
+            </label>
+            <label class="emotion-sphere" data-score="2">
+              <input type="radio" name="mood-score" value="2" style="display:none">
+              <span class="emoji">😐</span>
+              <span class="label">平平无奇</span>
+            </label>
+            <label class="emotion-sphere" data-score="1">
+              <input type="radio" name="mood-score" value="1" style="display:none">
+              <span class="emoji">😔</span>
+              <span class="label">有点低落</span>
+            </label>
           </div>
         </div>
 
-        <div class="card">
-          <div class="form-group">
-            <label class="form-label">今天想说什么？</label>
-            <textarea id="checkin-content" class="form-input"
-              placeholder="记录你今天的感受、你们之间的互动、或者任何想说的话...&#10;&#10;这些内容是隐私的，对方不会看到原文，只有AI会分析后给出洞察 💭"></textarea>
+        <div class="widget widget-full" style="margin-bottom: 16px;">
+          <span class="form-title">2. 互动质量诊断</span>
+
+          <div
+            style="background: var(--bg-surface-secondary); padding: 16px; border-radius: var(--radius-md); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-weight: 600; font-size: 16px;">互动频率 (次)</span>
+            <input id="checkin-interaction-freq" class="input-field" type="number" min="0" max="99" placeholder="0"
+              style="width: 80px; text-align: center; font-size: 20px; font-weight: 800; padding: 8px; margin: 0; background: white; box-shadow: var(--shadow-pressed);">
           </div>
 
-          <div class="form-group">
-            <label class="form-label">今天的情绪</label>
-            <div class="mood-tags">
-              <span class="mood-tag" data-mood="开心">😊 开心</span>
-              <span class="mood-tag" data-mood="平静">😌 平静</span>
-              <span class="mood-tag" data-mood="感动">🥰 感动</span>
-              <span class="mood-tag" data-mood="期待">🤩 期待</span>
-              <span class="mood-tag" data-mood="焦虑">😰 焦虑</span>
-              <span class="mood-tag" data-mood="委屈">😢 委屈</span>
-              <span class="mood-tag" data-mood="生气">😤 生气</span>
-              <span class="mood-tag" data-mood="疲惫">😩 疲惫</span>
-            </div>
+          <span
+            style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">谁更主动？</span>
+          <div style="display:flex;gap:12px;margin-bottom: 24px;">
+            <label class="emotion-sphere initiative-option" style="flex:1;padding:16px 0;" data-val="me">
+              <input type="radio" name="initiative" value="me" style="display:none">
+              <span class="label">我</span>
+            </label>
+            <label class="emotion-sphere initiative-option" style="flex:1;padding:16px 0;" data-val="equal">
+              <input type="radio" name="initiative" value="equal" style="display:none">
+              <span class="label">差不多</span>
+            </label>
+            <label class="emotion-sphere initiative-option" style="flex:1;padding:16px 0;" data-val="partner">
+              <input type="radio" name="initiative" value="partner" style="display:none">
+              <span class="label">TA</span>
+            </label>
           </div>
 
-          <!-- 多媒体上传 -->
-          <div class="form-group">
-            <label class="form-label">添加图片/语音（可选）</label>
-            <div style="display: flex; gap: 10px; margin-top: 6px">
-              <button type="button" id="checkin-image-btn" class="btn btn-outline btn-sm" style="flex:1">📷
-                添加图片</button>
-              <button type="button" id="checkin-voice-btn" class="btn btn-outline btn-sm" style="flex:1">🎤
-                添加语音</button>
+          <span
+            style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">有
+            30 分钟深度交流吗？</span>
+          <div style="display:flex;gap:12px;margin-bottom: 24px;">
+            <label class="emotion-sphere deep-conv-option" style="flex:1;padding:16px 0;" data-val="true">
+              <input type="radio" name="deep-conv" value="true" style="display:none">
+              <span class="label">有 💬</span>
+            </label>
+            <label class="emotion-sphere deep-conv-option" style="flex:1;padding:16px 0;" data-val="false">
+              <input type="radio" name="deep-conv" value="false" style="display:none">
+              <span class="label">没有</span>
+            </label>
+          </div>
+
+          <span
+            style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">完成了上次规划的任务吗？</span>
+          <div style="display:flex;gap:12px;">
+            <label class="emotion-sphere task-option" style="flex:1;padding:16px 0;" data-val="true">
+              <input type="radio" name="task-done" value="true" style="display:none">
+              <span class="label">完成 ✅</span>
+            </label>
+            <label class="emotion-sphere task-option" style="flex:1;padding:16px 0;" data-val="false">
+              <input type="radio" name="task-done" value="false" style="display:none">
+              <span class="label">还没</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="widget widget-full" style="margin-bottom: 24px;">
+          <span class="form-title">3. 留给 AI 分析的话</span>
+          <textarea id="checkin-content" class="input-field" placeholder="记录今天的感受... 对方不可见，AI会借此生成趋势报告 💭"></textarea>
+
+          <div style="margin-top: 20px;">
+            <span
+              style="font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; display: block;">附加回忆
+              (可选)</span>
+            <div style="display: flex; gap: 12px;">
+              <button type="button" id="checkin-image-btn" class="btn btn-secondary"
+                style="flex:1;font-size:15px;padding:12px;border-radius:16px;">📷 加图片</button>
+              <button type="button" id="checkin-voice-btn" class="btn btn-secondary"
+                style="flex:1;font-size:15px;padding:12px;border-radius:16px;">🎤 录语音</button>
             </div>
             <input type="file" id="checkin-image-input" accept="image/*" style="display:none">
             <input type="file" id="checkin-voice-input" accept="audio/*" style="display:none">
-            <div id="checkin-image-preview"></div>
-            <div id="checkin-voice-preview"></div>
+            <div id="checkin-image-preview" style="margin-top: 12px"></div>
+            <div id="checkin-voice-preview" style="margin-top: 12px"></div>
           </div>
         </div>
 
-        <button id="checkin-submit-btn" type="submit" class="btn btn-primary btn-block">提交打卡</button>
+        <button id="checkin-submit-btn" type="submit" class="btn btn-primary btn-block"
+          style="padding: 18px; font-size: 18px; border-radius: 20px;">封存今日日记</button>
       </form>
     </div>
 
     <!-- ═══ 报告页 ═══ -->
     <div id="page-report" class="page">
-      <div class="header">
-        <div>
-          <div class="header-title">关系报告</div>
-          <div class="header-subtitle">AI 为你们生成的健康洞察</div>
-        </div>
+      <div class="page-header">
+        <h1 class="page-title">档案</h1>
+        <p class="page-subtitle">健康趋势与分析</p>
       </div>
 
-      <div id="report-content">
-        <div class="empty-state">
-          <div class="empty-icon">📊</div>
-          <div class="empty-title">暂无报告</div>
-          <div class="empty-desc">每次打卡即可生成个人日记，双方完成后还有关系健康报告</div>
+      <div id="report-content" class="bento-grid">
+        <div class="widget widget-full" style="padding: 40px 20px; text-align: center; align-items: center;">
+          <div class="hero-visual" style="font-size: 64px; margin-bottom: 20px;">📊</div>
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 10px;">积累中</h2>
+          <p style="font-size: 15px; color: var(--text-secondary); margin-bottom: 24px; max-width: 80%;">
+            坚持双方打卡，AI将在周末为你生成全面的关系体验诊断报告。</p>
+          <button class="btn btn-primary" style="padding: 14px 24px; border-radius: 16px;"
+            onclick="showPage('checkin')">去写日记</button>
         </div>
       </div>
     </div>
 
     <!-- ═══ 个人中心页 ═══ -->
     <div id="page-profile" class="page">
-      <div class="header">
-        <div>
-          <div class="header-title">个人中心</div>
-        </div>
+      <div class="page-header">
+        <h1 class="page-title">账户</h1>
       </div>
 
-      <div class="card" style="text-align: center; padding: 30px">
-        <div class="avatar" style="width: 64px; height: 64px; font-size: 24px; margin: 0 auto 12px">我</div>
-        <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px">用户</div>
-        <div style="font-size: 13px; color: var(--text-muted)">MVP 版本</div>
-      </div>
-
-      <div class="card">
-        <div style="display: flex; flex-direction: column; gap: 4px">
-          <div
-            style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-light)">
-            <span style="color: var(--text-secondary)">配对状态</span>
-            <span style="font-weight: 500" id="profile-pair-status">--</span>
-          </div>
-          <div
-            style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-light)">
-            <span style="color: var(--text-secondary)">关系类型</span>
-            <span style="font-weight: 500" id="profile-pair-type">--</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; padding: 12px 0">
-            <span style="color: var(--text-secondary)">隐私保护</span>
-            <span class="privacy-badge">🔒 已开启</span>
+      <div class="bento-grid">
+        <div class="widget widget-full" style="flex-direction: row; align-items: center; gap: 16px; padding: 24px;">
+          <div class="avatar" style="width: 72px; height: 72px; font-size: 28px;">我</div>
+          <div>
+            <h2 style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">亲健用户</h2>
+            <p style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">Beta Version</p>
           </div>
         </div>
-      </div>
 
-      <!-- 解绑区域（计划书§9.1） -->
-      <div id="unbind-section" class="card" style="display:none">
-        <h3 style="font-size:15px;margin-bottom:12px;color:var(--text-secondary)">解绑管理</h3>
-        <div id="unbind-status-text" style="font-size:13px;color:var(--text-muted);margin-bottom:12px"></div>
-        <div id="unbind-actions" style="display:flex;gap:8px"></div>
-      </div>
+        <div class="widget widget-full">
+          <span class="widget-title" style="margin-bottom: 20px;">系统设定</span>
 
-      <button onclick="api.logout(); showPage('auth'); document.getElementById('tab-bar').style.display='none'"
-        class="btn btn-outline btn-block" style="margin-top: 8px; color: var(--coral-500)">
-        退出登录
-      </button>
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--bg-surface-secondary)">
+            <span style="font-size: 16px; font-weight: 600;">配对状态</span>
+            <span style="font-size: 16px; font-weight: 700; color: var(--color-blue);"
+              id="profile-pair-status">检查中...</span>
+          </div>
+
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--bg-surface-secondary)">
+            <span style="font-size: 16px; font-weight: 600;">关系类型</span>
+            <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);"
+              id="profile-pair-type">未知</span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0;">
+            <span style="font-size: 16px; font-weight: 600;">隐私保护</span>
+            <span
+              style="background: var(--color-green-light); color: var(--color-green); padding: 6px 12px; border-radius: 12px; font-size: 13px; font-weight: 700;">沙盒加密中
+              🔒</span>
+          </div>
+        </div>
+
+        <div id="unbind-section" class="widget widget-full" style="display:none; background: #FFF0F0;">
+          <span class="widget-title" style="color: #FF3B30; margin-bottom: 12px;">关系解除</span>
+          <div id="unbind-status-text"
+            style="font-size: 14px; font-weight: 600; color: #FF3B30; margin-bottom: 16px; opacity: 0.8;"></div>
+          <div id="unbind-actions" style="display:flex;gap:12px;"></div>
+        </div>
+
+        <div class="widget-full">
+          <button onclick="api.logout(); showPage('auth'); document.getElementById('dock-nav').style.display='none'"
+            class="btn btn-secondary btn-block"
+            style="padding: 16px; background: #E5E5EA; color: var(--text-primary); border-radius: 20px;">
+            退出登录
+          </button>
+        </div>
+      </div>
     </div>
 
-    <!-- ═══ 底部导航栏 ═══ -->
-    <nav id="tab-bar" class="tab-bar" style="display: none">
-      <button class="tab-item active" data-page="home">
-        <span class="tab-icon">🏠</span>
-        <span class="tab-label">首页</span>
-      </button>
-      <button class="tab-item" data-page="checkin">
-        <span class="tab-icon">✍️</span>
-        <span class="tab-label">打卡</span>
-      </button>
-      <button class="tab-item" data-page="report">
-        <span class="tab-icon">📊</span>
-        <span class="tab-label">报告</span>
-      </button>
-      <button class="tab-item" data-page="profile">
-        <span class="tab-icon">👤</span>
-        <span class="tab-label">我的</span>
-      </button>
-    </nav>
+    <!-- ═══ 浮动毛玻璃 Bottom Dock ═══ -->
+    <div id="dock-nav" class="dock-wrapper" style="display: none;">
+      <nav class="dock">
+        <button class="dock-item active" data-page="home">
+          <span class="dock-icon" style="font-size: 26px;">🏠</span>
+          <span class="dock-label">主页</span>
+        </button>
+        <button class="dock-item" data-page="report">
+          <span class="dock-icon" style="font-size: 26px;">📊</span>
+          <span class="dock-label">档案</span>
+        </button>
+        <button class="dock-action-btn" data-page="checkin" style="margin: 0 10px;">
+          +
+        </button>
+
+        <!-- Notification Integration in Dock -->
+        <button class="dock-item" id="dock-notification-btn" style="position: relative;">
+          <span class="dock-icon" style="font-size: 26px;">🔔</span>
+          <span class="dock-label">提醒</span>
+          <span id="notification-badge"
+            style="display: none; position: absolute; top: 4px; right: 12px; background: var(--color-brand); width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,0.8);"></span>
+        </button>
+
+        <button class="dock-item" data-page="profile">
+          <span class="dock-icon" style="font-size: 26px;">👤</span>
+          <span class="dock-label">我</span>
+        </button>
+      </nav>
+    </div>
+
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
 
-  <!-- 通用模态框 -->
-  <div id="modal-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;backdrop-filter:blur(4px)" onclick="closeModal()">
-    <div id="modal-content" style="position:absolute;bottom:0;left:0;right:0;max-height:80vh;background:var(--bg-card,#fff);border-radius:20px 20px 0 0;padding:24px 20px 32px;overflow-y:auto;animation:modalSlideUp .3s ease" onclick="event.stopPropagation()">
+  <!-- Notification Panel Modal injected by app.js conceptually -->
+  <div id="notification-panel" class="widget widget-full"
+    style="display: none; position: fixed; top: 10%; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 1000; max-height: 70vh; overflow-y: auto;">
+    <div class="widget-header">
+      <span class="widget-title">系统提醒</span>
+      <button id="read-all-btn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">标为已读</button>
+      <button onclick="document.getElementById('notification-panel').style.display='none'" class="btn"
+        style="background: none; font-size: 20px;">✕</button>
+    </div>
+    <div id="notification-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;"></div>
+  </div>
+
+  <!-- 通用模态框 (Apple Style Action Sheet) -->
+  <div id="modal-overlay"
+    style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1001;transition:opacity 0.3s;"
+    onclick="closeModal()">
+    <div id="modal-content"
+      style="position:absolute;bottom:0;left:0;right:0;max-height:85vh;overflow-y:auto;transition: transform 0.4s var(--spring);"
+      onclick="event.stopPropagation()">
+      <div style="width: 40px; height: 5px; border-radius: 5px; background: rgba(0,0,0,0.1); margin: 0 auto 20px;">
+      </div>
       <div id="modal-body"></div>
     </div>
   </div>
-  <style>
-    @keyframes modalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  </style>
+
 </body>
 
 </html>
