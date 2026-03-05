@@ -81,6 +81,27 @@
         </view>
       </view>
 
+      <!-- 加入新配对（多配对） -->
+      <view class="card mt-lg">
+        <view class="card-title">加入新的配对</view>
+        <view class="card-desc">输入伴侣分享的配对码</view>
+        <view class="input-wrap mt-sm">
+          <input
+            type="text"
+            placeholder="请输入配对码"
+            value="{{inviteCode}}"
+            bindinput="onInviteCodeInput"
+          />
+        </view>
+        <button
+          class="btn btn-secondary btn-block mt-md"
+          bindtap="joinPair"
+          disabled="{{joining}}"
+        >
+          {{joining ? '加入中...' : '加入配对'}}
+        </button>
+      </view>
+
       <!-- 解除配对 -->
       <view class="card mt-lg danger-card">
         <view class="card-title text-danger">解除配对</view>

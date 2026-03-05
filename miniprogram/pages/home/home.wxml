@@ -10,7 +10,7 @@
       <view>
         <view class="home-greeting">{{greeting}}</view>
         <view class="home-pair-status" wx:if="{{pairInfo}}">
-          已配对 · 与 {{pairInfo.partner_name || '伴侣'}} 同行
+          已配对 · 与 {{pairDisplayName}} 同行
         </view>
         <view class="home-pair-status" wx:else>
           <text bindtap="goPair">单人模式 · 点击配对 →</text>

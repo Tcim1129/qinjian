@@ -10,6 +10,7 @@ Page({
     // 用户信息
     userInfo: null,
     pairInfo: null,
+    pairDisplayName: '伴侣',
     greeting: '',
 
     // 今日打卡状态
@@ -91,10 +92,23 @@ Page({
     this.setData({ loading: true })
 
     const app = getApp()
-    const pairInfo = app.globalData.pairInfo
+    let pairInfo = app.globalData.pairInfo
+    if (!pairInfo) {
+      try {
+        const pairs = await api.get('/pairs/me')
+        const list = Array.isArray(pairs) ? pairs : [pairs]
+        pairInfo = list.find(p => p.status === 'active') || list[0] || null
+        if (pairInfo) {
+          app.setPairInfo(pairInfo)
+        }
+      } catch (e) {
+        console.warn('首页拉取配对信息失败', e)
+      }
+    }
     const pairId = pairInfo ? (pairInfo.id || pairInfo.pair_id) : null
 
-    this.setData({ pairInfo })
+    const displayName = pairInfo && (pairInfo.partner_nickname || pairInfo.partner_name || pairInfo.partnerNickname)
+    this.setData({ pairInfo, pairDisplayName: displayName || '伴侣' })
 
     const tasks = [
       this.loadTodayCheckin(),
