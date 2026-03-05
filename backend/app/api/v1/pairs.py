@@ -14,6 +14,21 @@ from app.schemas import PairCreateRequest, PairJoinRequest, PairResponse
 router = APIRouter(prefix="/pairs", tags=["配对"])
 
 
+def _build_pair_response(
+    pair: Pair, me: User, partner: User | None = None
+) -> PairResponse:
+    data = PairResponse.model_validate(pair).model_dump()
+    if partner:
+        data.update(
+            {
+                "partner_id": partner.id,
+                "partner_nickname": partner.nickname,
+                "partner_avatar": partner.wechat_avatar or partner.avatar_url,
+            }
+        )
+    return PairResponse(**data)
+
+
 @router.post("/create", response_model=PairResponse)
 async def create_pair(
     req: PairCreateRequest,
@@ -30,7 +45,7 @@ async def create_pair(
     )
     db.add(pair)
     await db.flush()
-    return pair
+    return _build_pair_response(pair, user)
 
 
 @router.post("/join", response_model=PairResponse)
@@ -55,7 +70,9 @@ async def join_pair(
     pair.user_b_id = user.id
     pair.status = PairStatus.ACTIVE
     await db.flush()
-    return pair
+
+    partner = await db.get(User, pair.user_a_id)
+    return _build_pair_response(pair, user, partner)
 
 
 @router.get("/me", response_model=list[PairResponse])
@@ -69,7 +86,13 @@ async def get_my_pairs(
             Pair.status.in_([PairStatus.PENDING, PairStatus.ACTIVE]),
         )
     )
-    return result.scalars().all()
+    pairs = result.scalars().all()
+    responses: list[PairResponse] = []
+    for pair in pairs:
+        partner_id = pair.user_b_id if pair.user_a_id == user.id else pair.user_a_id
+        partner = await db.get(User, partner_id) if partner_id else None
+        responses.append(_build_pair_response(pair, user, partner))
+    return responses
 
 
 # ── 解绑功能（计划书§9.1：双方确认或7天冷静期自动解绑）──

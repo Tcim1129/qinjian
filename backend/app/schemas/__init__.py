@@ -78,6 +78,9 @@ class PairResponse(BaseModel):
     unbind_requested_by: uuid.UUID | None = None
     unbind_requested_at: datetime | None = None
     created_at: datetime
+    partner_id: uuid.UUID | None = None
+    partner_nickname: str | None = None
+    partner_avatar: str | None = None
 
     model_config = {"from_attributes": True}
 

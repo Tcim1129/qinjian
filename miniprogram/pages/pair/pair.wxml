@@ -54,8 +54,8 @@
       <view class="pair-header gradient-card">
         <view class="paired-status">已配对</view>
         <view class="partner-info">
-          <view class="partner-avatar">{{pairInfo.partner_nickname ? pairInfo.partner_nickname[0] : '❤'}}</view>
-          <view class="partner-name">{{pairInfo.partner_nickname || '伴侣'}}</view>
+          <view class="partner-avatar">{{partnerInitial}}</view>
+          <view class="partner-name">{{partnerDisplay}}</view>
         </view>
         <view class="pair-date">配对时间：{{pairInfo.created_at || '--'}}</view>
       </view>

@@ -99,48 +99,87 @@
   <!-- 注册表单 -->
   <view class="login-form" wx:if="{{currentTab === 'register'}}">
     <view class="card">
-      <view class="input-wrap mb-md">
-        <input
-          placeholder="邮箱"
-          value="{{regEmail}}"
-          bindinput="onRegEmailInput"
-        />
+      <view class="login-mode-tabs flex-row">
+        <view class="login-mode {{regMode === 'email' ? 'active' : ''}}" data-mode="email" bindtap="switchRegMode">邮箱注册</view>
+        <view class="login-mode {{regMode === 'phone' ? 'active' : ''}}" data-mode="phone" bindtap="switchRegMode">手机注册</view>
       </view>
 
-      <view class="input-wrap mb-md">
-        <input
-          placeholder="密码（至少6位）"
-          password="{{!showRegPwd}}"
-          value="{{regPassword}}"
-          bindinput="onRegPasswordInput"
-        />
-        <text class="pwd-toggle" bindtap="toggleRegPwd">{{showRegPwd ? '🙈' : '👁️'}}</text>
+      <view wx:if="{{regMode === 'email'}}">
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="邮箱"
+            value="{{regEmail}}"
+            bindinput="onRegEmailInput"
+          />
+        </view>
+
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="密码（至少6位）"
+            password="{{!showRegPwd}}"
+            value="{{regPassword}}"
+            bindinput="onRegPasswordInput"
+          />
+          <text class="pwd-toggle" bindtap="toggleRegPwd">{{showRegPwd ? '🙈' : '👁️'}}</text>
+        </view>
+
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="确认密码"
+            password="{{!showRegPwd}}"
+            value="{{regPasswordConfirm}}"
+            bindinput="onRegPasswordConfirmInput"
+          />
+        </view>
+
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="昵称"
+            value="{{regNickname}}"
+            bindinput="onRegNicknameInput"
+          />
+        </view>
+
+        <button
+          class="btn btn-primary btn-block mt-lg {{submitting ? 'btn-disabled' : ''}}"
+          bindtap="handleRegister"
+          disabled="{{submitting}}"
+        >
+          {{submitting ? '注册中...' : '注 册'}}
+        </button>
       </view>
 
-      <view class="input-wrap mb-md">
-        <input
-          placeholder="确认密码"
-          password="{{!showRegPwd}}"
-          value="{{regPasswordConfirm}}"
-          bindinput="onRegPasswordConfirmInput"
-        />
+      <view wx:else>
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="手机号"
+            value="{{regPhone}}"
+            bindinput="onRegPhoneInput"
+          />
+        </view>
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="验证码"
+            value="{{regCode}}"
+            bindinput="onRegCodeInput"
+          />
+          <text class="code-btn" bindtap="sendRegPhoneCode">获取验证码</text>
+        </view>
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="昵称"
+            value="{{regNickname}}"
+            bindinput="onRegNicknameInput"
+          />
+        </view>
+        <button
+          class="btn btn-primary btn-block mt-lg {{submitting ? 'btn-disabled' : ''}}"
+          bindtap="handleRegister"
+          disabled="{{submitting}}"
+        >
+          {{submitting ? '注册中...' : '注 册'}}
+        </button>
       </view>
-
-      <view class="input-wrap mb-md">
-        <input
-          placeholder="昵称"
-          value="{{regNickname}}"
-          bindinput="onRegNicknameInput"
-        />
-      </view>
-
-      <button
-        class="btn btn-primary btn-block mt-lg {{submitting ? 'btn-disabled' : ''}}"
-        bindtap="handleRegister"
-        disabled="{{submitting}}"
-      >
-        {{submitting ? '注册中...' : '注 册'}}
-      </button>
     </view>
   </view>
 

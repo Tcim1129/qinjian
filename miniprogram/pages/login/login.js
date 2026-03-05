@@ -11,6 +11,7 @@ Page({
     currentTab: 'login',
 
     loginMode: 'email',
+    regMode: 'email',
 
     loginEmail: '',
     loginPassword: '',
@@ -21,6 +22,8 @@ Page({
     regPassword: '',
     regPasswordConfirm: '',
     regNickname: '',
+    regPhone: '',
+    regCode: '',
 
     submitting: false,
     showLoginPwd: false,
@@ -40,6 +43,10 @@ Page({
 
   switchLoginMode(e) {
     this.setData({ loginMode: e.currentTarget.dataset.mode })
+  },
+
+  switchRegMode(e) {
+    this.setData({ regMode: e.currentTarget.dataset.mode })
   },
 
   onLoginEmailInput(e) {
@@ -76,6 +83,14 @@ Page({
 
   onRegNicknameInput(e) {
     this.setData({ regNickname: e.detail.value })
+  },
+
+  onRegPhoneInput(e) {
+    this.setData({ regPhone: e.detail.value })
+  },
+
+  onRegCodeInput(e) {
+    this.setData({ regCode: e.detail.value })
   },
 
   toggleRegPwd() {
@@ -120,9 +135,15 @@ Page({
 
       const app = getApp()
       app.setLoginState(res.access_token || res.token, res.user || res)
-
-      if (res.pair) {
-        app.setPairInfo(res.pair)
+      try {
+        const pairs = await api.get('/pairs/me')
+        const list = Array.isArray(pairs) ? pairs : [pairs]
+        const activePair = list.find(p => p.status === 'active') || list[0] || null
+        if (activePair) {
+          app.setPairInfo(activePair)
+        }
+      } catch (e2) {
+        console.warn('获取配对信息失败', e2)
       }
 
       wx.showToast({ title: '登录成功', icon: 'success' })
@@ -138,19 +159,38 @@ Page({
   },
 
   async handleRegister() {
-    const { regEmail, regPassword, regPasswordConfirm, regNickname } = this.data
+    const {
+      regMode,
+      regEmail,
+      regPassword,
+      regPasswordConfirm,
+      regNickname,
+      regPhone,
+      regCode
+    } = this.data
 
-    if (!regEmail.trim()) {
-      wx.showToast({ title: '请输入邮箱', icon: 'none' })
-      return
-    }
-    if (!regPassword || regPassword.length < 6) {
-      wx.showToast({ title: '密码至少6位', icon: 'none' })
-      return
-    }
-    if (regPassword !== regPasswordConfirm) {
-      wx.showToast({ title: '两次密码不一致', icon: 'none' })
-      return
+    if (regMode === 'email') {
+      if (!regEmail.trim()) {
+        wx.showToast({ title: '请输入邮箱', icon: 'none' })
+        return
+      }
+      if (!regPassword || regPassword.length < 6) {
+        wx.showToast({ title: '密码至少6位', icon: 'none' })
+        return
+      }
+      if (regPassword !== regPasswordConfirm) {
+        wx.showToast({ title: '两次密码不一致', icon: 'none' })
+        return
+      }
+    } else {
+      if (!regPhone.trim()) {
+        wx.showToast({ title: '请输入手机号', icon: 'none' })
+        return
+      }
+      if (!regCode.trim()) {
+        wx.showToast({ title: '请输入验证码', icon: 'none' })
+        return
+      }
     }
     if (!regNickname.trim()) {
       wx.showToast({ title: '请输入昵称', icon: 'none' })
@@ -160,18 +200,31 @@ Page({
     this.setData({ submitting: true })
 
     try {
-      await api.post('/auth/register', {
-        email: regEmail.trim(),
-        password: regPassword,
-        nickname: regNickname.trim()
-      })
+      if (regMode === 'email') {
+        await api.post('/auth/register', {
+          email: regEmail.trim(),
+          password: regPassword,
+          nickname: regNickname.trim()
+        })
 
-      wx.showToast({ title: '注册成功，请登录', icon: 'success' })
+        wx.showToast({ title: '注册成功，请登录', icon: 'success' })
 
-      this.setData({
-        currentTab: 'login',
-        loginEmail: regEmail.trim()
-      })
+        this.setData({
+          currentTab: 'login',
+          loginEmail: regEmail.trim()
+        })
+      } else {
+        const res = await api.post('/auth/phone/login', {
+          phone: regPhone.trim(),
+          code: regCode.trim()
+        })
+        const app = getApp()
+        app.setLoginState(res.access_token || res.token, res.user || res)
+        wx.showToast({ title: '注册成功', icon: 'success' })
+        setTimeout(() => {
+          wx.switchTab({ url: '/pages/home/home' })
+        }, 800)
+      }
     } catch (e) {
       wx.showToast({ title: e.message || '注册失败', icon: 'none' })
     } finally {
@@ -187,6 +240,20 @@ Page({
     }
     try {
       await api.post('/auth/phone/send-code', { phone: loginPhone.trim() })
+      wx.showToast({ title: '验证码已发送(测试码123456)', icon: 'none' })
+    } catch (e) {
+      wx.showToast({ title: e.message || '发送失败', icon: 'none' })
+    }
+  },
+
+  async sendRegPhoneCode() {
+    const { regPhone } = this.data
+    if (!regPhone.trim()) {
+      wx.showToast({ title: '请输入手机号', icon: 'none' })
+      return
+    }
+    try {
+      await api.post('/auth/phone/send-code', { phone: regPhone.trim() })
       wx.showToast({ title: '验证码已发送(测试码123456)', icon: 'none' })
     } catch (e) {
       wx.showToast({ title: e.message || '发送失败', icon: 'none' })
@@ -217,6 +284,16 @@ Page({
 
       const app = getApp()
       app.setLoginState(res.access_token || res.token, res.user || res)
+      try {
+        const pairs = await api.get('/pairs/me')
+        const list = Array.isArray(pairs) ? pairs : [pairs]
+        const activePair = list.find(p => p.status === 'active') || list[0] || null
+        if (activePair) {
+          app.setPairInfo(activePair)
+        }
+      } catch (e2) {
+        console.warn('获取配对信息失败', e2)
+      }
 
       wx.showToast({ title: '登录成功', icon: 'success' })
       setTimeout(() => {

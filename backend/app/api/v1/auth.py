@@ -11,7 +11,6 @@ from app.models import User
 from app.schemas import (
     RegisterRequest,
     LoginRequest,
-    TokenResponse,
     UserResponse,
     WechatLoginRequest,
     PhoneSendCodeRequest,
@@ -24,7 +23,7 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 _phone_code_cache: dict[str, dict] = {}
 
 
-@router.post("/register", response_model=TokenResponse)
+@router.post("/register", response_model=dict)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """注册新用户"""
     # 检查邮箱是否已存在
@@ -41,10 +40,14 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     token = create_access_token(str(user.id))
-    return TokenResponse(access_token=token)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user),
+    }
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=dict)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """用户登录"""
     result = await db.execute(select(User).where(User.email == req.email))
@@ -53,10 +56,14 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="邮箱或密码错误")
 
     token = create_access_token(str(user.id))
-    return TokenResponse(access_token=token)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user),
+    }
 
 
-@router.post("/wechat/login", response_model=TokenResponse)
+@router.post("/wechat/login", response_model=dict)
 async def wechat_login(req: WechatLoginRequest, db: AsyncSession = Depends(get_db)):
     """微信一键登录（通过 code 获取 openid）"""
     if not settings.WECHAT_APPID or not settings.WECHAT_SECRET:
@@ -116,7 +123,11 @@ async def wechat_login(req: WechatLoginRequest, db: AsyncSession = Depends(get_d
             await db.flush()
 
     token = create_access_token(str(user.id))
-    return TokenResponse(access_token=token)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user),
+    }
 
 
 @router.post("/phone/send-code", response_model=dict)
@@ -126,7 +137,7 @@ async def send_phone_code(req: PhoneSendCodeRequest):
     return {"message": "验证码已发送", "code": "123456"}
 
 
-@router.post("/phone/login", response_model=TokenResponse)
+@router.post("/phone/login", response_model=dict)
 async def phone_login(req: PhoneLoginRequest, db: AsyncSession = Depends(get_db)):
     """手机号验证码登录（测试环境）"""
     entry = _phone_code_cache.get(req.phone)
@@ -146,7 +157,11 @@ async def phone_login(req: PhoneLoginRequest, db: AsyncSession = Depends(get_db)
         await db.flush()
 
     token = create_access_token(str(user.id))
-    return TokenResponse(access_token=token)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user),
+    }
 
 
 @router.get("/me", response_model=UserResponse)

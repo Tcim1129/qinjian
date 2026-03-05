@@ -82,10 +82,14 @@ Page({
         : await api.post(`${url}?mode=solo`)
       this.setData({ reportContent: res, reportView: this.normalizeReport(res) })
       wx.showToast({ title: '报告生成成功', icon: 'success' })
-      // 刷新历史列表
       this.loadHistory()
     } catch (e) {
-      wx.showToast({ title: e.message || '生成失败', icon: 'none' })
+      const isSolo = !pairId
+      if (isSolo && this.data.currentTab === 'daily') {
+        wx.showToast({ title: e.message || '请先完成今日打卡', icon: 'none' })
+      } else {
+        wx.showToast({ title: e.message || '生成失败', icon: 'none' })
+      }
     } finally {
       this.setData({ generating: false })
     }
@@ -100,7 +104,7 @@ Page({
       const pairId = auth.getPairId()
       const qs = pairId
         ? `pair_id=${pairId}&report_type=${this.data.currentTab}`
-        : `mode=solo`
+        : `mode=solo&report_type=${this.data.currentTab}`
       const res = await api.get(`/reports/history?${qs}`)
       const list = res || []
       this.setData({

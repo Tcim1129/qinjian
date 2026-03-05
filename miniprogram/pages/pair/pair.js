@@ -11,6 +11,8 @@ Page({
     // 配对状态
     isPaired: false,
     pairInfo: null,
+    partnerDisplay: '伴侣',
+    partnerInitial: '❤',
 
     // 未配对表单
     inviteCode: '',
@@ -38,18 +40,26 @@ Page({
       const activePair = pairs.find(p => p.status === 'active') || pairs[0] || null
       const app = getApp()
       if (activePair) {
+        const displayName = activePair.partner_nickname || activePair.partner_name || activePair.partnerNickname || '伴侣'
+        if (activePair.partner_nickname) {
+          const nickname = activePair.partner_nickname
+          activePair.partner_name = nickname
+          activePair.partnerNickname = nickname
+        }
         app.setPairInfo(activePair)
         this.setData({
           isPaired: true,
-          pairInfo: activePair
+          pairInfo: activePair,
+          partnerDisplay: displayName,
+          partnerInitial: displayName ? displayName[0] : '❤'
         })
       } else {
         app.setPairInfo(null)
-        this.setData({ isPaired: false, pairInfo: null })
+        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤' })
       }
     } catch (e) {
       if (e.code === 404) {
-        this.setData({ isPaired: false, pairInfo: null })
+        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤' })
       } else {
         console.error('获取配对状态失败:', e)
       }

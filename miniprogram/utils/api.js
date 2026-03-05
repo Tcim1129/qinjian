@@ -72,7 +72,7 @@ function request(url, method, data) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data)
         } else {
-          const errMsg = (res.data && res.data.message) || '请求失败'
+          const errMsg = (res.data && (res.data.detail || res.data.message)) || '请求失败'
           reject({ code: res.statusCode, message: errMsg, data: res.data })
         }
       },
