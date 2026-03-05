@@ -122,6 +122,14 @@ class Pair(Base):
     # ── 异地标记（Phase 4 新增）──
     is_long_distance: Mapped[bool | None] = mapped_column(default=False, nullable=True)
 
+    # ── 自定义伴侣昵称（给伴侣设置备注名）──
+    custom_partner_nickname_a: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    custom_partner_nickname_b: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+
     # 关系
     checkins: Mapped[list["Checkin"]] = relationship(back_populates="pair")
     reports: Mapped[list["Report"]] = relationship(back_populates="pair")

@@ -52,12 +52,18 @@
     <!-- 已配对状态 -->
     <view wx:else class="paired">
       <view class="pair-header gradient-card">
-        <view class="paired-status">已配对</view>
+        <view class="paired-status">已配对 · {{pairInfo.type === 'spouse' ? '夫妻' : pairInfo.type === 'bestfriend' ? '挚友' : '情侣'}}</view>
         <view class="partner-info">
           <view class="partner-avatar">{{partnerInitial}}</view>
           <view class="partner-name">{{partnerDisplay}}</view>
+          <view class="partner-account" wx:if="{{pairInfo.partner_email || pairInfo.partner_phone}}">
+            {{pairInfo.partner_phone || pairInfo.partner_email}}
+          </view>
         </view>
         <view class="pair-date">配对时间：{{pairInfo.created_at || '--'}}</view>
+        <view class="pair-actions" wx:if="{{pairInfo.partner_id}}">
+          <button class="btn btn-small btn-ghost" bindtap="showSetNicknameModal">设置备注名</button>
+        </view>
       </view>
 
       <!-- 关系统计 -->
@@ -138,4 +144,30 @@
       </view>
     </view>
   </block>
+
+  <!-- 设置备注名弹窗 -->
+  <view class="modal" wx:if="{{showNicknameModal}}">
+    <view class="modal-mask" bindtap="hideNicknameModal"></view>
+    <view class="modal-content">
+      <view class="modal-header">
+        <view class="modal-title">设置伴侣备注名</view>
+        <text class="modal-close" bindtap="hideNicknameModal">×</text>
+      </view>
+      <view class="modal-body">
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="给伴侣起个备注名"
+            value="{{customNicknameInput}}"
+            bindinput="onNicknameInput"
+            maxlength="20"
+          />
+        </view>
+        <view class="text-small text-muted">设置备注名后，首页和配对页将显示此名称</view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn btn-secondary" bindtap="hideNicknameModal">取消</button>
+        <button class="btn btn-primary" bindtap="saveCustomNickname">保存</button>
+      </view>
+    </view>
+  </view>
 </view>

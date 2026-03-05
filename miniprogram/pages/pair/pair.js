@@ -21,7 +21,11 @@ Page({
     // 加载状态
     loading: true,
     creating: false,
-    joining: false
+    joining: false,
+
+    // 自定义昵称
+    customNicknameInput: '',
+    showNicknameModal: false
   },
 
   onLoad() {
@@ -194,6 +198,66 @@ Page({
           wx.showToast({ title: '已复制', icon: 'success' })
         }
       })
+    }
+  },
+
+  /**
+   * 显示设置备注名弹窗
+   */
+  showSetNicknameModal() {
+    const currentNickname = this.data.pairInfo?.custom_partner_nickname || ''
+    this.setData({
+      showNicknameModal: true,
+      customNicknameInput: currentNickname
+    })
+  },
+
+  /**
+   * 隐藏设置备注名弹窗
+   */
+  hideNicknameModal() {
+    this.setData({ showNicknameModal: false })
+  },
+
+  /**
+   * 输入自定义昵称
+   */
+  onNicknameInput(e) {
+    this.setData({ customNicknameInput: e.detail.value })
+  },
+
+  /**
+   * 保存自定义昵称
+   */
+  async saveCustomNickname() {
+    const pairId = this.data.pairInfo?.id || this.data.pairInfo?.pair_id
+    if (!pairId) {
+      wx.showToast({ title: '配对信息异常', icon: 'none' })
+      return
+    }
+
+    const nickname = this.data.customNicknameInput.trim()
+    
+    try {
+      const res = await api.post(`/pairs/${pairId}/partner-nickname`, {
+        custom_nickname: nickname
+      })
+      
+      // 更新本地数据
+      const app = getApp()
+      app.setPairInfo(res)
+      
+      const displayName = nickname || res.partner_nickname || '伴侣'
+      this.setData({
+        pairInfo: res,
+        partnerDisplay: displayName,
+        partnerInitial: displayName ? displayName[0] : '❤',
+        showNicknameModal: false
+      })
+      
+      wx.showToast({ title: '备注名已保存', icon: 'success' })
+    } catch (e) {
+      wx.showToast({ title: e.message || '保存失败', icon: 'none' })
     }
   }
 })

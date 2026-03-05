@@ -179,3 +179,82 @@
   font-size: 28rpx;
   color: var(--color-text-muted);
 }
+
+/* 伴侣账号信息 */
+.partner-account {
+  font-size: 24rpx;
+  opacity: 0.9;
+  margin-top: 8rpx;
+}
+
+.pair-actions {
+  margin-top: 16rpx;
+}
+
+/* 弹窗样式 */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: relative;
+  width: 80%;
+  max-width: 600rpx;
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  padding: 32rpx;
+  z-index: 1001;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.modal-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.modal-close {
+  font-size: 40rpx;
+  color: var(--color-text-secondary);
+  padding: 0 8rpx;
+}
+
+.modal-body {
+  margin-bottom: 32rpx;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 24rpx;
+}
+
+.modal-footer .btn {
+  flex: 1;
+}
+
+.text-muted {
+  color: var(--color-text-secondary);
+}

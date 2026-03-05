@@ -94,3 +94,73 @@
   color: var(--color-text-muted);
   line-height: 88rpx;
 }
+
+/* 记住密码和自动登录 */
+.checkbox-wrap, .auto-login-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.checkbox {
+  font-size: 32rpx;
+  color: var(--color-text-muted);
+}
+
+.checkbox.checked {
+  color: var(--color-primary);
+}
+
+.checkbox-label {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+}
+
+/* 已保存账号列表 */
+.saved-accounts {
+  margin-bottom: 24rpx;
+}
+
+.account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  border: 2rpx solid var(--color-border);
+}
+
+.account-item:active {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+}
+
+.account-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.account-email {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  margin-top: 4rpx;
+}
+
+.account-arrow {
+  font-size: 40rpx;
+  color: var(--color-text-muted);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-primary);
+  border: 2rpx solid var(--color-primary);
+}

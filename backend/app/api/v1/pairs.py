@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.deps import get_current_user
 from app.models import User, Pair, PairType, PairStatus
-from app.schemas import PairCreateRequest, PairJoinRequest, PairResponse
+from app.schemas import (
+    PairCreateRequest,
+    PairJoinRequest,
+    PairResponse,
+    UpdatePartnerNicknameRequest,
+)
 
 router = APIRouter(prefix="/pairs", tags=["配对"])
 
@@ -19,11 +24,22 @@ def _build_pair_response(
 ) -> PairResponse:
     data = PairResponse.model_validate(pair).model_dump()
     if partner:
+        # Determine which custom nickname field to use
+        is_user_a = str(pair.user_a_id) == str(me.id)
+        custom_nickname = (
+            pair.custom_partner_nickname_a
+            if is_user_a
+            else pair.custom_partner_nickname_b
+        )
+
         data.update(
             {
                 "partner_id": partner.id,
                 "partner_nickname": partner.nickname,
                 "partner_avatar": partner.wechat_avatar or partner.avatar_url,
+                "partner_email": partner.email,
+                "partner_phone": partner.phone,
+                "custom_partner_nickname": custom_nickname,
             }
         )
     return PairResponse(**data)
@@ -233,3 +249,38 @@ async def get_unbind_status(
         "days_remaining": max(0, 7 - days_elapsed),
         "can_force_unbind": days_elapsed >= 7,
     }
+
+
+@router.post("/{pair_id}/partner-nickname", response_model=PairResponse)
+async def update_partner_nickname(
+    pair_id: str,
+    req: UpdatePartnerNicknameRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新给伴侣设置的备注名（自定义昵称）"""
+    result = await db.execute(
+        select(Pair).where(
+            Pair.id == pair_id,
+            or_(Pair.user_a_id == user.id, Pair.user_b_id == user.id),
+            Pair.status == PairStatus.ACTIVE,
+        )
+    )
+    pair = result.scalar_one_or_none()
+    if not pair:
+        raise HTTPException(status_code=404, detail="配对不存在")
+
+    # Determine which field to update based on whether user is user_a or user_b
+    if str(pair.user_a_id) == str(user.id):
+        pair.custom_partner_nickname_a = req.custom_nickname
+    else:
+        pair.custom_partner_nickname_b = req.custom_nickname
+
+    await db.flush()
+
+    # Rebuild response with partner info
+    partner_id = (
+        pair.user_b_id if str(pair.user_a_id) == str(user.id) else pair.user_a_id
+    )
+    partner = await db.get(User, partner_id) if partner_id else None
+    return _build_pair_response(pair, user, partner)

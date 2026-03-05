@@ -81,8 +81,15 @@ class PairResponse(BaseModel):
     partner_id: uuid.UUID | None = None
     partner_nickname: str | None = None
     partner_avatar: str | None = None
+    partner_email: str | None = None
+    partner_phone: str | None = None
+    custom_partner_nickname: str | None = None  # 我给伴侣设置的备注名
 
     model_config = {"from_attributes": True}
+
+
+class UpdatePartnerNicknameRequest(BaseModel):
+    custom_nickname: str
 
 
 # ── 打卡 ──
