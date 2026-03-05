@@ -9,3 +9,5 @@ venv/
 node_modules/
 .DS_Store
 *.log
+project.config.json
+project.private.config.json
