@@ -1,0 +1,147 @@
+<!--
+  登录/注册页 - 自定义导航栏（隐藏系统导航）
+  Logo + slogan + Tab切换 + 表单
+-->
+<view class="login-page">
+
+  <!-- 顶部 Logo 区域 -->
+  <view class="login-header">
+    <view class="login-logo">亲健</view>
+    <view class="login-slogan">让爱有据可循</view>
+  </view>
+
+  <!-- Tab 切换 -->
+  <view class="login-tabs flex-row">
+    <view
+      class="login-tab {{currentTab === 'login' ? 'login-tab-active' : ''}}"
+      bindtap="switchTab"
+      data-tab="login"
+    >登录</view>
+    <view
+      class="login-tab {{currentTab === 'register' ? 'login-tab-active' : ''}}"
+      bindtap="switchTab"
+      data-tab="register"
+    >注册</view>
+  </view>
+
+  <!-- 登录表单 -->
+  <view class="login-form" wx:if="{{currentTab === 'login'}}">
+    <view class="card">
+      <view class="login-mode-tabs flex-row">
+        <view class="login-mode {{loginMode === 'email' ? 'active' : ''}}" data-mode="email" bindtap="switchLoginMode">邮箱登录</view>
+        <view class="login-mode {{loginMode === 'phone' ? 'active' : ''}}" data-mode="phone" bindtap="switchLoginMode">手机登录</view>
+      </view>
+
+      <view wx:if="{{loginMode === 'email'}}">
+      <view class="input-wrap mb-md">
+        <input
+          placeholder="邮箱"
+          value="{{loginEmail}}"
+          bindinput="onLoginEmailInput"
+        />
+      </view>
+
+      <view class="input-wrap mb-md">
+        <input
+          placeholder="密码"
+          password="{{!showLoginPwd}}"
+          value="{{loginPassword}}"
+          bindinput="onLoginPasswordInput"
+        />
+        <text class="pwd-toggle" bindtap="toggleLoginPwd">{{showLoginPwd ? '🙈' : '👁️'}}</text>
+      </view>
+
+      <button
+        class="btn btn-primary btn-block mt-lg {{submitting ? 'btn-disabled' : ''}}"
+        bindtap="handleLogin"
+        disabled="{{submitting}}"
+      >
+        {{submitting ? '登录中...' : '登 录'}}
+      </button>
+      </view>
+
+      <view wx:else>
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="手机号"
+            value="{{loginPhone}}"
+            bindinput="onLoginPhoneInput"
+          />
+        </view>
+        <view class="input-wrap mb-md">
+          <input
+            placeholder="验证码"
+            value="{{loginCode}}"
+            bindinput="onLoginCodeInput"
+          />
+          <text class="code-btn" bindtap="sendPhoneCode">获取验证码</text>
+        </view>
+        <button
+          class="btn btn-primary btn-block mt-lg {{submitting ? 'btn-disabled' : ''}}"
+          bindtap="handleLogin"
+          disabled="{{submitting}}"
+        >
+          {{submitting ? '登录中...' : '登 录'}}
+        </button>
+      </view>
+
+      <view class="divider mt-lg"></view>
+      <button
+        class="btn btn-secondary btn-block"
+        bindtap="handleWechatLogin"
+        disabled="{{submitting}}"
+      >
+        微信一键登录
+      </button>
+    </view>
+  </view>
+
+  <!-- 注册表单 -->
+  <view class="login-form" wx:if="{{currentTab === 'register'}}">
+    <view class="card">
+      <view class="input-wrap mb-md">
+        <input
+          placeholder="邮箱"
+          value="{{regEmail}}"
+          bindinput="onRegEmailInput"
+        />
+      </view>
+
+      <view class="input-wrap mb-md">
+        <input
+          placeholder="密码（至少6位）"
+          password="{{!showRegPwd}}"
+          value="{{regPassword}}"
+          bindinput="onRegPasswordInput"
+        />
+        <text class="pwd-toggle" bindtap="toggleRegPwd">{{showRegPwd ? '🙈' : '👁️'}}</text>
+      </view>
+
+      <view class="input-wrap mb-md">
+        <input
+          placeholder="确认密码"
+          password="{{!showRegPwd}}"
+          value="{{regPasswordConfirm}}"
+          bindinput="onRegPasswordConfirmInput"
+        />
+      </view>
+
+      <view class="input-wrap mb-md">
+        <input
+          placeholder="昵称"
+          value="{{regNickname}}"
+          bindinput="onRegNicknameInput"
+        />
+      </view>
+
+      <button
+        class="btn btn-primary btn-block mt-lg {{submitting ? 'btn-disabled' : ''}}"
+        bindtap="handleRegister"
+        disabled="{{submitting}}"
+      >
+        {{submitting ? '注册中...' : '注 册'}}
+      </button>
+    </view>
+  </view>
+
+</view>

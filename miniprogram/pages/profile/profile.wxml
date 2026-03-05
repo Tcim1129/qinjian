@@ -1,0 +1,55 @@
+<!--
+  个人中心页 - 头像信息 + 菜单列表
+-->
+<view class="container container-safe">
+
+  <!-- 用户信息头部 -->
+  <view class="card card-elevated profile-header" bindtap="onMenuTap" data-id="pair" data-path="/pages/pair/pair">
+    <view class="flex-row gap-md">
+      <!-- 头像 -->
+      <view class="profile-avatar">
+        <image
+          wx:if="{{userInfo && userInfo.avatar}}"
+          src="{{userInfo.avatar}}"
+          class="profile-avatar-img"
+          mode="aspectFill"
+        ></image>
+        <view wx:else class="profile-avatar-placeholder">
+          <text>{{userInfo && userInfo.nickname ? userInfo.nickname[0] : '亲'}}</text>
+        </view>
+      </view>
+
+      <!-- 名称与状态 -->
+      <view class="flex-1">
+        <view class="text-title">{{userInfo ? userInfo.nickname : '未登录'}}</view>
+        <view class="mt-sm">
+          <view class="tag tag-primary" wx:if="{{isPaired}}">
+            已配对 · {{pairInfo.partner_name || '伴侣'}}
+          </view>
+          <view class="tag tag-warning" wx:else>尚未配对</view>
+        </view>
+      </view>
+
+      <text class="text-caption">></text>
+    </view>
+  </view>
+
+  <!-- 功能菜单 -->
+  <view class="card mt-md">
+    <view
+      wx:for="{{menuItems}}"
+      wx:key="id"
+      class="menu-item flex-between"
+      bindtap="onMenuTap"
+      data-id="{{item.id}}"
+      data-path="{{item.path}}"
+    >
+      <view class="flex-row gap-md">
+        <text class="menu-icon">{{item.icon}}</text>
+        <text class="text-body {{item.id === 'logout' ? 'text-danger' : ''}}">{{item.title}}</text>
+      </view>
+      <text class="text-caption" wx:if="{{item.id !== 'logout'}}">></text>
+    </view>
+  </view>
+
+</view>

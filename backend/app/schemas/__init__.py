@@ -19,6 +19,22 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class WechatLoginRequest(BaseModel):
+    code: str
+    nickname: str | None = None
+    avatar_url: str | None = None
+    unionid: str | None = None
+
+
+class PhoneSendCodeRequest(BaseModel):
+    phone: str
+
+
+class PhoneLoginRequest(BaseModel):
+    phone: str
+    code: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -30,8 +46,12 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
+    phone: str | None = None
     nickname: str
     avatar_url: str | None = None
+    wechat_openid: str | None = None
+    wechat_unionid: str | None = None
+    wechat_avatar: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -66,7 +86,7 @@ class PairResponse(BaseModel):
 
 
 class CheckinRequest(BaseModel):
-    pair_id: uuid.UUID
+    pair_id: uuid.UUID | None = None
     content: str
     mood_tags: list[str] | None = None
     image_url: str | None = None
@@ -81,7 +101,7 @@ class CheckinRequest(BaseModel):
 
 class CheckinResponse(BaseModel):
     id: uuid.UUID
-    pair_id: uuid.UUID
+    pair_id: uuid.UUID | None = None
     user_id: uuid.UUID
     content: str
     image_url: str | None = None
@@ -104,7 +124,8 @@ class CheckinResponse(BaseModel):
 
 class ReportResponse(BaseModel):
     id: uuid.UUID
-    pair_id: uuid.UUID
+    pair_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
     type: str
     status: str
     content: dict | None = None

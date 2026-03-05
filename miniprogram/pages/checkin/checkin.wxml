@@ -1,0 +1,226 @@
+<!--
+  打卡页 - 4步表单流程
+  心情 → 互动 → 深度对话 → 任务完成 → 附加信息 → 提交
+-->
+<view class="container container-safe">
+
+  <!-- 已打卡状态：展示今日摘要 -->
+  <block wx:if="{{hasCheckedIn && todayCheckin}}">
+    <view class="card card-elevated text-center">
+      <view class="checkin-done-emoji">✅</view>
+      <view class="text-title mt-sm">今日已打卡</view>
+      <view class="text-caption mt-sm">每天一次记录，让爱有据可循</view>
+    </view>
+
+    <view class="card mt-md">
+      <view class="text-subtitle mb-sm">打卡摘要</view>
+      <view class="divider"></view>
+      <view class="flex-between mt-sm">
+        <text class="text-caption">心情评分</text>
+        <text>{{todayCheckin.mood_score == 4 ? '😊 很好' : todayCheckin.mood_score == 3 ? '🙂 不错' : todayCheckin.mood_score == 2 ? '😐 一般' : '😟 低落'}}</text>
+      </view>
+      <view class="flex-between mt-sm">
+        <text class="text-caption">互动次数</text>
+        <text>{{todayCheckin.interaction_freq || 0}} 次</text>
+      </view>
+      <view class="flex-between mt-sm">
+        <text class="text-caption">主动性</text>
+        <text>{{todayCheckin.initiative_score == 1 ? '主动' : '被动'}}</text>
+      </view>
+      <view class="flex-between mt-sm">
+        <text class="text-caption">深度对话</text>
+        <text>{{todayCheckin.deep_conversation ? '有' : '无'}}</text>
+      </view>
+      <view class="flex-between mt-sm">
+        <text class="text-caption">任务完成</text>
+        <text>{{todayCheckin.task_completed ? '已完成' : '未完成'}}</text>
+      </view>
+      <view class="mt-md" wx:if="{{todayCheckin.free_text}}">
+        <view class="text-caption">备注</view>
+        <view class="text-body mt-sm">{{todayCheckin.free_text}}</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 未打卡状态：表单流程 -->
+  <block wx:else>
+    <!-- 进度条 -->
+    <view class="step-progress">
+      <view class="step-progress-bar">
+        <view class="step-progress-fill" style="width: {{currentStep / totalSteps * 100}}%"></view>
+      </view>
+      <view class="text-caption text-center mt-sm">第 {{currentStep}} 步 / 共 {{totalSteps}} 步</view>
+    </view>
+
+    <!-- 步骤1：心情选择 -->
+    <view class="card card-elevated mt-lg" wx:if="{{currentStep === 1}}">
+      <view class="text-title text-center">今天的心情如何？</view>
+      <view class="text-caption text-center mt-sm">选择最符合当前状态的表情</view>
+      <view class="mood-grid mt-lg">
+        <view
+          wx:for="{{moodOptions}}"
+          wx:key="score"
+          class="mood-item {{moodScore === item.score ? 'mood-item-active' : ''}}"
+          bindtap="selectMood"
+          data-score="{{item.score}}"
+        >
+          <text class="mood-item-emoji">{{item.emoji}}</text>
+          <text class="mood-item-label">{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 步骤2：互动次数 & 主动性 -->
+    <view class="card card-elevated mt-lg" wx:if="{{currentStep === 2}}">
+      <view class="text-title text-center">今日互动情况</view>
+
+      <view class="mt-lg">
+        <view class="text-subtitle">互动次数</view>
+        <view class="text-caption">今天和伴侣有几次有意义的互动？</view>
+        <view class="input-wrap mt-sm">
+          <input
+            type="number"
+            placeholder="输入次数"
+            value="{{interactionCount}}"
+            bindinput="onInteractionInput"
+          />
+        </view>
+      </view>
+
+      <view class="mt-lg">
+        <view class="text-subtitle">主动性</view>
+        <view class="text-caption">今天的互动中你更多是主动还是被动？</view>
+        <view class="flex-between mt-md">
+          <text class="text-body">被动</text>
+          <slider
+            min="0"
+            max="1"
+            step="1"
+            value="{{initiativeScore}}"
+            activeColor="#6C5CE7"
+            bindchange="onInitiativeChange"
+            style="flex: 1; margin: 0 20rpx;"
+          />
+          <text class="text-body">主动</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 步骤3：深度对话 -->
+    <view class="card card-elevated mt-lg" wx:if="{{currentStep === 3}}">
+      <view class="text-title text-center">是否有深度对话？</view>
+      <view class="text-caption text-center mt-sm">分享感受、讨论未来、倾听内心的对话</view>
+
+      <view class="toggle-group mt-xl">
+        <view
+          class="toggle-btn {{deepConversation ? 'toggle-btn-active' : ''}}"
+          bindtap="toggleDeepConversation"
+          data-val="true"
+        >
+          <text class="toggle-emoji">💬</text>
+          <text>有深度对话</text>
+        </view>
+        <view
+          class="toggle-btn {{!deepConversation ? 'toggle-btn-active' : ''}}"
+          bindtap="toggleDeepConversation"
+          data-val="false"
+        >
+          <text class="toggle-emoji">🤐</text>
+          <text>没有</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 步骤4：任务完成 -->
+    <view class="card card-elevated mt-lg" wx:if="{{currentStep === 4}}">
+      <view class="text-title text-center">今日任务是否完成？</view>
+      <view class="text-caption text-center mt-sm">完成关系维护的每日小任务了吗？</view>
+
+      <view class="toggle-group mt-xl">
+        <view
+          class="toggle-btn {{taskCompleted ? 'toggle-btn-active' : ''}}"
+          bindtap="toggleTaskCompleted"
+          data-val="true"
+        >
+          <text class="toggle-emoji">✅</text>
+          <text>已完成</text>
+        </view>
+        <view
+          class="toggle-btn {{!taskCompleted ? 'toggle-btn-active' : ''}}"
+          bindtap="toggleTaskCompleted"
+          data-val="false"
+        >
+          <text class="toggle-emoji">⏳</text>
+          <text>未完成</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 附加信息区域（第4步显示） -->
+    <view class="card mt-md" wx:if="{{currentStep === 4}}">
+      <view class="text-subtitle">备注与感受</view>
+      <textarea
+        class="free-text-area mt-sm"
+        placeholder="记录今天的感受、发生的事情..."
+        value="{{freeText}}"
+        bindinput="onFreeTextInput"
+        maxlength="500"
+      ></textarea>
+
+      <!-- 情绪标签 -->
+      <view class="text-caption mt-md">情绪标签</view>
+      <view class="flex-row flex-wrap gap-sm mt-sm">
+        <view
+          wx:for="{{emotionTags}}"
+          wx:key="*this"
+          class="tag {{selectedTags.indexOf(item) >= 0 ? 'tag-primary' : ''}} emotion-tag"
+          bindtap="toggleTag"
+          data-tag="{{item}}"
+        >
+          {{item}}
+        </view>
+      </view>
+
+      <!-- 图片上传 -->
+      <view class="mt-md">
+        <view class="text-caption">添加图片（可选，最多3张）</view>
+        <view class="flex-row flex-wrap gap-sm mt-sm">
+          <view wx:for="{{imageList}}" wx:key="*this" class="image-preview-wrap">
+            <image src="{{item}}" class="image-preview" mode="aspectFill"></image>
+            <view class="image-remove" bindtap="removeImage" data-idx="{{index}}">✕</view>
+          </view>
+          <view class="image-add" bindtap="chooseImage" wx:if="{{imageList.length < 3}}">
+            <text>+</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 语音上传 -->
+      <view class="mt-md">
+        <view class="text-caption">语音备注（可选）</view>
+        <view class="flex-row gap-sm mt-sm" wx:if="{{!voicePath}}">
+          <button class="btn btn-secondary btn-small" bindtap="chooseVoice">🎤 录制语音</button>
+        </view>
+        <view class="flex-row gap-sm mt-sm" wx:else>
+          <view class="tag tag-primary">已录制语音</view>
+          <text class="text-caption" bindtap="clearVoice" style="color: var(--color-danger);">删除</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部按钮 -->
+    <view class="flex-row gap-md mt-lg checkin-actions">
+      <button class="btn btn-outline flex-1" bindtap="prevStep" wx:if="{{currentStep > 1}}">上一步</button>
+      <button class="btn btn-primary flex-1" bindtap="nextStep" wx:if="{{currentStep < totalSteps}}">下一步</button>
+      <button
+        class="btn btn-primary flex-1 {{submitting ? 'btn-disabled' : ''}}"
+        bindtap="submitCheckin"
+        wx:if="{{currentStep === totalSteps}}"
+        disabled="{{submitting}}"
+      >
+        {{submitting ? '提交中...' : '提交打卡'}}
+      </button>
+    </view>
+  </block>
+
+</view>

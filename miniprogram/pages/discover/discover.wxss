@@ -1,0 +1,36 @@
+/* 发现页特有样式 */
+
+.feature-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.feature-card {
+  width: calc(50% - var(--spacing-md) / 2);
+  box-sizing: border-box;
+  text-align: center;
+  padding: var(--spacing-lg) var(--spacing-md);
+  transition: transform 0.15s;
+}
+
+.feature-card:active {
+  transform: scale(0.96);
+}
+
+.feature-icon {
+  font-size: 56rpx;
+  margin-bottom: var(--spacing-sm);
+}
+
+.feature-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+}
+
+.feature-desc {
+  font-size: 22rpx;
+  color: var(--color-text-muted);
+}

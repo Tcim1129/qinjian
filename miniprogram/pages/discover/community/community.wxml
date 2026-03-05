@@ -1,0 +1,43 @@
+<!--关系社区页-->
+<view class="container">
+  <view class="tab-bar">
+    <view class="tab-item {{currentTab === 'tips' ? 'active' : ''}}" data-tab="tips" bindtap="switchTab">小贴士</view>
+    <view class="tab-item {{currentTab === 'notifications' ? 'active' : ''}}" data-tab="notifications" bindtap="switchTab">通知</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- 小贴士列表 -->
+    <view wx:if="{{currentTab === 'tips'}}" class="tips-list">
+      <view class="tip-item card" wx:for="{{tips}}" wx:key="id">
+        <view class="tip-title">{{item.title}}</view>
+        <view class="tip-content">{{item.content}}</view>
+        <view class="tip-meta">
+          <text class="tip-category">{{item.category}}</text>
+          <text class="tip-date">{{item.created_at}}</text>
+        </view>
+      </view>
+      <view wx:if="{{tips.length === 0}}" class="empty-state">
+        <text class="empty-text">暂无小贴士</text>
+      </view>
+    </view>
+
+    <!-- 通知列表 -->
+    <view wx:else class="notifications-list">
+      <view wx:if="{{notifications.length > 0}}" class="read-all-btn">
+        <button class="btn btn-small btn-ghost" bindtap="readAllNotifications">全部已读</button>
+      </view>
+      <view class="notification-item card {{item.read ? '' : 'unread'}}" wx:for="{{notifications}}" wx:key="id">
+        <view class="notification-title">{{item.title}}</view>
+        <view class="notification-content">{{item.content}}</view>
+        <view class="notification-time">{{item.created_at}}</view>
+      </view>
+      <view wx:if="{{notifications.length === 0}}" class="empty-state">
+        <text class="empty-text">暂无通知</text>
+      </view>
+    </view>
+  </block>
+</view>

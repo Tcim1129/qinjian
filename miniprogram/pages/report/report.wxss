@@ -1,0 +1,106 @@
+/* 报告页特有样式 */
+
+/* Tab 切换 */
+.report-tabs {
+  background: var(--color-white);
+  border-radius: var(--radius-round);
+  padding: 4rpx;
+  box-shadow: var(--shadow-sm);
+}
+
+.report-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-round);
+  transition: all 0.2s;
+}
+
+.report-tab-active {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 报告摘要 */
+.report-summary {
+  font-size: 28rpx;
+  color: var(--color-text);
+  line-height: 1.8;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}
+
+.report-health {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.health-score {
+  font-size: 56rpx;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.report-tip {
+  font-size: 28rpx;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  background: rgba(224, 107, 90, 0.08);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}
+
+.report-note {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+/* 评分条 */
+.report-score-bar {
+  flex: 1;
+  height: 12rpx;
+  background: var(--color-border);
+  border-radius: var(--radius-round);
+  margin: 0 var(--spacing-md);
+  overflow: hidden;
+}
+
+.report-score-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  border-radius: var(--radius-round);
+}
+
+/* 建议 */
+.report-suggestion {
+  margin-top: var(--spacing-xs);
+  padding-left: var(--spacing-sm);
+}
+
+/* 趋势占位 */
+.trend-placeholder {
+  height: 300rpx;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+}
+
+.trend-icon {
+  font-size: 64rpx;
+}
+
+/* 历史列表 */
+.history-item {
+  transition: transform 0.15s;
+}
+
+.history-item:active {
+  transform: scale(0.98);
+}

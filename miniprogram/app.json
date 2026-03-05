@@ -1,0 +1,70 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/checkin/checkin",
+    "pages/discover/discover",
+    "pages/report/report",
+    "pages/profile/profile",
+    "pages/login/login",
+    "pages/pair/pair",
+    "pages/tree/tree",
+    "pages/milestone/milestone",
+    "pages/crisis/crisis",
+    "pages/discover/longdistance/longdistance",
+    "pages/discover/attachment-test/attachment-test",
+    "pages/discover/health-test/health-test",
+    "pages/discover/community/community",
+    "pages/discover/challenges/challenges",
+    "pages/discover/courses/courses",
+    "pages/discover/experts/experts",
+    "pages/discover/membership/membership"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "亲健",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F5F6FA",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#E06B5A",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页",
+        "iconPath": "images/tab-home.png",
+        "selectedIconPath": "images/tab-home-active.png"
+      },
+      {
+        "pagePath": "pages/checkin/checkin",
+        "text": "打卡",
+        "iconPath": "images/tab-checkin.png",
+        "selectedIconPath": "images/tab-checkin-active.png"
+      },
+      {
+        "pagePath": "pages/discover/discover",
+        "text": "发现",
+        "iconPath": "images/tab-discover.png",
+        "selectedIconPath": "images/tab-discover-active.png"
+      },
+      {
+        "pagePath": "pages/report/report",
+        "text": "报告",
+        "iconPath": "images/tab-report.png",
+        "selectedIconPath": "images/tab-report-active.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "images/tab-profile.png",
+        "selectedIconPath": "images/tab-profile-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

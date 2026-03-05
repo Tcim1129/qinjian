@@ -1,4 +1,5 @@
 """应用配置 - 通过环境变量加载"""
+
 from pydantic_settings import BaseSettings
 
 
@@ -23,6 +24,11 @@ class Settings(BaseSettings):
     # 文件上传
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
+
+    # 微信登录
+    WECHAT_APPID: str = ""
+    WECHAT_SECRET: str = ""
+    WECHAT_SESSION_URL: str = "https://api.weixin.qq.com/sns/jscode2session"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

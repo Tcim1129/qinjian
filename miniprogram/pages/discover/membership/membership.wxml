@@ -1,0 +1,29 @@
+<!--会员订阅页-->
+<view class="container">
+  <view class="header">
+    <view class="header-title">解锁更多功能</view>
+    <view class="header-desc">选择适合你的会员方案</view>
+  </view>
+
+  <view class="plan-list">
+    <view class="plan-item card {{item.recommended ? 'recommended' : ''}}" wx:for="{{plans}}" wx:key="id">
+      <view wx:if="{{item.recommended}}" class="recommend-badge">推荐</view>
+      <view class="plan-header">
+        <view class="plan-name">{{item.name}}</view>
+        <view class="plan-price">
+          <text class="price-value">{{item.price === 0 ? '免费' : '¥' + item.price}}</text>
+          <text class="price-period">{{item.period}}</text>
+        </view>
+      </view>
+      <view class="plan-features">
+        <view class="feature-item" wx:for="{{item.features}}" wx:for-item="feature" wx:key="index">
+          <text class="feature-check">✓</text>
+          <text class="feature-text">{{feature}}</text>
+        </view>
+      </view>
+      <button class="btn {{item.recommended ? 'btn-primary' : 'btn-secondary'}} btn-block" data-id="{{item.id}}" bindtap="subscribe">
+        {{item.price === 0 ? '当前方案' : '立即订阅'}}
+      </button>
+    </view>
+  </view>
+</view>

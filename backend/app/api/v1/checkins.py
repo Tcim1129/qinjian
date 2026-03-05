@@ -19,33 +19,47 @@ router = APIRouter(prefix="/checkins", tags=["打卡"])
 async def create_checkin(
     req: CheckinRequest,
     background_tasks: BackgroundTasks,
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """提交每日打卡（含自动AI情感分析 + 双方完成检测 + 单方solo日记）"""
-    # 验证配对存在且用户属于该配对
-    result = await db.execute(
-        select(Pair).where(Pair.id == req.pair_id, Pair.status == PairStatus.ACTIVE)
-    )
-    pair = result.scalar_one_or_none()
-    if not pair or (pair.user_a_id != user.id and pair.user_b_id != user.id):
-        raise HTTPException(status_code=403, detail="你不属于该配对")
+    is_solo = mode == "solo"
+    pair = None
+    if not is_solo:
+        if not req.pair_id:
+            raise HTTPException(status_code=422, detail="缺少配对ID")
+        result = await db.execute(
+            select(Pair).where(Pair.id == req.pair_id, Pair.status == PairStatus.ACTIVE)
+        )
+        pair = result.scalar_one_or_none()
+        if not pair or (pair.user_a_id != user.id and pair.user_b_id != user.id):
+            raise HTTPException(status_code=403, detail="你不属于该配对")
 
     # 检查今日是否已打卡
     today = date.today()
-    result = await db.execute(
-        select(Checkin).where(
-            Checkin.pair_id == req.pair_id,
-            Checkin.user_id == user.id,
-            Checkin.checkin_date == today,
+    if is_solo:
+        result = await db.execute(
+            select(Checkin).where(
+                Checkin.pair_id.is_(None),
+                Checkin.user_id == user.id,
+                Checkin.checkin_date == today,
+            )
         )
-    )
+    else:
+        result = await db.execute(
+            select(Checkin).where(
+                Checkin.pair_id == req.pair_id,
+                Checkin.user_id == user.id,
+                Checkin.checkin_date == today,
+            )
+        )
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="今天已经打过卡了")
 
     # 创建打卡记录
     checkin = Checkin(
-        pair_id=req.pair_id,
+        pair_id=req.pair_id if not is_solo else None,
         user_id=user.id,
         content=req.content,
         image_url=req.image_url,
@@ -64,65 +78,123 @@ async def create_checkin(
     # 异步执行 AI 情感分析（不阻塞响应）
     background_tasks.add_task(_run_sentiment_analysis, str(checkin.id), req.content)
 
-    # 检查对方是否也打卡完毕
-    partner_result = await db.execute(
-        select(Checkin).where(
-            Checkin.pair_id == req.pair_id,
-            Checkin.user_id != user.id,
-            Checkin.checkin_date == today,
-        )
-    )
-    partner_checkin = partner_result.scalar_one_or_none()
-
-    if partner_checkin:
-        # 双方都完成 → 自动生成日报（后台不阻塞）
-        checkin_a_content = (
-            checkin.content if user.id == pair.user_a_id else partner_checkin.content
-        )
-        checkin_b_content = (
-            partner_checkin.content if user.id == pair.user_a_id else checkin.content
-        )
+    partner_checkin = None
+    if is_solo:
         background_tasks.add_task(
-            _auto_generate_daily,
-            str(req.pair_id),
-            pair.type.value,
-            checkin_a_content,
-            checkin_b_content,
+            _auto_generate_solo, None, "solo", checkin.content, str(user.id)
         )
     else:
-        # 仅单方打卡 → 生成个人情感日记
-        background_tasks.add_task(
-            _auto_generate_solo, str(req.pair_id), pair.type.value, checkin.content
+        # 检查对方是否也打卡完毕
+        partner_result = await db.execute(
+            select(Checkin).where(
+                Checkin.pair_id == req.pair_id,
+                Checkin.user_id != user.id,
+                Checkin.checkin_date == today,
+            )
         )
+        partner_checkin = partner_result.scalar_one_or_none()
+
+        if partner_checkin and pair:
+            checkin_a_content = (
+                checkin.content
+                if user.id == pair.user_a_id
+                else partner_checkin.content
+            )
+            checkin_b_content = (
+                partner_checkin.content
+                if user.id == pair.user_a_id
+                else checkin.content
+            )
+            background_tasks.add_task(
+                _auto_generate_daily,
+                str(req.pair_id),
+                pair.type.value,
+                checkin_a_content,
+                checkin_b_content,
+            )
+        else:
+            background_tasks.add_task(
+                _auto_generate_solo,
+                str(req.pair_id),
+                pair.type.value if pair else "solo",
+                checkin.content,
+                str(user.id),
+            )
 
     # 关系树成长
-    from app.api.v1.tree import grow_tree_on_checkin
+    if not is_solo:
+        from app.api.v1.tree import grow_tree_on_checkin
 
-    background_tasks.add_task(
-        grow_tree_on_checkin, str(req.pair_id), partner_checkin is not None, 0
-    )
+        background_tasks.add_task(
+            grow_tree_on_checkin, str(req.pair_id), partner_checkin is not None, 0
+        )
 
     return checkin
 
 
 @router.get("/today", response_model=dict)
 async def get_today_status(
-    pair_id: str,
+    pair_id: str | None = None,
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """查询今日打卡状态"""
     today = date.today()
+    is_solo = mode == "solo"
+
+    if is_solo:
+        result = await db.execute(
+            select(Checkin).where(
+                Checkin.pair_id.is_(None),
+                Checkin.user_id == user.id,
+                Checkin.checkin_date == today,
+            )
+        )
+        checkins = result.scalars().all()
+        my_checkin = checkins[0] if checkins else None
+        my_done = len(checkins) > 0
+        partner_done = False
+        both_done = False
+        report_result = await db.execute(
+            select(Report).where(
+                Report.user_id == user.id,
+                Report.report_date == today,
+                Report.type == ReportType.SOLO,
+            )
+        )
+        has_report = report_result.scalar_one_or_none() is not None
+        return {
+            "date": str(today),
+            "my_done": my_done,
+            "partner_done": partner_done,
+            "both_done": both_done,
+            "has_report": has_report,
+            "has_solo_report": has_report,
+            "my_checkin": {
+                "mood_score": my_checkin.mood_score if my_checkin else None,
+                "interaction_freq": my_checkin.interaction_freq if my_checkin else None,
+                "deep_conversation": my_checkin.deep_conversation
+                if my_checkin
+                else None,
+                "task_completed": my_checkin.task_completed if my_checkin else None,
+                "content": my_checkin.content if my_checkin else None,
+            },
+        }
+
+    if not pair_id:
+        raise HTTPException(status_code=422, detail="缺少配对ID")
+
     result = await db.execute(
         select(Checkin).where(Checkin.pair_id == pair_id, Checkin.checkin_date == today)
     )
     checkins = result.scalars().all()
 
-    my_done = any(c.user_id == user.id for c in checkins)
+    my_checkin = next((c for c in checkins if c.user_id == user.id), None)
+    my_done = my_checkin is not None
     partner_done = any(c.user_id != user.id for c in checkins)
     both_done = my_done and partner_done
 
-    # 检查是否已有今日报告
     report_result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
@@ -132,7 +204,6 @@ async def get_today_status(
     )
     has_report = report_result.scalar_one_or_none() is not None
 
-    # 检查是否已有 solo 日记
     solo_result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
@@ -149,17 +220,39 @@ async def get_today_status(
         "both_done": both_done,
         "has_report": has_report,
         "has_solo_report": has_solo_report,
+        "my_checkin": {
+            "mood_score": my_checkin.mood_score if my_checkin else None,
+            "interaction_freq": my_checkin.interaction_freq if my_checkin else None,
+            "deep_conversation": my_checkin.deep_conversation if my_checkin else None,
+            "task_completed": my_checkin.task_completed if my_checkin else None,
+            "content": my_checkin.content if my_checkin else None,
+        },
     }
 
 
 @router.get("/history", response_model=list[CheckinResponse])
 async def get_checkin_history(
-    pair_id: str,
+    pair_id: str | None = None,
+    mode: str | None = None,
     limit: int = 14,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取打卡历史（隐私保护：仅返回自己的原始内容）"""
+    is_solo = mode == "solo"
+
+    if is_solo:
+        result = await db.execute(
+            select(Checkin)
+            .where(Checkin.pair_id.is_(None), Checkin.user_id == user.id)
+            .order_by(Checkin.checkin_date.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    if not pair_id:
+        raise HTTPException(status_code=422, detail="缺少配对ID")
+
     result = await db.execute(
         select(Checkin)
         .where(Checkin.pair_id == pair_id, Checkin.user_id == user.id)
@@ -171,17 +264,31 @@ async def get_checkin_history(
 
 @router.get("/streak", response_model=dict)
 async def get_checkin_streak(
-    pair_id: str,
+    pair_id: str | None = None,
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取连续打卡天数"""
-    result = await db.execute(
-        select(Checkin.checkin_date)
-        .where(Checkin.pair_id == pair_id, Checkin.user_id == user.id)
-        .distinct()
-        .order_by(Checkin.checkin_date.desc())
-    )
+    is_solo = mode == "solo"
+
+    if is_solo:
+        result = await db.execute(
+            select(Checkin.checkin_date)
+            .where(Checkin.pair_id.is_(None), Checkin.user_id == user.id)
+            .distinct()
+            .order_by(Checkin.checkin_date.desc())
+        )
+    else:
+        if not pair_id:
+            raise HTTPException(status_code=422, detail="缺少配对ID")
+        result = await db.execute(
+            select(Checkin.checkin_date)
+            .where(Checkin.pair_id == pair_id, Checkin.user_id == user.id)
+            .distinct()
+            .order_by(Checkin.checkin_date.desc())
+        )
+
     dates = [row[0] for row in result.all()]
 
     streak = 0
@@ -266,7 +373,9 @@ async def _auto_generate_daily(
         print(f"自动生成日报失败: {e}")
 
 
-async def _auto_generate_solo(pair_id: str, pair_type: str, content: str):
+async def _auto_generate_solo(
+    pair_id: str | None, pair_type: str, content: str, user_id: str
+):
     """后台自动生成个人情感日记（单方打卡时）"""
     try:
         from app.core.database import async_session
@@ -274,18 +383,28 @@ async def _auto_generate_solo(pair_id: str, pair_type: str, content: str):
         async with async_session() as db:
             today = date.today()
             # 检查是否已有
-            result = await db.execute(
-                select(Report).where(
-                    Report.pair_id == pair_id,
-                    Report.report_date == today,
-                    Report.type == ReportType.SOLO,
+            if pair_id:
+                result = await db.execute(
+                    select(Report).where(
+                        Report.pair_id == pair_id,
+                        Report.report_date == today,
+                        Report.type == ReportType.SOLO,
+                    )
                 )
-            )
+            else:
+                result = await db.execute(
+                    select(Report).where(
+                        Report.user_id == user_id,
+                        Report.report_date == today,
+                        Report.type == ReportType.SOLO,
+                    )
+                )
             if result.scalar_one_or_none():
                 return
 
             report = Report(
                 pair_id=pair_id,
+                user_id=user_id,
                 type=ReportType.SOLO,
                 status=ReportStatus.PENDING,
                 content=None,

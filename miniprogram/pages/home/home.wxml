@@ -1,0 +1,96 @@
+<!--
+  首页 - 亲健
+  顶部渐变区域 + 快捷操作卡片 + 打卡天数 + 危机横幅
+-->
+<view class="container container-safe">
+
+  <!-- 顶部渐变头部：问候、配对状态、今日心情 -->
+  <view class="gradient-header home-header">
+    <view class="flex-between">
+      <view>
+        <view class="home-greeting">{{greeting}}</view>
+        <view class="home-pair-status" wx:if="{{pairInfo}}">
+          已配对 · 与 {{pairInfo.partner_name || '伴侣'}} 同行
+        </view>
+        <view class="home-pair-status" wx:else>
+          <text bindtap="goPair">单人模式 · 点击配对 →</text>
+        </view>
+      </view>
+      <view class="home-mood-badge" wx:if="{{hasCheckedIn && todayCheckin}}">
+        <text class="mood-emoji">{{todayCheckin.mood_score == 4 ? '😊' : todayCheckin.mood_score == 3 ? '🙂' : todayCheckin.mood_score == 2 ? '😐' : '😟'}}</text>
+        <text class="mood-label">今日心情</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 危机预警横幅 -->
+  <view class="crisis-banner card" wx:if="{{hasCrisis}}" bindtap="goCrisis">
+    <view class="flex-row gap-sm">
+      <text class="crisis-icon">⚠️</text>
+      <view class="flex-1">
+        <view class="text-subtitle" style="color: var(--color-danger);">关系预警提醒</view>
+        <view class="text-caption">{{crisisStatus.message || '检测到关系波动，请及时关注'}}</view>
+      </view>
+      <text class="text-caption">查看 ></text>
+    </view>
+  </view>
+
+  <!-- 打卡天数展示 -->
+  <view class="card card-elevated streak-card">
+    <view class="flex-center flex-col">
+      <view class="streak-number">{{streak}}</view>
+      <view class="text-caption">连续打卡天数</view>
+    </view>
+  </view>
+
+  <!-- 快捷操作卡片 -->
+  <view class="text-subtitle mb-md mt-lg">快捷操作</view>
+  <view class="flex-row flex-wrap gap-md">
+    <!-- 今日打卡 -->
+    <view class="card action-card flex-1" bindtap="goCheckin">
+      <view class="action-icon action-icon-checkin">✏️</view>
+      <view class="text-body">今日打卡</view>
+      <view class="text-small mt-sm" wx:if="{{hasCheckedIn}}">已完成 ✓</view>
+      <view class="text-small mt-sm text-accent" wx:else>待完成</view>
+    </view>
+
+    <!-- 查看报告 -->
+    <view class="card action-card flex-1" bindtap="goReport">
+      <view class="action-icon action-icon-report">📊</view>
+      <view class="text-body">查看报告</view>
+      <view class="text-small mt-sm">AI 深度分析</view>
+    </view>
+
+    <!-- 关系树 -->
+    <view class="card action-card flex-1" bindtap="goTree">
+      <view class="action-icon action-icon-tree">🌳</view>
+      <view class="text-body">关系树</view>
+      <view class="text-small mt-sm" wx:if="{{treeStatus}}">{{treeStatus.level_name || '种子'}}</view>
+      <view class="text-small mt-sm" wx:else>配对后开启</view>
+    </view>
+  </view>
+
+  <!-- 今日打卡摘要 -->
+    <view class="card mt-lg" wx:if="{{hasCheckedIn && todayCheckin}}">
+    <view class="text-subtitle mb-sm">今日打卡摘要</view>
+    <view class="divider"></view>
+    <view class="flex-between mt-sm">
+      <text class="text-caption">心情评分</text>
+      <text class="text-body">{{todayCheckin.mood_score || 0}} / 4</text>
+    </view>
+    <view class="flex-between mt-sm">
+      <text class="text-caption">互动次数</text>
+      <text class="text-body">{{todayCheckin.interaction_freq || 0}} 次</text>
+    </view>
+    <view class="flex-between mt-sm">
+      <text class="text-caption">深度对话</text>
+      <text class="text-body">{{todayCheckin.deep_conversation ? '有' : '无'}}</text>
+    </view>
+  </view>
+
+  <!-- 加载提示 -->
+  <view class="loading-wrap" wx:if="{{loading}}">
+    <text class="text-caption">加载中...</text>
+  </view>
+
+</view>

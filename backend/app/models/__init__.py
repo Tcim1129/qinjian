@@ -70,9 +70,17 @@ class User(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    phone: Mapped[str | None] = mapped_column(
+        String(20), unique=True, index=True, nullable=True
+    )
     nickname: Mapped[str] = mapped_column(String(50))
     password_hash: Mapped[str] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    wechat_openid: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True, nullable=True
+    )
+    wechat_unionid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wechat_avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
@@ -125,7 +133,9 @@ class Checkin(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     content: Mapped[str] = mapped_column(Text)  # 打卡文字内容
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -158,7 +168,12 @@ class Report(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"))
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     type: Mapped[ReportType] = mapped_column(Enum(ReportType))
     status: Mapped[ReportStatus] = mapped_column(
         Enum(ReportStatus), default=ReportStatus.COMPLETED

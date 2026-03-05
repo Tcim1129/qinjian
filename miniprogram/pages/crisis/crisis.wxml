@@ -1,0 +1,49 @@
+<!--危机预警页-->
+<view class="container">
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- 预警列表 -->
+    <view class="section">
+      <view class="section-title">预警提醒</view>
+      <view wx:if="{{alerts.length > 0}}" class="alert-list">
+        <view class="alert-item card" wx:for="{{alerts}}" wx:key="id">
+          <view class="alert-header flex-between">
+            <view class="tag {{item.severity === 'high' ? 'tag-danger' : item.severity === 'medium' ? 'tag-warning' : 'tag-success'}}">
+              {{item.severity === 'high' ? '高' : item.severity === 'medium' ? '中' : '低'}}风险
+            </view>
+            <text class="alert-time">{{item.created_at}}</text>
+          </view>
+          <view class="alert-message">{{item.message}}</view>
+          <view class="alert-actions flex-row gap-sm mt-md">
+            <button class="btn btn-small btn-ghost" data-id="{{item.id}}" bindtap="acknowledgeAlert">确认</button>
+            <button class="btn btn-small btn-primary" data-id="{{item.id}}" bindtap="resolveAlert">已解决</button>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="empty-state">
+        <text class="empty-icon">✅</text>
+        <text class="empty-text">暂无预警</text>
+      </view>
+    </view>
+
+    <!-- 资源推荐 -->
+    <view class="section mt-lg">
+      <view class="section-title">帮助资源</view>
+      <view wx:if="{{resources.length > 0}}" class="resource-list">
+        <view class="resource-item card" wx:for="{{resources}}" wx:key="id">
+          <view class="resource-title">{{item.title}}</view>
+          <view class="resource-desc">{{item.description}}</view>
+          <view wx:if="{{item.url}}" class="resource-link mt-sm">
+            <text class="link-text">查看详情</text>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="empty-state">
+        <text class="empty-text">暂无资源</text>
+      </view>
+    </view>
+  </block>
+</view>

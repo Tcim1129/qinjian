@@ -1,0 +1,24 @@
+<!--
+  发现页 - 8个功能卡片网格
+-->
+<view class="container container-safe">
+
+  <view class="text-title mb-md">探索更多</view>
+  <view class="text-caption mb-lg">发现提升关系质量的实用工具</view>
+
+  <!-- 功能卡片网格 -->
+  <view class="feature-grid">
+    <view
+      wx:for="{{features}}"
+      wx:key="id"
+      class="card feature-card"
+      bindtap="goFeature"
+      data-path="{{item.path}}"
+    >
+      <view class="feature-icon">{{item.icon}}</view>
+      <view class="feature-title">{{item.title}}</view>
+      <view class="feature-desc">{{item.desc}}</view>
+    </view>
+  </view>
+
+</view>

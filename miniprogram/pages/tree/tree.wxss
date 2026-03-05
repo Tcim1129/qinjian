@@ -1,0 +1,171 @@
+/* 关系树页样式 */
+.container {
+  padding: 32rpx;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #E8F5E9 0%, var(--color-bg) 40%);
+  box-sizing: border-box;
+}
+
+/* 树可视化区域 */
+.tree-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 0 40rpx;
+}
+
+.tree-icon {
+  font-size: 160rpx;
+  margin-bottom: 24rpx;
+  filter: drop-shadow(0 8rpx 16rpx rgba(0, 0, 0, 0.1));
+}
+
+.tree-level {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: 8rpx;
+}
+
+.tree-desc {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}
+
+/* 进度区域 */
+.progress-section {
+  padding: 16rpx 0;
+}
+
+.progress-header {
+  margin-bottom: 16rpx;
+}
+
+.progress-label {
+  font-size: 28rpx;
+  color: var(--color-text);
+}
+
+.progress-count {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.progress-bar {
+  height: 16rpx;
+  background: var(--color-border);
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  border-radius: 8rpx;
+  transition: width 0.5s ease;
+}
+
+.progress-hint {
+  font-size: 24rpx;
+  color: var(--color-text-muted);
+  margin-top: 12rpx;
+  text-align: center;
+}
+
+.highlight {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* 统计行 */
+.stats-row {
+  padding: 16rpx 0;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.stat-label {
+  font-size: 22rpx;
+  color: var(--color-text-secondary);
+  margin-top: 4rpx;
+}
+
+/* 浇水区域 */
+.water-section {
+  padding: 0 16rpx;
+}
+
+.water-btn {
+  height: 100rpx;
+  font-size: 32rpx;
+}
+
+.water-icon {
+  font-size: 36rpx;
+  margin-right: 12rpx;
+}
+
+.water-tip {
+  font-size: 22rpx;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: 16rpx;
+}
+
+/* 等级列表 */
+.level-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 20rpx;
+}
+
+.level-items {
+  display: flex;
+  justify-content: space-between;
+}
+
+.level-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.4;
+  transition: opacity 0.3s;
+}
+
+.level-item.active {
+  opacity: 1;
+}
+
+.level-icon {
+  font-size: 40rpx;
+  margin-bottom: 8rpx;
+}
+
+.level-name {
+  font-size: 22rpx;
+  color: var(--color-text-secondary);
+}
+
+/* 加载状态 */
+.loading-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: var(--color-text-muted);
+}

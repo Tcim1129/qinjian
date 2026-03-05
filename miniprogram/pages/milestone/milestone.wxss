@@ -1,0 +1,195 @@
+/* 里程碑页样式 */
+.container {
+  padding: 32rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.add-btn-wrap {
+  margin-bottom: 32rpx;
+}
+
+.add-icon {
+  font-size: 32rpx;
+  margin-right: 8rpx;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 40rpx;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 14rpx;
+  top: 0;
+  bottom: 0;
+  width: 2rpx;
+  background: var(--color-border);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 24rpx;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -32rpx;
+  top: 28rpx;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 4rpx solid var(--color-white);
+  box-shadow: 0 0 0 2rpx var(--color-primary);
+}
+
+.milestone-header {
+  margin-bottom: 8rpx;
+}
+
+.milestone-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.milestone-date {
+  font-size: 22rpx;
+  color: var(--color-text-muted);
+}
+
+.milestone-desc {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 120rpx 48rpx;
+}
+
+.empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-text {
+  font-size: 30rpx;
+  color: var(--color-text);
+  margin-bottom: 8rpx;
+}
+
+.empty-hint {
+  font-size: 24rpx;
+  color: var(--color-text-muted);
+}
+
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 600rpx;
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx;
+  border-bottom: 1rpx solid var(--color-border);
+}
+
+.modal-title {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.modal-close {
+  font-size: 40rpx;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 32rpx;
+}
+
+.form-item {
+  margin-bottom: 24rpx;
+}
+
+.form-label {
+  font-size: 26rpx;
+  color: var(--color-text);
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  height: 80rpx;
+  padding: 0 24rpx;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  font-size: 28rpx;
+}
+
+.form-picker {
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 24rpx;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  font-size: 28rpx;
+  color: var(--color-text);
+}
+
+.form-textarea {
+  width: 100%;
+  height: 160rpx;
+  padding: 20rpx 24rpx;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 24rpx;
+  padding: 24rpx 32rpx 32rpx;
+}
+
+.modal-footer .btn {
+  flex: 1;
+}
+
+.loading-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: var(--color-text-muted);
+}

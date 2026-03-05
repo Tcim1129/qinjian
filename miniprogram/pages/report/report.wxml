@@ -1,0 +1,112 @@
+<!--
+  报告页 - 日报/周报/月报 切换 + 生成 + 历史 + 趋势
+-->
+<view class="container container-safe">
+
+  <!-- Tab 选择器 -->
+  <view class="report-tabs flex-row">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="key"
+      class="report-tab {{currentTab === item.key ? 'report-tab-active' : ''}}"
+      bindtap="switchTab"
+      data-tab="{{item.key}}"
+    >
+      {{item.label}}
+    </view>
+  </view>
+
+  <!-- 生成报告按钮 -->
+  <view class="mt-lg">
+    <button
+      class="btn btn-primary btn-block {{generating ? 'btn-disabled' : ''}}"
+      bindtap="generateReport"
+      disabled="{{generating}}"
+    >
+      {{generating ? '正在生成...' : '生成' + (currentTab === 'daily' ? '日报' : currentTab === 'weekly' ? '周报' : '月报')}}
+    </button>
+  </view>
+
+  <!-- 报告内容展示区 -->
+  <view class="card card-elevated mt-lg" wx:if="{{reportView}}">
+    <view class="text-subtitle mb-sm">{{reportView.title || '报告详情'}}</view>
+    <view class="divider"></view>
+
+    <view class="report-health" wx:if="{{reportView.healthScore !== null && reportView.healthScore !== undefined}}">
+      <view class="health-score">{{reportView.healthScore}}</view>
+      <view class="text-caption">健康分</view>
+    </view>
+
+    <view class="mt-sm" wx:if="{{reportView.insight}}">
+      <view class="text-caption">核心洞察</view>
+      <view class="report-summary mt-sm">{{reportView.insight}}</view>
+    </view>
+
+    <view class="mt-md" wx:if="{{reportView.suggestion}}">
+      <view class="text-caption">今日建议</view>
+      <view class="report-tip mt-sm">{{reportView.suggestion}}</view>
+    </view>
+
+    <view class="mt-md" wx:if="{{reportView.highlights.length}}">
+      <view class="text-caption mb-sm">亮点</view>
+      <view class="report-suggestion" wx:for="{{reportView.highlights}}" wx:key="*this">
+        <text class="text-body">• {{item}}</text>
+      </view>
+    </view>
+
+    <view class="mt-md" wx:if="{{reportView.concerns.length}}">
+      <view class="text-caption mb-sm">待关注</view>
+      <view class="report-suggestion" wx:for="{{reportView.concerns}}" wx:key="*this">
+        <text class="text-body">• {{item}}</text>
+      </view>
+    </view>
+
+    <view class="mt-md" wx:if="{{reportView.encouragement}}">
+      <view class="text-caption">温柔提醒</view>
+      <view class="report-note mt-sm">{{reportView.encouragement}}</view>
+    </view>
+  </view>
+
+  <!-- 趋势图表占位区 -->
+  <view class="card mt-lg" wx:if="{{trendData}}">
+    <view class="text-subtitle mb-sm">趋势变化</view>
+    <view class="divider"></view>
+    <view class="trend-placeholder flex-center">
+      <view class="text-center">
+        <text class="trend-icon">📈</text>
+        <view class="text-caption mt-sm">趋势图表区域</view>
+        <view class="text-small">心情均值: {{trendData.avg_mood || '--'}} · 互动均值: {{trendData.avg_interaction || '--'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 历史报告列表 -->
+  <view class="mt-lg">
+    <view class="text-subtitle mb-md">历史报告</view>
+
+    <view class="loading-wrap" wx:if="{{loading}}">
+      <text class="text-caption">加载中...</text>
+    </view>
+
+    <view wx:if="{{!loading && historyList.length === 0}}" class="empty-state">
+      <view class="empty-state-text">暂无历史报告</view>
+    </view>
+
+    <view
+      wx:for="{{historyListView}}"
+      wx:key="id"
+      class="card history-item"
+      bindtap="viewReport"
+      data-report="{{item}}"
+    >
+      <view class="flex-between">
+        <view>
+          <view class="text-body">{{item._label || '报告'}}</view>
+          <view class="text-small mt-sm">{{item.created_at || ''}}</view>
+        </view>
+        <text class="text-caption">查看 ></text>
+      </view>
+    </view>
+  </view>
+
+</view>

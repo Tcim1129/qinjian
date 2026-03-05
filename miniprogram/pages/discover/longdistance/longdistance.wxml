@@ -1,0 +1,60 @@
+<!--异地恋工具页-->
+<view class="container">
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- 健康指数 -->
+    <view wx:if="{{healthIndex}}" class="health-card gradient-card">
+      <view class="health-label">异地恋健康指数</view>
+      <view class="health-value">{{healthIndex.score || 0}}</view>
+      <view class="health-desc">{{healthIndex.description || '保持良好沟通'}}</view>
+    </view>
+
+    <!-- 活动列表 -->
+    <view class="section mt-lg">
+      <view class="section-header flex-between">
+        <text class="section-title">共同活动</text>
+        <button class="btn btn-small btn-primary" bindtap="showAdd">添加</button>
+      </view>
+      <view wx:if="{{activities.length > 0}}" class="activity-list">
+        <view class="activity-item card" wx:for="{{activities}}" wx:key="id">
+          <view class="activity-title">{{item.title}}</view>
+          <view wx:if="{{item.description}}" class="activity-desc">{{item.description}}</view>
+          <view class="activity-footer flex-between mt-sm">
+            <text class="activity-status {{item.completed ? 'completed' : ''}}">{{item.completed ? '已完成' : '进行中'}}</text>
+            <button wx:if="{{!item.completed}}" class="btn btn-small btn-ghost" data-id="{{item.id}}" bindtap="completeActivity">完成</button>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="empty-state">
+        <text class="empty-text">暂无活动，添加一个吧</text>
+      </view>
+    </view>
+  </block>
+
+  <!-- 添加表单弹窗 -->
+  <view wx:if="{{showAddForm}}" class="modal-mask" bindtap="hideAdd">
+    <view class="modal-content" catchtap>
+      <view class="modal-header">
+        <text class="modal-title">添加活动</text>
+        <text class="modal-close" bindtap="hideAdd">×</text>
+      </view>
+      <view class="modal-body">
+        <view class="form-item">
+          <view class="form-label">活动名称</view>
+          <input class="form-input" placeholder="例如：一起看电影" value="{{newActivityTitle}}" bindinput="onTitleInput" />
+        </view>
+        <view class="form-item">
+          <view class="form-label">描述（可选）</view>
+          <textarea class="form-textarea" placeholder="活动详情..." value="{{newActivityDesc}}" bindinput="onDescInput" />
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn btn-ghost" bindtap="hideAdd">取消</button>
+        <button class="btn btn-primary" bindtap="submitActivity" disabled="{{submitting}}">{{submitting ? '保存中...' : '保存'}}</button>
+      </view>
+    </view>
+  </view>
+</view>

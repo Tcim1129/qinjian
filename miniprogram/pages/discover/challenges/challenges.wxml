@@ -1,0 +1,31 @@
+<!--关系挑战赛页-->
+<view class="container">
+  <view class="header">
+    <view class="header-title">今日挑战</view>
+    <view class="header-desc">完成任务增进感情</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{tasks.length > 0}}" class="task-list">
+      <view class="task-item card {{item.completed ? 'completed' : ''}}" wx:for="{{tasks}}" wx:key="id">
+        <view class="task-header flex-between">
+          <view class="task-title">{{item.title}}</view>
+          <view class="task-points">+{{item.points || 10}}分</view>
+        </view>
+        <view class="task-desc">{{item.description}}</view>
+        <view class="task-footer">
+          <button wx:if="{{!item.completed}}" class="btn btn-small btn-primary" data-id="{{item.id}}" bindtap="completeTask">完成</button>
+          <view wx:else class="completed-badge">✓ 已完成</view>
+        </view>
+      </view>
+    </view>
+    <view wx:else class="empty-state">
+      <view class="empty-icon">🎯</view>
+      <view class="empty-text">今日暂无挑战任务</view>
+    </view>
+  </block>
+</view>

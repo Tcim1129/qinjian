@@ -15,6 +15,7 @@ from app.ai.reporter import (
     generate_daily_report,
     generate_weekly_report,
     generate_monthly_report,
+    generate_solo_report,
 )
 
 router = APIRouter(prefix="/reports", tags=["报告"])
@@ -33,6 +34,16 @@ async def _process_daily_report(
             return
 
         try:
+            if pair_type == "solo":
+                report_content = await generate_solo_report(
+                    pair_type="solo", content=content_a
+                )
+                report.content = report_content
+                report.health_score = report_content.get("health_score")
+                report.status = ReportStatus.COMPLETED
+                await db.commit()
+                return
+
             report_content = await generate_daily_report(
                 pair_type=pair_type,
                 content_a=content_a,
@@ -111,13 +122,60 @@ async def _process_monthly_report(
 
 @router.post("/generate-daily", response_model=ReportResponse)
 async def trigger_daily_report(
-    pair_id: str,
     background_tasks: BackgroundTasks,
+    pair_id: str | None = None,
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发生成今日报告（异步，使用后台任务以防阻塞）"""
     today = date.today()
+    is_solo = mode == "solo"
+
+    if is_solo:
+        result = await db.execute(
+            select(Checkin).where(
+                Checkin.user_id == user.id,
+                Checkin.pair_id.is_(None),
+                Checkin.checkin_date == today,
+            )
+        )
+        checkin = result.scalar_one_or_none()
+        if not checkin:
+            raise HTTPException(status_code=400, detail="今天尚未打卡")
+
+        result = await db.execute(
+            select(Report).where(
+                Report.user_id == user.id,
+                Report.report_date == today,
+                Report.type == ReportType.SOLO,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing
+
+        report = Report(
+            user_id=user.id,
+            pair_id=None,
+            type=ReportType.SOLO,
+            status=ReportStatus.PENDING,
+            content=None,
+            health_score=None,
+            report_date=today,
+        )
+        db.add(report)
+        await db.commit()
+        await db.refresh(report)
+
+        if background_tasks:
+            background_tasks.add_task(
+                _process_daily_report, report.id, "solo", "solo", checkin.content, ""
+            )
+        return report
+
+    if not pair_id:
+        raise HTTPException(status_code=422, detail="缺少配对ID")
 
     result = await db.execute(
         select(Checkin).where(Checkin.pair_id == pair_id, Checkin.checkin_date == today)
@@ -131,7 +189,6 @@ async def trigger_daily_report(
     if not pair:
         raise HTTPException(status_code=404, detail="配对不存在")
 
-    # 检查是否已有生成中或已生成的
     result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
@@ -150,7 +207,6 @@ async def trigger_daily_report(
     checkin_a = next((c for c in checkins if c.user_id == pair.user_a_id), checkins[0])
     checkin_b = next((c for c in checkins if c.user_id == pair.user_b_id), checkins[-1])
 
-    # 插入 PENDING 数据
     report = Report(
         pair_id=pair_id,
         type=ReportType.DAILY,
@@ -163,27 +219,33 @@ async def trigger_daily_report(
     await db.commit()
     await db.refresh(report)
 
-    background_tasks.add_task(
-        _process_daily_report,
-        report.id,
-        pair_id,
-        pair.type.value,
-        checkin_a.content,
-        checkin_b.content,
-    )
+    if background_tasks:
+        background_tasks.add_task(
+            _process_daily_report,
+            report.id,
+            pair_id,
+            pair.type.value,
+            checkin_a.content,
+            checkin_b.content,
+        )
 
     return report
 
 
 @router.post("/generate-weekly", response_model=ReportResponse)
 async def trigger_weekly_report(
-    pair_id: str,
     background_tasks: BackgroundTasks,
+    pair_id: str | None = None,
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """生成周报（基于过去7天的日报汇总，异步后台任务）"""
     today = date.today()
+    if mode == "solo":
+        raise HTTPException(status_code=400, detail="单人模式不支持周报")
+    if not pair_id:
+        raise HTTPException(status_code=422, detail="缺少配对ID")
     week_ago = today - timedelta(days=7)
 
     result = await db.execute(select(Pair).where(Pair.id == pair_id))
@@ -235,22 +297,28 @@ async def trigger_weekly_report(
     await db.commit()
     await db.refresh(report)
 
-    background_tasks.add_task(
-        _process_weekly_report, report.id, pair_id, pair.type.value, daily_reports
-    )
+    if background_tasks:
+        background_tasks.add_task(
+            _process_weekly_report, report.id, pair_id, pair.type.value, daily_reports
+        )
 
     return report
 
 
 @router.post("/generate-monthly", response_model=ReportResponse)
 async def trigger_monthly_report(
-    pair_id: str,
     background_tasks: BackgroundTasks,
+    pair_id: str | None = None,
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """生成月报（基于过去30天的周报汇总，异步后台任务）"""
     today = date.today()
+    if mode == "solo":
+        raise HTTPException(status_code=400, detail="单人模式不支持月报")
+    if not pair_id:
+        raise HTTPException(status_code=422, detail="缺少配对ID")
     month_ago = today - timedelta(days=30)
 
     result = await db.execute(select(Pair).where(Pair.id == pair_id))
@@ -302,24 +370,34 @@ async def trigger_monthly_report(
     await db.commit()
     await db.refresh(report)
 
-    background_tasks.add_task(
-        _process_monthly_report, report.id, pair_id, pair.type.value, weekly_reports
-    )
+    if background_tasks:
+        background_tasks.add_task(
+            _process_monthly_report, report.id, pair_id, pair.type.value, weekly_reports
+        )
 
     return report
 
 
 @router.get("/latest", response_model=ReportResponse | None)
 async def get_latest_report(
-    pair_id: str,
+    pair_id: str | None = None,
+    mode: str | None = None,
     report_type: str = "daily",
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取最新报告（可按类型筛选）"""
-    query = select(Report).where(Report.pair_id == pair_id)
-    if report_type in ("daily", "weekly", "monthly"):
-        query = query.where(Report.type == ReportType(report_type))
+    is_solo = mode == "solo"
+    if is_solo:
+        query = select(Report).where(
+            Report.user_id == user.id, Report.type == ReportType.SOLO
+        )
+    else:
+        if not pair_id:
+            raise HTTPException(status_code=422, detail="缺少配对ID")
+        query = select(Report).where(Report.pair_id == pair_id)
+        if report_type in ("daily", "weekly", "monthly"):
+            query = query.where(Report.type == ReportType(report_type))
     query = query.order_by(Report.report_date.desc()).limit(1)
 
     result = await db.execute(query)
@@ -328,18 +406,29 @@ async def get_latest_report(
 
 @router.get("/history", response_model=list[ReportResponse])
 async def get_report_history(
-    pair_id: str,
+    pair_id: str | None = None,
+    mode: str | None = None,
     report_type: str = "daily",
     limit: int = 7,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取报告历史（仅返回生成的）"""
-    query = select(Report).where(
-        Report.pair_id == pair_id, Report.status == ReportStatus.COMPLETED
-    )
-    if report_type in ("daily", "weekly", "monthly"):
-        query = query.where(Report.type == ReportType(report_type))
+    is_solo = mode == "solo"
+    if is_solo:
+        query = select(Report).where(
+            Report.user_id == user.id,
+            Report.type == ReportType.SOLO,
+            Report.status == ReportStatus.COMPLETED,
+        )
+    else:
+        if not pair_id:
+            raise HTTPException(status_code=422, detail="缺少配对ID")
+        query = select(Report).where(
+            Report.pair_id == pair_id, Report.status == ReportStatus.COMPLETED
+        )
+        if report_type in ("daily", "weekly", "monthly"):
+            query = query.where(Report.type == ReportType(report_type))
     query = query.order_by(Report.report_date.desc()).limit(limit)
 
     result = await db.execute(query)
@@ -348,24 +437,40 @@ async def get_report_history(
 
 @router.get("/trend", response_model=dict)
 async def get_health_trend(
-    pair_id: str,
+    pair_id: str | None = None,
+    mode: str | None = None,
     days: int = 14,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取健康度趋势数据（用于绘制图表）"""
     since = date.today() - timedelta(days=days)
-    result = await db.execute(
-        select(Report.report_date, Report.health_score)
-        .where(
-            Report.pair_id == pair_id,
-            Report.type == ReportType.DAILY,
-            Report.status == ReportStatus.COMPLETED,
-            Report.report_date >= since,
-            Report.health_score.isnot(None),
+    if mode == "solo":
+        result = await db.execute(
+            select(Report.report_date, Report.health_score)
+            .where(
+                Report.user_id == user.id,
+                Report.type == ReportType.SOLO,
+                Report.status == ReportStatus.COMPLETED,
+                Report.report_date >= since,
+                Report.health_score.isnot(None),
+            )
+            .order_by(Report.report_date)
         )
-        .order_by(Report.report_date)
-    )
+    else:
+        if not pair_id:
+            raise HTTPException(status_code=422, detail="缺少配对ID")
+        result = await db.execute(
+            select(Report.report_date, Report.health_score)
+            .where(
+                Report.pair_id == pair_id,
+                Report.type == ReportType.DAILY,
+                Report.status == ReportStatus.COMPLETED,
+                Report.report_date >= since,
+                Report.health_score.isnot(None),
+            )
+            .order_by(Report.report_date)
+        )
 
     trend_data = [{"date": str(row[0]), "score": row[1]} for row in result.all()]
 

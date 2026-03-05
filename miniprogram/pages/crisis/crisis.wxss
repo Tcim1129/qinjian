@@ -1,0 +1,87 @@
+/* 危机预警页样式 */
+.container {
+  padding: 32rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 20rpx;
+}
+
+.alert-item {
+  margin-bottom: 20rpx;
+}
+
+.alert-header {
+  margin-bottom: 12rpx;
+}
+
+.alert-time {
+  font-size: 22rpx;
+  color: var(--color-text-muted);
+}
+
+.alert-message {
+  font-size: 28rpx;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.tag-danger {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--color-danger);
+}
+
+.resource-item {
+  margin-bottom: 16rpx;
+}
+
+.resource-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8rpx;
+}
+
+.resource-desc {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+}
+
+.link-text {
+  font-size: 24rpx;
+  color: var(--color-primary);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx;
+}
+
+.empty-icon {
+  font-size: 48rpx;
+  margin-bottom: 16rpx;
+}
+
+.empty-text {
+  font-size: 26rpx;
+  color: var(--color-text-muted);
+}
+
+.loading-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: var(--color-text-muted);
+}

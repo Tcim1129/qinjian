@@ -1,0 +1,71 @@
+<!--里程碑页-->
+<view class="container">
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- 添加按钮 -->
+    <view class="add-btn-wrap">
+      <button class="btn btn-primary" bindtap="showAdd">
+        <text class="add-icon">+</text> 添加里程碑
+      </button>
+    </view>
+
+    <!-- 时间线 -->
+    <view wx:if="{{milestones.length > 0}}" class="timeline">
+      <view class="timeline-item" wx:for="{{milestones}}" wx:key="id">
+        <view class="timeline-dot"></view>
+        <view class="timeline-content card">
+          <view class="milestone-header flex-between">
+            <view class="milestone-title">{{item.title}}</view>
+            <view class="milestone-date">{{item.date}}</view>
+          </view>
+          <view wx:if="{{item.description}}" class="milestone-desc">{{item.description}}</view>
+          <button class="btn btn-small btn-ghost mt-sm" data-id="{{item.id}}" bindtap="generateReview">
+            生成回顾
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view wx:else class="empty-state">
+      <view class="empty-icon">🎯</view>
+      <view class="empty-text">还没有里程碑</view>
+      <view class="empty-hint">记录你们关系中的重要时刻</view>
+    </view>
+  </block>
+
+  <!-- 添加表单弹窗 -->
+  <view wx:if="{{showAddForm}}" class="modal-mask">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">添加里程碑</text>
+        <text class="modal-close" bindtap="hideAdd">×</text>
+      </view>
+      <view class="modal-body">
+        <view class="form-item">
+          <view class="form-label">标题</view>
+          <input class="form-input" placeholder="例如：第一次约会" value="{{newTitle}}" bindinput="onTitleInput" />
+        </view>
+        <view class="form-item">
+          <view class="form-label">日期</view>
+          <picker mode="date" value="{{newDate}}" bindchange="onDatePick">
+            <view class="form-picker">{{newDate || '选择日期'}}</view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <view class="form-label">描述（可选）</view>
+          <textarea class="form-textarea" placeholder="记录这个特别的时刻..." value="{{newDesc}}" bindinput="onDescInput" />
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn btn-ghost" bindtap="hideAdd">取消</button>
+        <button class="btn btn-primary" bindtap="submitMilestone" disabled="{{submitting}}">
+          {{submitting ? '保存中...' : '保存'}}
+        </button>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,89 @@
+/* 会员订阅页样式 */
+.container {
+  padding: 32rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.header-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 8rpx;
+}
+
+.header-desc {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}
+
+.plan-item {
+  margin-bottom: 24rpx;
+  position: relative;
+  overflow: visible;
+}
+
+.plan-item.recommended {
+  border: 2rpx solid var(--color-primary);
+}
+
+.recommend-badge {
+  position: absolute;
+  top: -12rpx;
+  right: 24rpx;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 16rpx;
+  border-radius: 12rpx;
+}
+
+.plan-header {
+  margin-bottom: 20rpx;
+}
+
+.plan-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8rpx;
+}
+
+.price-value {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.price-period {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  margin-left: 4rpx;
+}
+
+.plan-features {
+  margin-bottom: 24rpx;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.feature-check {
+  color: var(--color-success);
+  font-size: 24rpx;
+  margin-right: 12rpx;
+}
+
+.feature-text {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}

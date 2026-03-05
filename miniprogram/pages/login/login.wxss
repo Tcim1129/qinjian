@@ -1,0 +1,96 @@
+/* 登录页特有样式 */
+
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-light) 40%, var(--color-bg) 40%);
+  padding: 0 var(--spacing-lg);
+  box-sizing: border-box;
+}
+
+.login-header {
+  padding-top: 160rpx;
+  text-align: center;
+  padding-bottom: var(--spacing-xl);
+}
+
+.login-logo {
+  font-size: 72rpx;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 8rpx;
+}
+
+.login-slogan {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: var(--spacing-sm);
+}
+
+/* Tab */
+.login-tabs {
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-xl);
+}
+
+.login-tab {
+  font-size: 32rpx;
+  color: var(--color-text-muted);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 4rpx solid transparent;
+  transition: all 0.2s;
+}
+
+.login-tab-active {
+  color: var(--color-primary);
+  font-weight: 600;
+  border-bottom-color: var(--color-primary);
+}
+
+/* 表单 */
+.login-form {
+  padding-bottom: var(--spacing-xl);
+}
+
+.login-mode-tabs {
+  justify-content: center;
+  gap: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.login-mode {
+  font-size: 26rpx;
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+}
+
+.login-mode.active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.code-btn {
+  font-size: 24rpx;
+  color: var(--color-primary);
+  padding-left: 16rpx;
+}
+
+.divider {
+  height: 1rpx;
+  background: var(--color-border);
+  margin: 32rpx 0;
+}
+
+.pwd-toggle {
+  font-size: 32rpx;
+  padding: 0 var(--spacing-sm);
+}
+
+.picker-display {
+  font-size: 28rpx;
+  color: var(--color-text-muted);
+  line-height: 88rpx;
+}

@@ -1,0 +1,28 @@
+<!--依恋风格测试页-->
+<view class="container">
+  <view wx:if="{{!showResult}}" class="question-section">
+    <view class="progress-bar">
+      <view class="progress-fill" style="width: {{(currentQuestion + 1) / questions.length * 100}}%"></view>
+    </view>
+    <view class="question-number">问题 {{currentQuestion + 1}} / {{questions.length}}</view>
+    <view class="question-text">{{questions[currentQuestion].q}}</view>
+    <view class="options">
+      <button class="option-btn" wx:for="{{questions[currentQuestion].options}}" wx:key="index" data-idx="{{index}}" bindtap="selectOption">
+        {{item}}
+      </button>
+    </view>
+  </view>
+
+  <view wx:else class="result-section">
+    <view class="result-icon">💕</view>
+    <view class="result-title">你的依恋风格</view>
+    <view class="result-type">{{resultType}}</view>
+    <view class="result-desc">
+      <block wx:if="{{resultType === '安全型'}}">你在关系中感到舒适，能够平衡亲密与独立。</block>
+      <block wx:elif="{{resultType === '焦虑型'}}">你渴望亲密，但常担心被拒绝或抛弃。</block>
+      <block wx:elif="{{resultType === '回避型'}}">你倾向于保持距离，重视独立性。</block>
+      <block wx:else>你对亲密关系有矛盾的感受，既渴望又害怕。</block>
+    </view>
+    <button class="btn btn-primary btn-block mt-lg" bindtap="restart">重新测试</button>
+  </view>
+</view>

@@ -1,0 +1,94 @@
+<!--配对管理页-->
+<view class="container">
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- 未配对状态 -->
+    <view wx:if="{{!isPaired}}" class="not-paired">
+      <view class="pair-header">
+        <view class="pair-icon">💕</view>
+        <view class="pair-title">开始你们的亲健之旅</view>
+        <view class="pair-subtitle">与伴侣配对后，即可共同记录关系点滴</view>
+      </view>
+
+      <!-- 创建配对 -->
+      <view class="card mt-lg">
+        <view class="card-title">创建配对</view>
+        <view class="card-desc">生成专属配对码，分享给伴侣</view>
+        <button 
+          class="btn btn-primary btn-block mt-md" 
+          bindtap="createPair"
+          disabled="{{creating}}"
+        >
+          {{creating ? '生成中...' : '创建配对'}}
+        </button>
+      </view>
+
+      <!-- 加入配对 -->
+      <view class="card mt-md">
+        <view class="card-title">加入配对</view>
+        <view class="card-desc">输入伴侣分享的配对码</view>
+        <view class="input-wrap mt-sm">
+          <input 
+            type="text" 
+            placeholder="请输入配对码" 
+            value="{{inviteCode}}"
+            bindinput="onInviteCodeInput"
+          />
+        </view>
+        <button 
+          class="btn btn-secondary btn-block mt-md" 
+          bindtap="joinPair"
+          disabled="{{joining}}"
+        >
+          {{joining ? '加入中...' : '加入配对'}}
+        </button>
+      </view>
+    </view>
+
+    <!-- 已配对状态 -->
+    <view wx:else class="paired">
+      <view class="pair-header gradient-card">
+        <view class="paired-status">已配对</view>
+        <view class="partner-info">
+          <view class="partner-avatar">{{pairInfo.partner_nickname ? pairInfo.partner_nickname[0] : '❤'}}</view>
+          <view class="partner-name">{{pairInfo.partner_nickname || '伴侣'}}</view>
+        </view>
+        <view class="pair-date">配对时间：{{pairInfo.created_at || '--'}}</view>
+      </view>
+
+      <!-- 关系统计 -->
+      <view class="stats-grid mt-lg">
+        <view class="stat-item card">
+          <view class="stat-value">{{pairInfo.checkin_days || 0}}</view>
+          <view class="stat-label">共同打卡天数</view>
+        </view>
+        <view class="stat-item card">
+          <view class="stat-value">{{pairInfo.relationship_days || 0}}</view>
+          <view class="stat-label">在一起天数</view>
+        </view>
+      </view>
+
+      <!-- 邀请码 -->
+      <view wx:if="{{pairInfo.invite_code}}" class="card mt-md">
+        <view class="card-title">我的配对码</view>
+        <view class="invite-code-wrap flex-between">
+          <text class="invite-code">{{pairInfo.invite_code}}</text>
+          <button class="btn btn-small btn-ghost" bindtap="copyInviteCode">复制</button>
+        </view>
+      </view>
+
+      <!-- 解除配对 -->
+      <view class="card mt-lg danger-card">
+        <view class="card-title text-danger">解除配对</view>
+        <view class="card-desc">解除后所有配对数据将被清除，此操作不可撤销</view>
+        <button class="btn btn-outline btn-block mt-md" style="border-color: var(--color-danger); color: var(--color-danger);" bindtap="handleUnbind">
+          解除配对
+        </button>
+      </view>
+    </view>
+  </block>
+</view>
