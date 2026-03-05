@@ -81,6 +81,32 @@
         </view>
       </view>
 
+      <!-- 我的配对列表 -->
+      <view wx:if="{{pairList.length > 0}}" class="card mt-md">
+        <view class="card-title">我的配对</view>
+        <view class="pair-list">
+          <block wx:for="{{pairList}}" wx:key="id">
+            <view class="pair-item">
+              <view class="pair-item-info">
+                <view class="pair-item-name">
+                  {{item.partner_nickname || item.partner_name || item.partnerNickname || '伴侣'}}
+                </view>
+                <view class="pair-item-meta">
+                  {{item.type || 'couple'}} · {{item.status || 'active'}}
+                </view>
+              </view>
+              <button
+                class="btn btn-small btn-ghost"
+                bindtap="setCurrentPair"
+                data-pair="{{item}}"
+              >
+                设为当前
+              </button>
+            </view>
+          </block>
+        </view>
+      </view>
+
       <!-- 加入新配对（多配对） -->
       <view class="card mt-lg">
         <view class="card-title">加入新的配对</view>

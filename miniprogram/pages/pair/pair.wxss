@@ -130,6 +130,34 @@
   letter-spacing: 4rpx;
 }
 
+.pair-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.pair-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 12rpx;
+  border-radius: 16rpx;
+  background: #fff5f1;
+}
+
+.pair-item-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2d2a32;
+}
+
+.pair-item-meta {
+  font-size: 22rpx;
+  color: #8f8a9c;
+  margin-top: 4rpx;
+}
+
 /* 危险卡片 */
 .danger-card {
   border: 2rpx solid rgba(255, 107, 107, 0.3);

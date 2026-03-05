@@ -93,17 +93,19 @@ Page({
 
     const app = getApp()
     let pairInfo = app.globalData.pairInfo
-    if (!pairInfo) {
-      try {
-        const pairs = await api.get('/pairs/me')
-        const list = Array.isArray(pairs) ? pairs : [pairs]
-        pairInfo = list.find(p => p.status === 'active') || list[0] || null
-        if (pairInfo) {
-          app.setPairInfo(pairInfo)
-        }
-      } catch (e) {
-        console.warn('首页拉取配对信息失败', e)
+    try {
+      const pairs = await api.get('/pairs/me')
+      const list = Array.isArray(pairs) ? pairs : [pairs]
+      const currentId = pairInfo && (pairInfo.id || pairInfo.pair_id)
+      const currentMatch = currentId
+        ? list.find(p => (p.id || p.pair_id) === currentId)
+        : null
+      pairInfo = currentMatch || list.find(p => p.status === 'active') || list[0] || null
+      if (pairInfo) {
+        app.setPairInfo(pairInfo)
       }
+    } catch (e) {
+      console.warn('首页拉取配对信息失败', e)
     }
     const pairId = pairInfo ? (pairInfo.id || pairInfo.pair_id) : null
 

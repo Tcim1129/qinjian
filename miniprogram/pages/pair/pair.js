@@ -13,6 +13,7 @@ Page({
     pairInfo: null,
     partnerDisplay: '伴侣',
     partnerInitial: '❤',
+    pairList: [],
 
     // 未配对表单
     inviteCode: '',
@@ -51,21 +52,36 @@ Page({
           isPaired: true,
           pairInfo: activePair,
           partnerDisplay: displayName,
-          partnerInitial: displayName ? displayName[0] : '❤'
+          partnerInitial: displayName ? displayName[0] : '❤',
+          pairList: pairs
         })
       } else {
         app.setPairInfo(null)
-        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤' })
+        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤', pairList: [] })
       }
     } catch (e) {
       if (e.code === 404) {
-        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤' })
+        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤', pairList: [] })
       } else {
         console.error('获取配对状态失败:', e)
       }
     } finally {
       this.setData({ loading: false })
     }
+  },
+
+  setCurrentPair(e) {
+    const pair = e.currentTarget.dataset.pair
+    if (!pair) return
+    const displayName = pair.partner_nickname || pair.partner_name || pair.partnerNickname || '伴侣'
+    const app = getApp()
+    app.setPairInfo(pair)
+    this.setData({
+      pairInfo: pair,
+      partnerDisplay: displayName,
+      partnerInitial: displayName ? displayName[0] : '❤'
+    })
+    wx.showToast({ title: '已切换配对', icon: 'success' })
   },
 
   /**

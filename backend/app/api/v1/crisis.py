@@ -61,7 +61,7 @@ async def get_crisis_status(
         .where(
             CrisisAlert.pair_id == pair_id,
             CrisisAlert.status.in_(
-                [CrisisAlertStatus.ACTIVE, CrisisAlertStatus.ACKNOWLEDGED]
+                [CrisisAlertStatus.ACTIVE.value, CrisisAlertStatus.ACKNOWLEDGED.value]
             ),
         )
         .order_by(desc(CrisisAlert.created_at))
