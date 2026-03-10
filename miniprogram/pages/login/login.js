@@ -46,9 +46,17 @@ Page({
    */
   loadSavedAccounts() {
     try {
-      const savedAccounts = wx.getStorageSync('savedAccounts') || []
+      const storedAccounts = wx.getStorageSync('savedAccounts') || []
       const rememberMe = wx.getStorageSync('rememberMe') || false
       const autoLogin = wx.getStorageSync('autoLogin') || false
+      const savedAccounts = storedAccounts.map(acc => ({
+        email: acc.email,
+        nickname: acc.nickname || (acc.email ? acc.email.split('@')[0] : '已保存账号')
+      })).filter(acc => acc.email)
+
+      if (storedAccounts.some(acc => acc.password)) {
+        wx.setStorageSync('savedAccounts', savedAccounts)
+      }
 
       this.setData({
         savedAccounts: savedAccounts.slice(0, 3), // 最多显示3个
@@ -66,27 +74,19 @@ Page({
   async checkAutoLogin() {
     const app = getApp()
     if (app.globalData.isLoggedIn) {
-      wx.switchTab({ url: '/pages/home/home' })
+      if (wx.getStorageSync('autoLogin')) {
+        wx.switchTab({ url: '/pages/home/home' })
+      }
       return
     }
 
-    const autoLogin = wx.getStorageSync('autoLogin')
-    if (!autoLogin) return
-
     const lastAccount = wx.getStorageSync('lastAccount')
-    if (!lastAccount || !lastAccount.password) return
+    if (!lastAccount || !lastAccount.email) return
 
-    // 自动填充并尝试登录
     this.setData({
       loginEmail: lastAccount.email,
-      loginPassword: lastAccount.password,
       showAllLoginModes: true
     })
-
-    // 延迟执行自动登录
-    setTimeout(() => {
-      this.handleLogin()
-    }, 500)
   },
 
   /**
@@ -96,14 +96,9 @@ Page({
     const account = e.currentTarget.dataset.account
     this.setData({
       loginEmail: account.email,
-      loginPassword: account.password || '',
+      loginPassword: '',
       showAllLoginModes: true
     })
-
-    if (account.password) {
-      // 有密码直接登录
-      this.handleLogin()
-    }
   },
 
   /**
@@ -125,6 +120,12 @@ Page({
     if (!rememberMe && this.data.autoLogin) {
       this.setData({ autoLogin: false })
       wx.setStorageSync('autoLogin', false)
+    }
+
+    if (!rememberMe) {
+      this.setData({ savedAccounts: [] })
+      wx.removeStorageSync('savedAccounts')
+      wx.removeStorageSync('lastAccount')
     }
   },
 
@@ -158,7 +159,6 @@ Page({
       // 添加新账号到开头
       savedAccounts.unshift({
         email,
-        password: this.data.rememberMe ? password : '',
         nickname: nickname || email.split('@')[0]
       })
 
@@ -260,13 +260,13 @@ Page({
     try {
       const res = loginMode === 'email'
         ? await api.post('/auth/login', {
-            email: loginEmail.trim(),
-            password: loginPassword
-          })
+          email: loginEmail.trim(),
+          password: loginPassword
+        })
         : await api.post('/auth/phone/login', {
-            phone: loginPhone.trim(),
-            code: loginCode.trim()
-          })
+          phone: loginPhone.trim(),
+          code: loginCode.trim()
+        })
 
       const app = getApp()
       app.setLoginState(res.access_token || res.token, res.user || res)
@@ -381,7 +381,7 @@ Page({
     }
     try {
       await api.post('/auth/phone/send-code', { phone: loginPhone.trim() })
-      wx.showToast({ title: '验证码已发送(测试码123456)', icon: 'none' })
+      wx.showToast({ title: '验证码已发送，请注意查收', icon: 'none' })
     } catch (e) {
       wx.showToast({ title: e.message || '发送失败', icon: 'none' })
     }
@@ -395,7 +395,7 @@ Page({
     }
     try {
       await api.post('/auth/phone/send-code', { phone: regPhone.trim() })
-      wx.showToast({ title: '验证码已发送(测试码123456)', icon: 'none' })
+      wx.showToast({ title: '验证码已发送，请注意查收', icon: 'none' })
     } catch (e) {
       wx.showToast({ title: e.message || '发送失败', icon: 'none' })
     }

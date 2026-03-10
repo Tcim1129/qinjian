@@ -6,7 +6,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, PairStatus, Milestone, Report, ReportType, ReportStatus
 from app.ai.reporter import generate_milestone_report
 
@@ -24,11 +24,7 @@ async def create_milestone(
     db: AsyncSession = Depends(get_db),
 ):
     """创建关系里程碑"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权操作")
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     from datetime import date
     try:
@@ -61,11 +57,7 @@ async def get_milestones(
     db: AsyncSession = Depends(get_db),
 ):
     """获取里程碑列表"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权访问")
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     result = await db.execute(
         select(Milestone)
@@ -103,9 +95,7 @@ async def generate_review(
     if not milestone:
         raise HTTPException(status_code=404, detail="里程碑不存在")
 
-    pair = await db.get(Pair, str(milestone.pair_id))
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权操作")
+    pair = await validate_pair_access(str(milestone.pair_id), user, db, require_active=True)
 
     # 获取该里程碑期间的报告数据
     result = await db.execute(

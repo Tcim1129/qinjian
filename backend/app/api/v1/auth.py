@@ -1,5 +1,10 @@
 """认证接口：注册 + 登录"""
 
+import logging
+import re
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +24,21 @@ from app.schemas import (
 from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["认证"])
+logger = logging.getLogger(__name__)
 
 _phone_code_cache: dict[str, dict] = {}
+
+
+def _normalize_phone(phone: str) -> str:
+    normalized = phone.strip()
+    if not re.fullmatch(r"1\d{10}", normalized):
+        raise HTTPException(status_code=400, detail="手机号格式错误")
+    return normalized
+
+
+def _generate_phone_code() -> str:
+    upper_bound = 10 ** settings.PHONE_CODE_LENGTH
+    return str(secrets.randbelow(upper_bound)).zfill(settings.PHONE_CODE_LENGTH)
 
 
 @router.post("/register", response_model=dict)
@@ -52,8 +70,10 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """用户登录"""
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    if not user:
+        raise HTTPException(status_code=404, detail="该邮箱尚未注册，请先注册")
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="密码错误，请重新输入")
 
     token = create_access_token(str(user.id))
     return {
@@ -99,7 +119,7 @@ async def wechat_login(req: WechatLoginRequest, db: AsyncSession = Depends(get_d
         user = User(
             email=f"wx_{openid}@qinjian.local",
             nickname=req.nickname or "微信用户",
-            password_hash=hash_password(openid),
+            password_hash=hash_password(secrets.token_urlsafe(32)),
             avatar_url=req.avatar_url,
             wechat_openid=openid,
             wechat_unionid=unionid,
@@ -132,26 +152,64 @@ async def wechat_login(req: WechatLoginRequest, db: AsyncSession = Depends(get_d
 
 @router.post("/phone/send-code", response_model=dict)
 async def send_phone_code(req: PhoneSendCodeRequest):
-    """发送手机验证码（测试环境：固定 123456）"""
-    _phone_code_cache[req.phone] = {"code": "123456"}
-    return {"message": "验证码已发送", "code": "123456"}
+    """发送手机验证码（当前使用内存缓存 + 频控，便于后续接短信网关）"""
+    phone = _normalize_phone(req.phone)
+    now = datetime.now(timezone.utc)
+    existing = _phone_code_cache.get(phone)
+    if existing and existing["requested_at"] + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS) > now:
+        remaining = int((existing["requested_at"] + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS) - now).total_seconds())
+        raise HTTPException(status_code=429, detail=f"发送过于频繁，请 {max(1, remaining)} 秒后再试")
+
+    code = _generate_phone_code()
+    _phone_code_cache[phone] = {
+        "code_hash": hash_password(code),
+        "requested_at": now,
+        "expires_at": now + timedelta(minutes=settings.PHONE_CODE_EXPIRE_MINUTES),
+        "attempts_left": settings.PHONE_CODE_MAX_ATTEMPTS,
+    }
+
+    if settings.DEBUG:
+        logger.info("Phone verification code generated for %s: %s", phone, code)
+
+    payload = {"message": "验证码已发送"}
+    if settings.DEBUG and settings.PHONE_CODE_DEBUG_RETURN:
+        payload["debug_code"] = code
+    return payload
 
 
 @router.post("/phone/login", response_model=dict)
 async def phone_login(req: PhoneLoginRequest, db: AsyncSession = Depends(get_db)):
-    """手机号验证码登录（测试环境）"""
-    entry = _phone_code_cache.get(req.phone)
-    if not entry or entry.get("code") != req.code:
+    """手机号验证码登录"""
+    phone = _normalize_phone(req.phone)
+    entry = _phone_code_cache.get(phone)
+    if not entry:
         raise HTTPException(status_code=400, detail="验证码错误")
 
-    result = await db.execute(select(User).where(User.phone == req.phone))
+    now = datetime.now(timezone.utc)
+    if entry["expires_at"] <= now:
+        _phone_code_cache.pop(phone, None)
+        raise HTTPException(status_code=400, detail="验证码已过期，请重新获取")
+
+    if entry["attempts_left"] <= 0:
+        _phone_code_cache.pop(phone, None)
+        raise HTTPException(status_code=400, detail="验证码尝试次数过多，请重新获取")
+
+    if not verify_password(req.code.strip(), entry["code_hash"]):
+        entry["attempts_left"] -= 1
+        if entry["attempts_left"] <= 0:
+            _phone_code_cache.pop(phone, None)
+        raise HTTPException(status_code=400, detail="验证码错误")
+
+    _phone_code_cache.pop(phone, None)
+
+    result = await db.execute(select(User).where(User.phone == phone))
     user = result.scalar_one_or_none()
     if not user:
         user = User(
-            email=f"phone_{req.phone}@qinjian.local",
-            phone=req.phone,
-            nickname=f"手机用户{req.phone[-4:]}",
-            password_hash=hash_password(req.phone),
+            email=f"phone_{phone}@qinjian.local",
+            phone=phone,
+            nickname=f"手机用户{phone[-4:]}",
+            password_hash=hash_password(secrets.token_urlsafe(32)),
         )
         db.add(user)
         await db.flush()

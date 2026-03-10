@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, validate_pair_access
 from app.models import (
     User, Pair, PairStatus, Checkin, RelationshipTask, TaskStatus,
 )
@@ -32,11 +32,7 @@ async def get_daily_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """获取今日个性化关系任务（基于依恋类型组合）"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权访问该配对")
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
     if not pair.user_b_id:
         raise HTTPException(status_code=400, detail="配对尚未完成")
 
@@ -125,11 +121,7 @@ async def get_attachment_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     """获取双方依恋类型分析结果"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权访问")
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     return {
         "pair_id": pair_id,
@@ -152,9 +144,7 @@ async def trigger_attachment_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     """触发依恋类型分析（需至少7天打卡数据）"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
     if not pair.user_b_id:
         raise HTTPException(status_code=400, detail="配对尚未完成")
 

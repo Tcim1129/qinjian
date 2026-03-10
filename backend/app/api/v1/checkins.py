@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, Checkin, Report, PairStatus, ReportType, ReportStatus
 from app.schemas import CheckinRequest, CheckinResponse
 from app.ai import analyze_sentiment
@@ -185,6 +185,8 @@ async def get_today_status(
     if not pair_id:
         raise HTTPException(status_code=422, detail="缺少配对ID")
 
+    await validate_pair_access(pair_id, user, db, require_active=True)
+
     result = await db.execute(
         select(Checkin).where(Checkin.pair_id == pair_id, Checkin.checkin_date == today)
     )
@@ -253,6 +255,8 @@ async def get_checkin_history(
     if not pair_id:
         raise HTTPException(status_code=422, detail="缺少配对ID")
 
+    await validate_pair_access(pair_id, user, db, require_active=True)
+
     result = await db.execute(
         select(Checkin)
         .where(Checkin.pair_id == pair_id, Checkin.user_id == user.id)
@@ -282,6 +286,7 @@ async def get_checkin_streak(
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
+        await validate_pair_access(pair_id, user, db, require_active=True)
         result = await db.execute(
             select(Checkin.checkin_date)
             .where(Checkin.pair_id == pair_id, Checkin.user_id == user.id)

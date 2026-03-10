@@ -6,7 +6,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, PairStatus, LongDistanceActivity, Checkin, Report
 from sqlalchemy import func
 
@@ -23,11 +23,7 @@ async def create_activity(
     db: AsyncSession = Depends(get_db),
 ):
     """创建异地互动活动"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权操作")
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     ACTIVITY_TITLES = {
         "movie": "一起看电影 🎬",
@@ -63,11 +59,7 @@ async def get_activities(
     db: AsyncSession = Depends(get_db),
 ):
     """获取异地互动活动列表"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权访问")
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     result = await db.execute(
         select(LongDistanceActivity)
@@ -101,6 +93,8 @@ async def complete_activity(
     if not activity:
         raise HTTPException(status_code=404, detail="活动不存在")
 
+    await validate_pair_access(str(activity.pair_id), user, db, require_active=True)
+
     activity.status = "completed"
     activity.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     return {"message": "活动完成 🎉", "status": "completed"}
@@ -113,9 +107,7 @@ async def get_health_index(
     db: AsyncSession = Depends(get_db),
 ):
     """异地关系健康指数（聚焦沟通及时性和情感表达频率）"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     # 近14天打卡数据
     from datetime import date, timedelta

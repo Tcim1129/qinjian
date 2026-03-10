@@ -101,21 +101,24 @@ Page({
         ? list.find(p => (p.id || p.pair_id) === currentId)
         : null
       pairInfo = currentMatch || list.find(p => p.status === 'active') || list[0] || null
-      if (pairInfo) {
-        app.setPairInfo(pairInfo)
-      }
+      app.setPairInfo(pairInfo)
     } catch (e) {
       console.warn('首页拉取配对信息失败', e)
     }
     const pairId = pairInfo ? (pairInfo.id || pairInfo.pair_id) : null
 
     const displayName = pairInfo && (pairInfo.partner_nickname || pairInfo.partner_name || pairInfo.partnerNickname)
-    this.setData({ pairInfo, pairDisplayName: displayName || '伴侣' })
+    this.setData({
+      pairInfo,
+      pairDisplayName: displayName || '伴侣',
+      crisisStatus: pairId ? this.data.crisisStatus : null,
+      hasCrisis: pairId ? this.data.hasCrisis : false
+    })
 
     const tasks = [
-      this.loadTodayCheckin(),
-      this.loadStreak(),
-      this.loadTreeStatus()
+      this.loadTodayCheckin(pairId),
+      this.loadStreak(pairId),
+      this.loadTreeStatus(pairId)
     ]
     if (pairId) {
       tasks.push(this.loadCrisisStatus(pairId))
@@ -133,9 +136,9 @@ Page({
   /**
    * 获取今日打卡记录
    */
-  async loadTodayCheckin() {
-    const pairId = auth.getPairId()
-    const url = pairId ? `/checkins/today?pair_id=${pairId}` : '/checkins/today?mode=solo'
+  async loadTodayCheckin(pairId = null) {
+    const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
+    const url = resolvedPairId ? `/checkins/today?pair_id=${resolvedPairId}` : '/checkins/today?mode=solo'
     try {
       const res = await api.get(url)
       const myDone = res && res.my_done
@@ -152,9 +155,9 @@ Page({
     }
   },
 
-  async loadStreak() {
-    const pairId = auth.getPairId()
-    const url = pairId ? `/checkins/streak?pair_id=${pairId}` : '/checkins/streak?mode=solo'
+  async loadStreak(pairId = null) {
+    const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
+    const url = resolvedPairId ? `/checkins/streak?pair_id=${resolvedPairId}` : '/checkins/streak?mode=solo'
     try {
       const res = await api.get(url)
       this.setData({ streak: res.streak || 0 })
@@ -163,16 +166,22 @@ Page({
     }
   },
 
-  async loadTreeStatus() {
-    const pairId = auth.getPairId()
-    if (!pairId) {
+  async loadTreeStatus(pairId = null) {
+    const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
+    if (!resolvedPairId) {
       this.setData({ treeStatus: null })
       return
     }
     try {
-      const res = await api.get(`/tree/status?pair_id=${pairId}`)
+      const res = await api.get(`/tree/status?pair_id=${resolvedPairId}`)
       this.setData({ treeStatus: res })
     } catch (e) {
+      if (e.code === 403 || e.code === 404) {
+        const app = getApp()
+        app.setPairInfo(null)
+        this.setData({ pairInfo: null, pairDisplayName: '伴侣', treeStatus: null })
+        return
+      }
       console.error('获取关系树状态失败:', e)
     }
   },
@@ -189,6 +198,12 @@ Page({
         hasCrisis: res && res.crisis_level && res.crisis_level !== 'none'
       })
     } catch (e) {
+      if (e.code === 403 || e.code === 404) {
+        const app = getApp()
+        app.setPairInfo(null)
+        this.setData({ pairInfo: null, pairDisplayName: '伴侣', crisisStatus: null, hasCrisis: false })
+        return
+      }
       console.error('获取危机状态失败:', e)
     }
   },

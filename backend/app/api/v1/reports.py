@@ -22,6 +22,24 @@ router = APIRouter(prefix="/reports", tags=["报告"])
 logger = logging.getLogger(__name__)
 
 
+async def _get_authorized_pair(
+    db: AsyncSession,
+    pair_id: str,
+    user: User,
+    *,
+    require_active: bool,
+) -> Pair:
+    result = await db.execute(select(Pair).where(Pair.id == pair_id))
+    pair = result.scalar_one_or_none()
+    if not pair:
+        raise HTTPException(status_code=404, detail="配对不存在")
+    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
+        raise HTTPException(status_code=403, detail="无权访问该配对数据")
+    if require_active and pair.status != PairStatus.ACTIVE:
+        raise HTTPException(status_code=404, detail="配对不存在或未激活")
+    return pair
+
+
 async def _process_daily_report(
     report_id: uuid.UUID, pair_id: str, pair_type: str, content_a: str, content_b: str
 ):
@@ -177,18 +195,14 @@ async def trigger_daily_report(
     if not pair_id:
         raise HTTPException(status_code=422, detail="缺少配对ID")
 
+    pair = await _get_authorized_pair(db, pair_id, user, require_active=True)
+
     result = await db.execute(
         select(Checkin).where(Checkin.pair_id == pair_id, Checkin.checkin_date == today)
     )
     checkins = result.scalars().all()
     if len(checkins) < 2:
         raise HTTPException(status_code=400, detail="需要双方都完成打卡后才能生成报告")
-
-    result = await db.execute(select(Pair).where(Pair.id == pair_id))
-    pair = result.scalar_one_or_none()
-    if not pair:
-        raise HTTPException(status_code=404, detail="配对不存在")
-
     result = await db.execute(
         select(Report).where(
             Report.pair_id == pair_id,
@@ -248,10 +262,7 @@ async def trigger_weekly_report(
         raise HTTPException(status_code=422, detail="缺少配对ID")
     week_ago = today - timedelta(days=7)
 
-    result = await db.execute(select(Pair).where(Pair.id == pair_id))
-    pair = result.scalar_one_or_none()
-    if not pair:
-        raise HTTPException(status_code=404, detail="配对不存在")
+    pair = await _get_authorized_pair(db, pair_id, user, require_active=True)
 
     result = await db.execute(
         select(Report).where(
@@ -321,10 +332,7 @@ async def trigger_monthly_report(
         raise HTTPException(status_code=422, detail="缺少配对ID")
     month_ago = today - timedelta(days=30)
 
-    result = await db.execute(select(Pair).where(Pair.id == pair_id))
-    pair = result.scalar_one_or_none()
-    if not pair:
-        raise HTTPException(status_code=404, detail="配对不存在")
+    pair = await _get_authorized_pair(db, pair_id, user, require_active=True)
 
     result = await db.execute(
         select(Report)
@@ -395,6 +403,7 @@ async def get_latest_report(
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
+        await _get_authorized_pair(db, pair_id, user, require_active=False)
         query = select(Report).where(Report.pair_id == pair_id)
         if report_type in ("daily", "weekly", "monthly"):
             query = query.where(Report.type == ReportType(report_type))
@@ -424,6 +433,7 @@ async def get_report_history(
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
+        await _get_authorized_pair(db, pair_id, user, require_active=False)
         query = select(Report).where(
             Report.pair_id == pair_id, Report.status == ReportStatus.COMPLETED
         )
@@ -460,6 +470,7 @@ async def get_health_trend(
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
+        await _get_authorized_pair(db, pair_id, user, require_active=False)
         result = await db.execute(
             select(Report.report_date, Report.health_score)
             .where(

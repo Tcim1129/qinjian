@@ -6,7 +6,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, validate_pair_access
 from app.models import (
     User,
     Pair,
@@ -30,19 +30,6 @@ from app.schemas import (
 router = APIRouter(prefix="/crisis", tags=["危机预警"])
 
 
-# ── 辅助函数 ──
-
-
-async def _validate_pair_access(pair_id: str, user: User, db: AsyncSession) -> Pair:
-    """验证用户属于该配对，返回 Pair 对象"""
-    pair = await db.get(Pair, pair_id)
-    if not pair or pair.status != PairStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="配对不存在或未激活")
-    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权访问该配对")
-    return pair
-
-
 # ── 危机状态 ──
 
 
@@ -53,7 +40,7 @@ async def get_crisis_status(
     db: AsyncSession = Depends(get_db),
 ):
     """获取当前危机等级 — 优先从 CrisisAlert 表读取，回退到 Report.content"""
-    await _validate_pair_access(pair_id, user, db)
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     # 优先查 CrisisAlert 表（active 状态）
     result = await db.execute(
@@ -127,7 +114,7 @@ async def get_crisis_history(
     db: AsyncSession = Depends(get_db),
 ):
     """获取危机等级历史趋势 — 合并 CrisisAlert 记录 + Report.content"""
-    await _validate_pair_access(pair_id, user, db)
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     history = []
 
@@ -207,7 +194,7 @@ async def get_crisis_alerts(
     db: AsyncSession = Depends(get_db),
 ):
     """获取预警记录列表（可按状态筛选）"""
-    await _validate_pair_access(pair_id, user, db)
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     query = select(CrisisAlert).where(CrisisAlert.pair_id == pair_id)
     if status:
@@ -237,9 +224,7 @@ async def acknowledge_alert(
         raise HTTPException(status_code=404, detail="预警记录不存在")
 
     # 验证权限
-    pair = await db.get(Pair, alert.pair_id)
-    if not pair or str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权操作")
+    await validate_pair_access(str(alert.pair_id), user, db, require_active=True)
 
     if alert.status not in (CrisisAlertStatus.ACTIVE,):
         raise HTTPException(status_code=400, detail="该预警已处理")
@@ -264,9 +249,7 @@ async def resolve_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="预警记录不存在")
 
-    pair = await db.get(Pair, alert.pair_id)
-    if not pair or str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权操作")
+    await validate_pair_access(str(alert.pair_id), user, db, require_active=True)
 
     if alert.status == CrisisAlertStatus.RESOLVED:
         raise HTTPException(status_code=400, detail="该预警已解决")
@@ -291,9 +274,7 @@ async def escalate_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="预警记录不存在")
 
-    pair = await db.get(Pair, alert.pair_id)
-    if not pair or str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
-        raise HTTPException(status_code=403, detail="无权操作")
+    await validate_pair_access(str(alert.pair_id), user, db, require_active=True)
 
     alert.status = CrisisAlertStatus.ESCALATED
     alert.resolve_note = (

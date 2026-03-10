@@ -48,7 +48,7 @@ sudo bash deploy.sh
 
 ### 完成！🎉
 
-- 访问 `https://你的域名` 即可看到亲健登录页
+- 访问 `https://你的域名` 即可进入亲健 Web 关系健康工作台
 - API 文档在 `https://你的域名/api/health`
 
 ---
@@ -77,9 +77,14 @@ cd web
 
 ## 技术栈
 
+当前 Web 登录页已支持两种认证方式：
+
+- 邮箱注册 / 登录
+- 手机号验证码登录（未注册手机号首次登录时自动创建账号）
+
 | 层 | 技术 |
 |---|------|
-| 前端 | HTML / CSS / JS（Web 原型） |
+| 前端 | HTML / CSS / JS（移动端优先 Web 工作台） |
 | 后端 | Python FastAPI + PostgreSQL |
 | AI | 硅基流动 API（DeepSeek-V3 + Kimi K2.5 多模态） |
 | 部署 | Docker Compose + Nginx + Cloudflare |

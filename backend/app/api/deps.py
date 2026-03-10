@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
-from app.models import User
+from app.models import User, Pair, PairStatus
 
 security_scheme = HTTPBearer()
 
@@ -23,3 +23,22 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
     return user
+
+
+async def validate_pair_access(
+    pair_id: str,
+    user: User,
+    db: AsyncSession,
+    *,
+    require_active: bool = True,
+) -> Pair:
+    """验证当前用户是否属于指定配对。"""
+    result = await db.execute(select(Pair).where(Pair.id == pair_id))
+    pair = result.scalar_one_or_none()
+    if not pair:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="配对不存在")
+    if require_active and pair.status != PairStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="配对不存在或未激活")
+    if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该配对")
+    return pair

@@ -56,17 +56,24 @@ App({
   setLoginState(token, userInfo) {
     this.globalData.token = token
     this.globalData.userInfo = userInfo
+    this.globalData.pairInfo = null
     this.globalData.isLoggedIn = true
     wx.setStorageSync('token', token)
     wx.setStorageSync('userInfo', userInfo)
+    wx.removeStorageSync('pairInfo')
   },
 
   /**
    * 设置配对信息
    */
   setPairInfo(pairInfo) {
-    this.globalData.pairInfo = pairInfo
-    wx.setStorageSync('pairInfo', pairInfo)
+    this.globalData.pairInfo = pairInfo || null
+    if (pairInfo) {
+      wx.setStorageSync('pairInfo', pairInfo)
+      return
+    }
+
+    wx.removeStorageSync('pairInfo')
   },
 
   /**

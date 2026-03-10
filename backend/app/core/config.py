@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7天
+    PHONE_CODE_EXPIRE_MINUTES: int = 5
+    PHONE_CODE_RESEND_COOLDOWN_SECONDS: int = 60
+    PHONE_CODE_MAX_ATTEMPTS: int = 5
+    PHONE_CODE_LENGTH: int = 6
+    PHONE_CODE_DEBUG_RETURN: bool = False
 
     # 数据库
     DATABASE_URL: str = "postgresql+asyncpg://qinjian:qinjian@localhost:5432/qinjian"

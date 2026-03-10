@@ -1,9 +1,10 @@
-/**
- * 亲健 API 客户端 (Phase 4 增强：危机预警 + 任务)
- */
-const API_BASE = window.location.hostname === 'localhost'
-    ? 'http://localhost:8000/api/v1'
-    : '/api/v1';
+const API_ROOT = (() => {
+    if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
+        return 'http://localhost:8000/api/v1';
+    }
+
+    return '/api/v1';
+})();
 
 class ApiClient {
     constructor() {
@@ -11,70 +12,108 @@ class ApiClient {
     }
 
     setToken(token) {
-        this.token = token;
-        localStorage.setItem('qj_token', token);
-    }
+        this.token = token || '';
 
-    clearToken() {
-        this.token = '';
+        if (this.token) {
+            localStorage.setItem('qj_token', this.token);
+            return;
+        }
+
         localStorage.removeItem('qj_token');
     }
 
+    clearToken() {
+        this.setToken('');
+    }
+
     isLoggedIn() {
-        return !!this.token;
+        return Boolean(this.token);
     }
 
     async request(method, path, body = null) {
-        const headers = { 'Content-Type': 'application/json' };
+        const headers = {};
+        const options = { method, headers };
+
         if (this.token) {
-            headers['Authorization'] = `Bearer ${this.token}`;
+            headers.Authorization = `Bearer ${this.token}`;
         }
 
-        const opts = { method, headers };
-        if (body) opts.body = JSON.stringify(body);
-
-        const res = await fetch(`${API_BASE}${path}`, opts);
-        const data = await res.json();
-
-        if (!res.ok) {
-            throw new Error(data.detail || '请求失败');
+        if (body !== null && body !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(body);
         }
-        return data;
+
+        let response;
+        try {
+            response = await fetch(`${API_ROOT}${path}`, options);
+        } catch (error) {
+            throw new Error('无法连接后端服务');
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        const isJson = contentType.includes('application/json');
+        const payload = isJson ? await response.json() : await response.text();
+
+        if (!response.ok) {
+            if (typeof payload === 'string') {
+                throw new Error(payload || '请求失败');
+            }
+
+            throw new Error(payload.detail || payload.message || '请求失败');
+        }
+
+        return payload;
     }
 
-    // ── 文件上传 ──
     async uploadFile(type, file) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const res = await fetch(`${API_BASE}/upload/${type}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${this.token}` },
-            body: formData,
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || '上传失败');
-        return data;
-    }
+        let response;
+        try {
+            response = await fetch(`${API_ROOT}/upload/${type}`, {
+                method: 'POST',
+                headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+                body: formData,
+            });
+        } catch (error) {
+            throw new Error('上传失败，请检查网络连接');
+        }
 
-    // ── 认证 ──
-    async register(email, nickname, password) {
-        const data = await this.request('POST', '/auth/register', { email, nickname, password });
-        this.setToken(data.access_token);
-        return data;
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.detail || payload.message || '上传失败');
+        }
+
+        return payload;
     }
 
     async login(email, password) {
-        const data = await this.request('POST', '/auth/login', { email, password });
-        this.setToken(data.access_token);
-        return data;
+        const payload = await this.request('POST', '/auth/login', { email, password });
+        this.setToken(payload.access_token);
+        return payload;
     }
 
-    logout() {
-        this.clearToken();
+    async register(email, nickname, password) {
+        const payload = await this.request('POST', '/auth/register', { email, nickname, password });
+        this.setToken(payload.access_token);
+        return payload;
     }
 
-    // ── 配对 ──
+    async sendPhoneCode(phone) {
+        return this.request('POST', '/auth/phone/send-code', { phone });
+    }
+
+    async phoneLogin(phone, code) {
+        const payload = await this.request('POST', '/auth/phone/login', { phone, code });
+        this.setToken(payload.access_token);
+        return payload;
+    }
+
+    async getMe() {
+        return this.request('GET', '/auth/me');
+    }
+
     async createPair(type) {
         return this.request('POST', '/pairs/create', { type });
     }
@@ -83,11 +122,11 @@ class ApiClient {
         return this.request('POST', '/pairs/join', { invite_code: inviteCode });
     }
 
-    async getMyPair() {
-        return this.request('GET', '/pairs/me');
+    async getMyPairs() {
+        const payload = await this.request('GET', '/pairs/me');
+        return Array.isArray(payload) ? payload : [];
     }
 
-    // ── 解绑 ──
     async requestUnbind(pairId) {
         return this.request('POST', `/pairs/request-unbind?pair_id=${pairId}`);
     }
@@ -104,37 +143,32 @@ class ApiClient {
         return this.request('GET', `/pairs/unbind-status?pair_id=${pairId}`);
     }
 
-    // ── 打卡 ──
-    async submitCheckin(pairId, content, moodTags = [], imageUrl = null, voiceUrl = null, moodScore = null, interactionFreq = null, interactionInitiative = null, deepConversation = null, taskCompleted = null) {
-        const body = {
-            pair_id: pairId,
-            content,
-            mood_tags: moodTags.length ? moodTags : null,
-            image_url: imageUrl,
-            voice_url: voiceUrl,
-        };
-        if (moodScore != null) body.mood_score = moodScore;
-        if (interactionFreq != null) body.interaction_freq = interactionFreq;
-        if (interactionInitiative != null) body.interaction_initiative = interactionInitiative;
-        if (deepConversation != null) body.deep_conversation = deepConversation;
-        if (taskCompleted != null) body.task_completed = taskCompleted;
-        return this.request('POST', '/checkins/', body);
+    async updatePartnerNickname(pairId, customNickname) {
+        return this.request('POST', `/pairs/${pairId}/partner-nickname`, { custom_nickname: customNickname });
+    }
+
+    async submitCheckin(pairId, payload) {
+        if (pairId === 'solo') return this.request('POST', '/checkins/?mode=solo', payload);
+        return this.request('POST', '/checkins/', { pair_id: pairId, ...payload });
     }
 
     async getTodayStatus(pairId) {
+        if (pairId === 'solo') return this.request('GET', '/checkins/today?mode=solo');
         return this.request('GET', `/checkins/today?pair_id=${pairId}`);
     }
 
     async getCheckinHistory(pairId, limit = 14) {
+        if (pairId === 'solo') return this.request('GET', `/checkins/history?mode=solo&limit=${limit}`);
         return this.request('GET', `/checkins/history?pair_id=${pairId}&limit=${limit}`);
     }
 
     async getCheckinStreak(pairId) {
+        if (pairId === 'solo') return this.request('GET', '/checkins/streak?mode=solo');
         return this.request('GET', `/checkins/streak?pair_id=${pairId}`);
     }
 
-    // ── 报告 ──
     async generateDailyReport(pairId) {
+        if (pairId === 'solo') return this.request('POST', '/reports/generate-daily?mode=solo');
         return this.request('POST', `/reports/generate-daily?pair_id=${pairId}`);
     }
 
@@ -146,40 +180,42 @@ class ApiClient {
         return this.request('POST', `/reports/generate-monthly?pair_id=${pairId}`);
     }
 
-    async getLatestReport(pairId, type = 'daily') {
-        return this.request('GET', `/reports/latest?pair_id=${pairId}&report_type=${type}`);
+    async getLatestReport(pairId, reportType = 'daily') {
+        if (pairId === 'solo') return this.request('GET', `/reports/latest?mode=solo&report_type=${reportType}`);
+        return this.request('GET', `/reports/latest?pair_id=${pairId}&report_type=${reportType}`);
     }
 
-    async getReportHistory(pairId, type = 'daily', limit = 7) {
-        return this.request('GET', `/reports/history?pair_id=${pairId}&report_type=${type}&limit=${limit}`);
+    async getReportHistory(pairId, reportType = 'daily', limit = 7) {
+        if (pairId === 'solo') return this.request('GET', `/reports/history?mode=solo&report_type=${reportType}&limit=${limit}`);
+        return this.request('GET', `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}`);
     }
 
     async getHealthTrend(pairId, days = 14) {
+        if (pairId === 'solo') return this.request('GET', `/reports/trend?mode=solo&days=${days}`);
         return this.request('GET', `/reports/trend?pair_id=${pairId}&days=${days}`);
     }
 
-    // ── 关系树 ──
     async getTreeStatus(pairId) {
+        if (pairId === 'solo') return { level: 1, exp: 0, next_level_exp: 100, days_to_die: 3, last_watered_at: null };
         return this.request('GET', `/tree/status?pair_id=${pairId}`);
     }
 
     async waterTree(pairId) {
+        if (pairId === 'solo') throw new Error('单身模式不支持关系树浇水');
         return this.request('POST', `/tree/water?pair_id=${pairId}`);
     }
 
-    // ── 危机预警（Phase 4 + 分级系统） ──
     async getCrisisStatus(pairId) {
+        if (pairId === 'solo') return { crisis_level: 'none' };
         return this.request('GET', `/crisis/status/${pairId}`);
     }
 
-    async getCrisisHistory(pairId, limit = 30) {
+    async getCrisisHistory(pairId, limit = 20) {
         return this.request('GET', `/crisis/history/${pairId}?limit=${limit}`);
     }
 
-    async getCrisisAlerts(pairId, status = null, limit = 20) {
-        let path = `/crisis/alerts/${pairId}?limit=${limit}`;
-        if (status) path += `&status=${status}`;
-        return this.request('GET', path);
+    async getCrisisAlerts(pairId, limit = 10) {
+        return this.request('GET', `/crisis/alerts/${pairId}?limit=${limit}`);
     }
 
     async acknowledgeCrisisAlert(alertId) {
@@ -195,11 +231,11 @@ class ApiClient {
     }
 
     async getCrisisResources() {
-        return this.request('GET', `/crisis/resources`);
+        return this.request('GET', '/crisis/resources');
     }
 
-    // ── 关系任务（Phase 4） ──
     async getDailyTasks(pairId) {
+        if (pairId === 'solo') return { tasks: [] };
         return this.request('GET', `/tasks/daily/${pairId}`);
     }
 
@@ -208,50 +244,65 @@ class ApiClient {
     }
 
     async getAttachmentAnalysis(pairId) {
+        if (pairId === 'solo') throw new Error('依恋分析仅支持双人关系');
         return this.request('GET', `/tasks/attachment/${pairId}`);
     }
 
     async triggerAttachmentAnalysis(pairId) {
+        if (pairId === 'solo') throw new Error('依恋分析仅支持双人关系');
         return this.request('POST', `/tasks/attachment/${pairId}/analyze`);
     }
 
-    // ── 异地互动（Phase 4） ──
-    async getLongDistanceDashboard(pairId) {
-        return this.request('GET', `/longdistance/dashboard/${pairId}`);
+    async getLongDistanceHealth(pairId) {
+        return this.request('GET', `/longdistance/health-index/${pairId}`);
     }
 
-    async suggestActivity(pairId) {
-        return this.request('POST', `/longdistance/suggest/${pairId}`);
+    async getLongDistanceActivities(pairId, limit = 20) {
+        return this.request('GET', `/longdistance/activities/${pairId}?limit=${limit}`);
     }
 
-    async completeActivity(activityId) {
-        return this.request('POST', `/longdistance/activity/${activityId}/complete`);
+    async createLongDistanceActivity(pairId, activityType, title = '') {
+        const params = new URLSearchParams({ pair_id: pairId, activity_type: activityType });
+        if (title) {
+            params.set('title', title);
+        }
+
+        return this.request('POST', `/longdistance/activities?${params.toString()}`);
     }
 
-    // ── 里程碑（Phase 4） ──
+    async completeLongDistanceActivity(activityId) {
+        return this.request('POST', `/longdistance/activities/${activityId}/complete`);
+    }
+
     async getMilestones(pairId) {
         return this.request('GET', `/milestones/${pairId}`);
     }
 
-    async createMilestone(pairId, data) {
-        return this.request('POST', `/milestones/${pairId}`, data);
+    async createMilestone(pairId, milestoneType, title, milestoneDate) {
+        const params = new URLSearchParams({
+            pair_id: pairId,
+            milestone_type: milestoneType,
+            title,
+            milestone_date: milestoneDate,
+        });
+
+        return this.request('POST', `/milestones/?${params.toString()}`);
     }
 
-    async getMilestoneReport(milestoneId) {
-        return this.request('GET', `/milestones/${milestoneId}/report`);
+    async generateMilestoneReview(milestoneId) {
+        return this.request('POST', `/milestones/${milestoneId}/generate-review`);
     }
 
-    // ── 社群（Phase 4） ──
-    async getCommunityTips(pairType) {
-        return this.request('GET', `/community/tips?pair_type=${pairType || 'couple'}`);
+    async getCommunityTips(pairType = 'couple') {
+        return this.request('GET', `/community/tips?pair_type=${pairType}`);
     }
 
-    async generateTip(pairType) {
-        return this.request('POST', `/community/tips/generate?pair_type=${pairType || 'couple'}`);
+    async generateTip(pairType = 'couple') {
+        return this.request('POST', `/community/tips/generate?pair_type=${pairType}`);
     }
 
-    async getNotifications() {
-        return this.request('GET', '/community/notifications');
+    async getNotifications(limit = 20) {
+        return this.request('GET', `/community/notifications?limit=${limit}`);
     }
 
     async markNotificationsRead() {
@@ -259,4 +310,5 @@ class ApiClient {
     }
 }
 
-const api = new ApiClient();
+window.API_ROOT = API_ROOT;
+window.api = new ApiClient();

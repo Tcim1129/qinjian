@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, validate_pair_access
 from app.models import (
     User,
     Pair,
@@ -58,12 +58,7 @@ async def get_tree_status(
     db: AsyncSession = Depends(get_db),
 ):
     """获取关系树当前状态"""
-    result = await db.execute(
-        select(Pair).where(Pair.id == pair_id, Pair.status == PairStatus.ACTIVE)
-    )
-    pair = result.scalar_one_or_none()
-    if not pair or (pair.user_a_id != user.id and pair.user_b_id != user.id):
-        raise HTTPException(status_code=403, detail="无权访问")
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     tree = await _get_or_create_tree(pair_id, db)
 
@@ -98,12 +93,7 @@ async def water_tree(
     db: AsyncSession = Depends(get_db),
 ):
     """手动浇水（每日限一次，+5 成长值）"""
-    result = await db.execute(
-        select(Pair).where(Pair.id == pair_id, Pair.status == PairStatus.ACTIVE)
-    )
-    pair = result.scalar_one_or_none()
-    if not pair or (pair.user_a_id != user.id and pair.user_b_id != user.id):
-        raise HTTPException(status_code=403, detail="无权操作")
+    await validate_pair_access(pair_id, user, db, require_active=True)
 
     tree = await _get_or_create_tree(pair_id, db)
 

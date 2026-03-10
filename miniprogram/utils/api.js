@@ -13,6 +13,10 @@ function getGlobalData() {
   return app ? app.globalData : {}
 }
 
+function isAuthEndpoint(url) {
+  return url === '/auth/login' || url === '/auth/phone/login' || url === '/auth/register'
+}
+
 /**
  * 处理 401 未授权响应
  * 清除登录态并跳转到登录页
@@ -63,7 +67,7 @@ function request(url, method, data) {
       data,
       header,
       success(res) {
-        if (res.statusCode === 401) {
+        if (res.statusCode === 401 && !isAuthEndpoint(url)) {
           handleUnauthorized()
           reject({ code: 401, message: '登录已过期，请重新登录' })
           return
@@ -150,7 +154,7 @@ function upload(url, filePath, formData) {
       header,
       formData: formData || {},
       success(res) {
-        if (res.statusCode === 401) {
+        if (res.statusCode === 401 && !isAuthEndpoint(url)) {
           handleUnauthorized()
           reject({ code: 401, message: '登录已过期，请重新登录' })
           return

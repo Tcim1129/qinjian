@@ -204,9 +204,7 @@ async def generate_weekly_report(pair_type: str, daily_reports: list[dict]) -> d
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
     ]
-    result = await chat_completion(
-        settings.AI_MULTIMODAL_MODEL, messages, temperature=0.5
-    )
+    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.5)
     return _parse_ai_json(
         result,
         {
@@ -236,9 +234,7 @@ async def generate_monthly_report(pair_type: str, weekly_reports: list[dict]) ->
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
     ]
-    result = await chat_completion(
-        settings.AI_MULTIMODAL_MODEL, messages, temperature=0.5
-    )
+    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.5)
     return _parse_ai_json(
         result,
         {

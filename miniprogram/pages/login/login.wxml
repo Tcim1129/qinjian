@@ -74,11 +74,11 @@
       <view class="flex-between mt-md mb-md">
         <view class="checkbox-wrap" bindtap="toggleRememberMe">
           <text class="checkbox {{rememberMe ? 'checked' : ''}}">{{rememberMe ? '☑' : '☐'}}</text>
-          <text class="checkbox-label">记住密码</text>
+          <text class="checkbox-label">记住账号</text>
         </view>
         <view class="auto-login-wrap" bindtap="toggleAutoLogin">
           <text class="checkbox {{autoLogin ? 'checked' : ''}}">{{autoLogin ? '☑' : '☐'}}</text>
-          <text class="checkbox-label">自动登录</text>
+          <text class="checkbox-label">自动进入</text>
         </view>
       </view>
 

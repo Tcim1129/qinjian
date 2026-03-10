@@ -1,2077 +1,1912 @@
-/**
- * 亲健 · Web 原型主逻辑 (Phase 2 增强 + Phase 1.4 设计重构)
- * ──────────────────────────────────────────────────
- * 变更说明:
- *   - modal 使用 .active 类切换 (1.4a)
- *   - 所有 style.display 切换改为 .hidden 类 (1.4b)
- *   - .mood-tag 选择器 → .tag[data-mood] (1.4c)
- *   - 旧 CSS 变量名全部替换为新设计系统变量 (1.4d)
- *   - 所有 render 函数的 inline style / emoji 替换为 CSS 类 + SVG 图标 (1.4e-n)
- */
-
-// ── 状态管理 ──
 const state = {
     currentPage: 'auth',
-    pairs: [],           // 所有配对列表
-    currentPair: null,   // 当前选中的配对
-    todayStatus: null,
-    latestReport: null,
+    authMode: 'login',
+    authMethod: 'email',
+    me: null,
+    pairs: [],
+    currentPair: null,
+    profileFeedback: null,
+    selectedPairType: 'couple',
+    selectedReportType: 'daily',
     selectedMoods: [],
     uploadedImageUrl: null,
     uploadedVoiceUrl: null,
-    pairPollingTimer: null,
+    todayStatus: null,
+    notifications: [],
+    homeSnapshot: null,
+    phoneCodeCooldown: 0,
 };
 
-// ── 工具函数：显示/隐藏元素 ──
-function show(el) {
-    if (el) el.classList.remove('hidden');
-}
-function hide(el) {
-    if (el) el.classList.add('hidden');
+const DEMO = {
+    me: { nickname: '演示用户', email: 'demo@qinjian.local' },
+    pair: { id: 'demo-pair', type: 'couple', partner_nickname: '演示伴侣', status: 'active', invite_code: '381624' },
+    todayStatus: { my_done: true, partner_done: false, both_done: false, has_report: false, has_solo_report: true },
+    streak: { streak: 12 },
+    tree: { level_name: '小树', growth_points: 368, progress_percent: 72, can_water: true },
+    crisis: { crisis_level: 'mild', health_score: 68, intervention: { title: '建议今天安排一次不被打断的 20 分钟对话', description: '重点不是解决问题，而是先对齐彼此的感受。', action_items: ['先说事实，不先下判断', '轮流说完再回应', '结束前给出一个可执行小动作'] } },
+    tasks: {
+        attachment_a: 'secure', attachment_b: 'anxious', tasks: [
+            { id: 'demo-task-1', title: '今天说一次具体的感谢', description: '不要泛泛而谈，指出一个具体瞬间。', category: 'communication', status: 'pending' },
+            { id: 'demo-task-2', title: '安排 15 分钟无手机聊天', description: '只聊今天的情绪和真实感受。', category: 'activity', status: 'completed' },
+        ], combination_insight: '一方更稳定，一方更需要回应时，最有效的是“及时确认”而不是“讲道理”。'
+    },
+    tips: {
+        tips: [
+            { title: '今天的经营提示', content: '当对方表达情绪时，先复述感受，再给建议。先被理解，才会愿意继续沟通。' },
+            { title: '小动作比大承诺更值钱', content: '关系改善最怕只在情绪高点说漂亮话，最有用的是每天一个真实的小动作。' },
+        ]
+    },
+    report: {
+        daily: {
+            status: 'completed',
+            report_date: '2026-03-06',
+            content: {
+                health_score: 74,
+                insight: '今天的关系状态并不差，但存在轻微节奏错位：你更愿意表达，对方更倾向于延后回应。',
+                suggestion: '今晚不讨论对错，只同步各自今天最在意的一件事。',
+                highlights: ['你们都保持了联系，没有完全回避', '冲突强度可控，仍有修复空间'],
+                concerns: ['回应时机不一致，容易被解读为忽视'],
+            },
+        },
+        weekly: {
+            status: 'completed',
+            report_date: '2026-03-06',
+            content: {
+                overall_health_score: 76,
+                trend_description: '过去一周整体稳定，情绪波动主要集中在沟通延迟。',
+                encouragement: '稳定关系的关键不是没有摩擦，而是出现摩擦后还能回到连接。',
+                weekly_highlights: ['连续 5 天保持互动', '冲突后的恢复速度变快'],
+                action_plan: ['建立固定的晚间同步时间', '减少“你总是”式表达'],
+            },
+        },
+        monthly: {
+            status: 'completed',
+            report_date: '2026-03-06',
+            content: {
+                overall_health_score: 79,
+                executive_summary: '这段关系具备稳定基础，主要提升空间在沟通效率和需求表达的清晰度。',
+                strengths: ['持续记录习惯正在形成', '遇到问题仍愿意继续交流'],
+                growth_areas: ['边界表达还不够具体', '对“被理解”的期待高于实际回应能力'],
+                next_month_goals: ['每周一次长对话', '建立冲突暂停机制'],
+            },
+        },
+    },
+    history: [
+        { report_date: '2026-03-06', status: 'completed' },
+        { report_date: '2026-03-05', status: 'completed' },
+        { report_date: '2026-03-04', status: 'completed' },
+    ],
+    trend: {
+        trend: [
+            { date: '2026-02-28', score: 61 },
+            { date: '2026-03-01', score: 63 },
+            { date: '2026-03-02', score: 66 },
+            { date: '2026-03-03', score: 67 },
+            { date: '2026-03-04', score: 69 },
+            { date: '2026-03-05', score: 72 },
+            { date: '2026-03-06', score: 74 },
+        ],
+        direction: 'improving',
+    },
+    notifications: [
+        { id: 'n1', type: 'tip', content: '今天适合做一次低防御沟通。', is_read: false, created_at: '2026-03-06T08:30:00' },
+        { id: 'n2', type: 'task', content: '你们今日任务已生成，建议晚饭后完成。', is_read: true, created_at: '2026-03-06T09:10:00' },
+    ],
+    longdistance: {
+        health_index: 71.5,
+        communication_timeliness: 64,
+        expression_frequency: 78,
+        deep_conversation_rate: 69,
+        overlap_days: 8,
+        checkin_days_a: 11,
+        checkin_days_b: 9,
+        activities: [
+            { id: 'a1', type: 'movie', title: '周末一起看电影', status: 'pending', created_at: '2026-03-05T18:00:00' },
+            { id: 'a2', type: 'chat', title: '晚间视频深聊', status: 'completed', created_at: '2026-03-03T20:30:00' },
+        ],
+    },
+    milestones: [
+        { id: 'm1', type: 'anniversary', title: '恋爱一周年', date: '2026-03-12', days_until: 6, days_since: 0, reminder_sent: false },
+        { id: 'm2', type: 'custom', title: '第一次一起旅行', date: '2025-11-03', days_until: null, days_since: 123, reminder_sent: true },
+    ],
+    attachment: { pair_id: 'demo-pair', attachment_a: { type: 'secure', label: '安全型' }, attachment_b: { type: 'anxious', label: '焦虑型' }, analyzed_at: '2026-03-05 22:00:00' },
+};
+
+const MOOD_TAGS = ['开心', '平静', '感动', '期待', '焦虑', '委屈', '生气', '疲惫'];
+const TYPE_LABELS = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
+const ATTACHMENT_LABELS = { secure: '安全型', anxious: '焦虑型', avoidant: '回避型', fearful: '恐惧型', unknown: '未分析' };
+const ACTIVITY_LABELS = { movie: '一起看电影', meal: '共享一顿饭', chat: '视频深聊', gift: '寄一份礼物', exercise: '同步运动' };
+const HEALTH_TEST_QUESTIONS = [
+    { q: '你觉得和 TA 的沟通质量如何？', dim: '沟通质量', options: ['非常好', '比较好', '一般', '较差', '很差'] },
+    { q: '你是否经常感受到 TA 的支持？', dim: '情感支持', options: ['总是', '经常', '有时', '偶尔', '从不'] },
+    { q: '你们之间的信任程度如何？', dim: '信任程度', options: ['完全信任', '比较信任', '一般', '较弱', '很弱'] },
+    { q: '你们能否说出自己的真实需求？', dim: '表达能力', options: ['总是可以', '大多可以', '有时可以', '不太可以', '几乎不能'] },
+    { q: '冲突过后你们能修复关系吗？', dim: '修复能力', options: ['很快修复', '大多能修复', '有时能', '很难', '几乎不能'] },
+    { q: '你是否觉得自己被尊重？', dim: '尊重感', options: ['非常强', '比较强', '一般', '较弱', '很弱'] },
+    { q: '你们是否有共同生活目标？', dim: '共同愿景', options: ['非常一致', '比较一致', '一般', '较少一致', '几乎没有'] },
+    { q: '这段关系是否给你带来稳定感？', dim: '安全感', options: ['非常强', '比较强', '一般', '较弱', '很弱'] },
+    { q: '你们相处时是否能感到轻松？', dim: '幸福感', options: ['总是', '经常', '有时', '偶尔', '从不'] },
+    { q: '总体而言，你对这段关系满意吗？', dim: '总体满意', options: ['非常满意', '比较满意', '一般', '不太满意', '很不满意'] },
+];
+
+let healthTestState = { current: 0, answers: [] };
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
-/** 生成内联 SVG 图标引用 */
-function svgIcon(id, cls = '') {
-    const extra = cls ? ` ${cls}` : '';
-    return `<svg class="icon${extra}"><use href="#${id}"/></svg>`;
+function svgIcon(id, className = '') {
+    const extra = className ? ` ${className}` : '';
+    return `<svg class="icon${extra}"><use href="#${id}"></use></svg>`;
 }
 
-// ── 通用模态框 (1.4a) ──
+function showToast(message, duration = 2400) {
+    const toast = $('#toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => toast.classList.remove('show'), duration);
+}
+
 function openModal(html) {
-    const overlay = document.getElementById('modal-overlay');
-    const body = document.getElementById('modal-body');
+    const overlay = $('#modal-overlay');
+    const body = $('#modal-body');
     if (!overlay || !body) return;
     body.innerHTML = html;
-    overlay.classList.add('active');
+    overlay.classList.remove('hidden');
 }
+
 function closeModal() {
-    const overlay = document.getElementById('modal-overlay');
-    if (overlay) overlay.classList.remove('active');
+    $('#modal-overlay')?.classList.add('hidden');
 }
 
-/**
- * 显示带输入框的模态框，返回 Promise<object|null> (1.4l)
- * fields: [{ key, label, type, placeholder, defaultValue }]
- */
-function openInputModal(title, fields) {
-    return new Promise(resolve => {
-        const fieldHtml = fields.map(f => `
-            <div class="form-group">
-                <label class="form-label">${f.label}</label>
-                <input id="modal-input-${f.key}" class="form-input w-full"
-                    type="${f.type || 'text'}"
-                    placeholder="${f.placeholder || ''}"
-                    value="${f.defaultValue || ''}">
-            </div>
-        `).join('');
-        openModal(`
-            <div class="modal-title text-center">${title}</div>
-            ${fieldHtml}
-            <div class="flex gap-2 mt-4">
-                <button class="btn btn-secondary flex-1" onclick="closeModal();window._modalResolve(null)">取消</button>
-                <button class="btn btn-primary flex-1" onclick="
-                    var result = {};
-                    ${fields.map(f => `result['${f.key}'] = document.getElementById('modal-input-${f.key}').value;`).join('')}
-                    closeModal();
-                    window._modalResolve(result);
-                ">确认</button>
-            </div>
-        `);
-        window._modalResolve = resolve;
-        setTimeout(() => {
-            const first = document.getElementById(`modal-input-${fields[0].key}`);
-            if (first) first.focus();
-        }, 100);
-    });
+function isLiveMode() {
+    return api.isLoggedIn() && Boolean(state.currentPair);
 }
 
-// ── 页面路由 ──
-function showPage(pageId) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const page = document.getElementById(`page-${pageId}`);
-    if (page) {
-        page.classList.add('active');
-        state.currentPage = pageId;
-    }
-    document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
-    const tab = document.querySelector(`[data-page="${pageId}"]`);
-    if (tab) tab.classList.add('active');
+function getPairSnapshot() {
+    return state.currentPair || DEMO.pair;
+}
 
-    if (pageId === 'home') loadHome();
-    if (pageId === 'report') loadReports();
-    if (pageId === 'profile') loadProfile();
+function getPartnerDisplayName(pair) {
+    if (!pair) return '关系对象';
+    return pair.custom_partner_nickname || pair.partner_nickname || pair.partner_email || pair.partner_phone || '关系对象';
+}
 
-    // Phase 2 页面加载钩子
-    if (typeof onPageEnter === 'function') onPageEnter(pageId);
+function resolveAssetUrl(path) {
+    if (!path) return '';
+    if (/^https?:\/\//i.test(path)) return path;
+    const origin = window.API_ROOT ? window.API_ROOT.replace(/\/api\/v1$/, '') : window.location.origin;
+    return `${origin}${path}`;
+}
 
-    // B6: 配对等待页面轮询
-    if (pageId === 'pair-waiting') {
-        startPairPolling();
-    } else {
-        stopPairPolling();
+function setCurrentPair(pairId) {
+    const match = state.pairs.find((pair) => pair.id === pairId);
+    if (!match) return;
+    state.currentPair = match;
+    localStorage.setItem('qj_current_pair', pairId);
+}
+
+function upsertPair(updatedPair) {
+    state.pairs = state.pairs.map((pair) => pair.id === updatedPair.id ? updatedPair : pair);
+    if (state.currentPair?.id === updatedPair.id) {
+        state.currentPair = updatedPair;
     }
 }
 
-// ── 配对等待轮询 (B6) ──
-function startPairPolling() {
-    stopPairPolling();
-    state.pairPollingTimer = setInterval(async () => {
-        try {
-            const pairs = await api.getMyPair();
-            const activePairs = (pairs || []).filter(p => p.status === 'active');
-            if (activePairs.length > 0) {
-                stopPairPolling();
-                state.currentPair = activePairs[0];
-                state.currentPairs = pairs;
-                show(document.getElementById('tab-bar'));
-                showPage('home');
-                showToast('对方已加入，配对成功！');
-            }
-        } catch (err) {
-            console.log('轮询配对状态失败:', err.message);
-        }
-    }, 5000);
+function syncTopbar() {
+    const titleMap = {
+        auth: '关系健康工作台',
+        pair: '创建或加入关系',
+        'pair-waiting': '等待对方加入',
+        home: '关系首页',
+        checkin: '每日打卡',
+        discover: '发现与扩展',
+        report: 'AI 报告中心',
+        profile: '账户与设置',
+        milestones: '关系里程碑',
+        longdistance: '异地关系模式',
+        'attachment-test': '依恋分析',
+        'health-test': '关系体检',
+        community: '社群技巧',
+        challenges: '关系挑战',
+        courses: '内容展示',
+        experts: '咨询服务',
+        membership: '会员方案',
+    };
+    $('#topbar-title').textContent = titleMap[state.currentPage] || '关系健康工作台';
+    $('#topbar-demo-badge').textContent = isLiveMode() ? '已连接后端' : '演示态';
 }
-function stopPairPolling() {
-    if (state.pairPollingTimer) {
-        clearInterval(state.pairPollingTimer);
-        state.pairPollingTimer = null;
+
+function syncTabBar() {
+    const visible = api.isLoggedIn() && Boolean(state.currentPair);
+    $('#tab-bar')?.classList.toggle('hidden', !visible);
+}
+
+function syncTabSelection(pageId) {
+    $$('.tab-item').forEach((button) => {
+        button.classList.toggle('tab-item--active', button.dataset.page === pageId);
+    });
+}
+
+async function showPage(pageId) {
+    $$('.page').forEach((page) => page.classList.remove('active'));
+    $(`#page-${pageId}`)?.classList.add('active');
+    state.currentPage = pageId;
+    syncTopbar();
+    syncTabSelection(pageId);
+
+    switch (pageId) {
+        case 'pair':
+            renderPairPage();
+            break;
+        case 'pair-waiting':
+            renderWaitingPage();
+            break;
+        case 'home':
+            await loadHomePage();
+            break;
+        case 'checkin':
+            renderCheckinPage();
+            break;
+        case 'report':
+            await loadReportPage();
+            break;
+        case 'profile':
+            await loadProfilePage();
+            break;
+        case 'milestones':
+            await loadMilestonesPage();
+            break;
+        case 'longdistance':
+            await loadLongDistancePage();
+            break;
+        case 'attachment-test':
+            await loadAttachmentPage();
+            break;
+        case 'health-test':
+            initHealthTest();
+            break;
+        case 'community':
+            await loadCommunityPage();
+            break;
+        case 'challenges':
+            await loadChallengesPage();
+            break;
+        default:
+            break;
     }
 }
 
-// ── Toast ──
-function showToast(msg, duration = 2500) {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), duration);
-}
+async function bootstrapSession() {
+    if (!api.isLoggedIn()) {
+        state.me = null;
+        state.pairs = [];
+        state.currentPair = null;
+        syncTabBar();
+        return false;
+    }
 
-// ── 认证 ──
-function initAuth() {
-    const form = document.getElementById('auth-form');
-    let isLogin = true;
-
-    document.addEventListener('click', (e) => {
-        if (e.target.id === 'auth-toggle-link') {
-            e.preventDefault();
-            isLogin = !isLogin;
-            document.getElementById('auth-title').textContent = isLogin ? '欢迎回来' : '加入亲健';
-            const nicknameGroup = document.getElementById('auth-nickname-group');
-            if (isLogin) { hide(nicknameGroup); } else { show(nicknameGroup); }
-            document.getElementById('auth-submit-btn').textContent = isLogin ? '登录' : '注册';
-            document.getElementById('auth-toggle-text').innerHTML = isLogin
-                ? '还没有账号？<a href="#" id="auth-toggle-link">立即注册</a>'
-                : '已有账号？<a href="#" id="auth-toggle-link">登录</a>';
-        }
-    });
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('auth-email').value.trim();
-        const password = document.getElementById('auth-password').value;
-        const btn = document.getElementById('auth-submit-btn');
-        btn.disabled = true;
-
-        try {
-            if (isLogin) {
-                await api.login(email, password);
-                showToast('登录成功');
-            } else {
-                const nickname = document.getElementById('auth-nickname').value.trim();
-                if (!nickname) { showToast('请输入昵称'); btn.disabled = false; return; }
-                await api.register(email, nickname, password);
-                showToast('注册成功');
-            }
-            await checkPairAndRoute();
-        } catch (err) {
-            showToast(err.message);
-        }
-        btn.disabled = false;
-    });
-}
-
-// ── 路由 ──
-async function checkPairAndRoute() {
     try {
-        const pairs = await api.getMyPair();
-        state.currentPairs = pairs || [];
+        const [me, pairs] = await Promise.all([api.getMe(), api.getMyPairs()]);
+        state.me = me;
+        state.pairs = pairs;
 
-        const activePairs = state.currentPairs.filter(p => p.status === 'active');
-        const pendingPairs = state.currentPairs.filter(p => p.status === 'pending');
+        const storedPairId = localStorage.getItem('qj_current_pair');
+        const activePairs = pairs.filter((pair) => pair.status === 'active');
+        const pendingPairs = pairs.filter((pair) => pair.status === 'pending');
+        state.currentPair = activePairs.find((pair) => pair.id === storedPairId)
+            || pendingPairs.find((pair) => pair.id === storedPairId)
+            || activePairs[0]
+            || pendingPairs[0]
+            || null;
+
+        syncTabBar();
 
         if (activePairs.length > 0) {
-            state.currentPair = activePairs[0];
-            show(document.getElementById('tab-bar'));
-            showPage('home');
-        } else if (pendingPairs.length > 0) {
-            state.currentPair = pendingPairs[0];
-            showPage('pair-waiting');
-            document.getElementById('waiting-invite-code').textContent = state.currentPair.invite_code;
-        } else {
-            showPage('pair');
+            await showPage('home');
+            return true;
         }
-    } catch (err) {
-        console.error('checkPairAndRoute 失败:', err);
-        if (err.message && (err.message.includes('认证') || err.message.includes('401') || err.message.includes('无效'))) {
-            api.clearToken();
-            showPage('auth');
-        } else {
-            showPage('pair');
+
+        if (pendingPairs.length > 0) {
+            await showPage('pair-waiting');
+            return true;
         }
+
+        await showPage('pair');
+        return true;
+    } catch (error) {
+        api.clearToken();
+        state.me = null;
+        state.pairs = [];
+        state.currentPair = null;
+        syncTabBar();
+        showToast(error.message || '登录状态已失效');
+        await showPage('auth');
+        return false;
     }
 }
 
-// ── 配对 ──
-function initPair() {
-    renderExistingPairs();
-
-    document.querySelectorAll('input[name="pair-type"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-            document.querySelectorAll('.pair-type-option').forEach(opt => opt.classList.remove('selected'));
-            radio.closest('.pair-type-option').classList.add('selected');
-        });
-    });
-
-    document.getElementById('pair-create-btn').addEventListener('click', async () => {
-        const type = document.querySelector('input[name="pair-type"]:checked')?.value || 'couple';
-        try {
-            const pair = await api.createPair(type);
-            state.currentPair = pair;
-            showPage('pair-waiting');
-            document.getElementById('waiting-invite-code').textContent = pair.invite_code;
-            showToast('配对已创建，分享邀请码给对方');
-        } catch (err) { showToast(err.message); }
-    });
-
-    document.getElementById('pair-join-btn').addEventListener('click', async () => {
-        const code = document.getElementById('pair-join-code').value.trim();
-        if (!code) { showToast('请输入邀请码'); return; }
-        try {
-            const pair = await api.joinPair(code);
-            state.currentPair = pair;
-            show(document.getElementById('tab-bar'));
-            showPage('home');
-            showToast('配对成功！');
-        } catch (err) { showToast(err.message); }
-    });
+function switchAuthMode(mode) {
+    state.authMode = mode;
+    $('#auth-mode-login').classList.toggle('segmented__item--active', mode === 'login');
+    $('#auth-mode-register').classList.toggle('segmented__item--active', mode === 'register');
+    syncAuthForm();
 }
 
-/** 渲染已有配对列表 (1.4e) */
-function renderExistingPairs() {
-    const existingSection = document.getElementById('existing-pairs');
-    const pairsList = document.getElementById('pairs-list');
-    const createHeader = document.getElementById('pair-create-header');
+function switchAuthMethod(method) {
+    state.authMethod = method;
+    $('#auth-method-email').classList.toggle('segmented__item--active', method === 'email');
+    $('#auth-method-phone').classList.toggle('segmented__item--active', method === 'phone');
+    syncAuthForm();
+}
 
-    if (!existingSection || !pairsList) return;
+function syncAuthForm() {
+    const isEmail = state.authMethod === 'email';
+    const isRegister = state.authMode === 'register';
 
-    const activePairs = state.pairs.filter(p => p.status === 'active');
+    $('#auth-nickname-wrap').classList.toggle('hidden', !isEmail || !isRegister);
+    $('#auth-email-wrap').classList.toggle('hidden', !isEmail);
+    $('#auth-password-wrap').classList.toggle('hidden', !isEmail);
+    $('#auth-phone-wrap').classList.toggle('hidden', isEmail);
+    $('#auth-phone-code-wrap').classList.toggle('hidden', isEmail);
+    $('#auth-phone-note').classList.toggle('hidden', isEmail);
 
-    if (activePairs.length === 0) {
-        hide(existingSection);
-        show(createHeader);
+    $('#auth-email').disabled = !isEmail;
+    $('#auth-password').disabled = !isEmail;
+    $('#auth-phone').disabled = isEmail;
+    $('#auth-phone-code').disabled = isEmail;
+    $('#auth-nickname').disabled = !isEmail || !isRegister;
+
+    $('#auth-email').required = isEmail;
+    $('#auth-password').required = isEmail;
+    $('#auth-phone').required = !isEmail;
+    $('#auth-phone-code').required = !isEmail;
+    $('#auth-nickname').required = isEmail && isRegister;
+
+    $('#auth-submit').textContent = isEmail
+        ? (isRegister ? '创建并进入' : '进入工作台')
+        : '验证码进入';
+}
+
+function validatePhone(phone) {
+    return /^1\d{10}$/.test(phone);
+}
+
+function updateSendCodeButton() {
+    const button = $('#auth-send-code');
+    if (!button) return;
+    if (state.phoneCodeCooldown > 0) {
+        button.disabled = true;
+        button.textContent = `${state.phoneCodeCooldown}s 后重试`;
         return;
     }
 
-    show(existingSection);
-    hide(createHeader);
+    button.disabled = false;
+    button.textContent = '获取验证码';
+}
 
-    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
-    const typeIcons = { couple: 'i-couple', spouse: 'i-ring', bestfriend: 'i-fist-bump', parent: 'i-baby' };
+function startPhoneCodeCooldown(seconds = 60) {
+    clearInterval(startPhoneCodeCooldown.timer);
+    state.phoneCodeCooldown = seconds;
+    updateSendCodeButton();
+    startPhoneCodeCooldown.timer = window.setInterval(() => {
+        state.phoneCodeCooldown = Math.max(0, state.phoneCodeCooldown - 1);
+        updateSendCodeButton();
+        if (state.phoneCodeCooldown === 0) {
+            clearInterval(startPhoneCodeCooldown.timer);
+        }
+    }, 1000);
+}
 
-    pairsList.innerHTML = activePairs.map(p => `
-        <div class="option-card mb-2 cursor-pointer" onclick="switchPair('${p.id}')">
-            <div class="option-card__icon">
-                ${svgIcon(typeIcons[p.type] || 'i-couple')}
-            </div>
-            <span class="option-card__label">${typeMap[p.type] || p.type}</span>
-            <span class="text-xs text-muted ml-auto">${p.id === state.currentPair?.id ? '当前' : '切换 →'}</span>
+async function handleSendPhoneCode() {
+    const phone = $('#auth-phone').value.trim();
+    if (!validatePhone(phone)) {
+        showToast('请输入正确的 11 位手机号');
+        return;
+    }
+
+    try {
+        const payload = await api.sendPhoneCode(phone);
+        startPhoneCodeCooldown(60);
+        showToast(payload.debug_code ? `验证码已发送：${payload.debug_code}` : '验证码已发送');
+    } catch (error) {
+        const message = error.message || '发送失败';
+        const match = String(message).match(/(\d+)\s*秒/);
+        if (match) {
+            startPhoneCodeCooldown(Number(match[1]));
+        }
+        showToast(message);
+    }
+}
+
+async function handleAuthSubmit(event) {
+    event.preventDefault();
+    const email = $('#auth-email').value.trim();
+    const password = $('#auth-password').value;
+    const nickname = $('#auth-nickname').value.trim();
+    const phone = $('#auth-phone').value.trim();
+    const phoneCode = $('#auth-phone-code').value.trim();
+    const submit = $('#auth-submit');
+
+    if (state.authMethod === 'phone') {
+        if (!validatePhone(phone)) {
+            showToast('请输入正确的 11 位手机号');
+            return;
+        }
+
+        if (!/^\d{6}$/.test(phoneCode)) {
+            showToast('请输入 6 位验证码');
+            return;
+        }
+
+        submit.disabled = true;
+        submit.textContent = '登录中...';
+
+        try {
+            await api.phoneLogin(phone, phoneCode);
+            showToast('登录成功');
+            await bootstrapSession();
+        } catch (error) {
+            showToast(error.message || '提交失败');
+        } finally {
+            submit.disabled = false;
+            syncAuthForm();
+        }
+        return;
+    }
+
+    if (!email || !password) {
+        showToast('请填写邮箱和密码');
+        return;
+    }
+
+    if (state.authMode === 'register' && !nickname) {
+        showToast('注册时请填写昵称');
+        return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = state.authMode === 'login' ? '登录中...' : '注册中...';
+
+    try {
+        if (state.authMode === 'login') {
+            await api.login(email, password);
+            showToast('登录成功');
+        } else {
+            await api.register(email, nickname, password);
+            showToast('注册成功');
+        }
+
+        await bootstrapSession();
+    } catch (error) {
+        if (state.authMode === 'login' && String(error.message || '').includes('尚未注册')) {
+            showToast('这个邮箱还没注册，请先注册新账号');
+        } else if (state.authMode === 'login' && String(error.message || '').includes('密码错误')) {
+            showToast('密码错误，请重新输入');
+        } else {
+            showToast(error.message || '提交失败');
+        }
+    } finally {
+        submit.disabled = false;
+        submit.textContent = state.authMode === 'login' ? '进入工作台' : '创建并进入';
+    }
+}
+
+function renderPairPage() {
+    const list = $('#pair-existing-list');
+    const activePairs = state.pairs.filter((pair) => pair.status === 'active');
+    const pendingPairs = state.pairs.filter((pair) => pair.status === 'pending');
+    const allPairs = [...activePairs, ...pendingPairs];
+
+    if (!allPairs.length) {
+        list.innerHTML = '<div class="empty-state">你还没有建立任何关系。这里会显示你已经创建或加入的配对。</div>';
+        return;
+    }
+
+    list.innerHTML = allPairs.map((pair) => {
+        const label = TYPE_LABELS[pair.type] || pair.type;
+        const partner = pair.status === 'active' ? getPartnerDisplayName(pair) : (pair.partner_nickname || pair.partner_email || pair.partner_phone || '等待对方加入');
+        const activeText = state.currentPair?.id === pair.id ? '当前关系' : '切换到此关系';
+        return `
+      <button class="stack-item" type="button" onclick="handleSwitchPair('${pair.id}')">
+        <div>
+          <strong>${escapeHtml(label)}</strong>
+          <div class="stack-item__meta">${escapeHtml(partner)} · ${pair.status === 'active' ? '已配对' : '等待加入'}</div>
         </div>
-    `).join('');
+        <span class="pill">${activeText}</span>
+      </button>`;
+    }).join('');
 }
 
-function switchPair(pairId) {
-    const pair = state.pairs.find(p => p.id === pairId);
-    if (pair) {
+async function handleCreatePair() {
+    const button = $('#pair-create-btn');
+    button.disabled = true;
+    button.textContent = '创建中...';
+
+    try {
+        if (state.selectedPairType === 'solo') {
+            const pair = { id: 'solo', type: 'solo', status: 'active', partner_nickname: '自己' };
+            state.pairs = [...state.pairs.filter((item) => item.id !== 'solo'), pair];
+            state.currentPair = pair;
+            showToast('已进入单人模式');
+            await bootstrapSession();
+            return;
+        }
+
+        const pair = await api.createPair(state.selectedPairType);
+        state.pairs = [...state.pairs.filter((item) => item.id !== pair.id), pair];
         state.currentPair = pair;
-        show(document.getElementById('tab-bar'));
-        showPage('home');
-        showToast('已切换关系');
+        showToast('邀请码已生成');
+        await showPage('pair-waiting');
+    } catch (error) {
+        showToast(error.message || '创建失败');
+    } finally {
+        button.disabled = false;
+        button.textContent = '创建邀请码';
     }
 }
 
-// ── 首页 ──
-async function loadHome() {
-    if (!state.currentPair) return;
-
-    renderPairSelector();
-
-    try {
-        const [status, streak] = await Promise.all([
-            api.getTodayStatus(state.currentPair.id),
-            api.getCheckinStreak(state.currentPair.id).catch(() => ({ streak: 0 })),
-        ]);
-        state.todayStatus = status;
-        renderHomeStatus(status, streak);
-    } catch (err) {
-        console.error('加载首页失败', err);
-    }
-
-    // 独立加载，不阻塞主流程
-    loadTree();
-    loadCrisisStatus();
-    loadDailyTasks();
-    loadTips();
-    loadMilestones();
-    loadNotifications();
-}
-
-function renderPairSelector() {
-    const selector = document.getElementById('pair-selector');
-    const select = document.getElementById('pair-select');
-    if (!selector || !select) return;
-
-    const activePairs = state.pairs.filter(p => p.status === 'active');
-    if (activePairs.length <= 1) {
-        hide(selector);
+async function handleJoinPair() {
+    const code = $('#pair-join-code').value.trim();
+    if (!code) {
+        showToast('请输入邀请码');
         return;
     }
 
-    show(selector);
+    const button = $('#pair-join-btn');
+    button.disabled = true;
+    button.textContent = '加入中...';
 
-    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
-    select.innerHTML = activePairs.map(p =>
-        `<option value="${p.id}" ${p.id === state.currentPair?.id ? 'selected' : ''}>${typeMap[p.type] || p.type}</option>`
-    ).join('');
-
-    select.onchange = (e) => {
-        const selectedId = e.target.value;
-        state.currentPair = state.pairs.find(p => p.id === selectedId);
-        loadHome();
-        showToast('已切换关系');
-    };
-}
-
-async function loadTree() {
-    if (!state.currentPair) return;
     try {
-        const tree = await api.getTreeStatus(state.currentPair.id);
-        renderTree(tree);
-    } catch { /* 静默失败 */ }
-}
-
-/** 渲染关系树 (1.4f) */
-function renderTree(tree) {
-    const card = document.getElementById('tree-card');
-    if (!card) return;
-    show(card);
-
-    // 树的可视化：根据 level 选择不同 SVG 图标
-    const treeVisual = document.getElementById('tree-visual');
-    const levelIcons = { '种子': 'i-sprout', '幼苗': 'i-sprout', '小树': 'i-tree', '大树': 'i-tree' };
-    const iconId = levelIcons[tree.level_name] || 'i-sprout';
-    treeVisual.innerHTML = svgIcon(iconId, 'icon-2xl');
-
-    document.getElementById('tree-level').textContent = tree.level_name || '种子';
-    document.getElementById('tree-points').textContent = tree.growth_points || 0;
-
-    const bar = document.getElementById('tree-progress-bar');
-    bar.style.width = `${tree.progress_percent || 0}%`;
-
-    const btn = document.getElementById('tree-water-btn');
-    if (tree.can_water) {
-        btn.disabled = false;
-        btn.innerHTML = `${svgIcon('i-droplet', 'icon-sm')} 浇水`;
-        btn.onclick = waterTree;
-    } else {
-        btn.disabled = true;
-        btn.innerHTML = `${svgIcon('i-check-circle', 'icon-sm')} 今日已浇水`;
+        await api.joinPair(code);
+        showToast('加入成功');
+        await bootstrapSession();
+    } catch (error) {
+        showToast(error.message || '加入失败');
+    } finally {
+        button.disabled = false;
+        button.textContent = '加入关系';
     }
 }
 
-async function waterTree() {
-    if (!state.currentPair) return;
-    const btn = document.getElementById('tree-water-btn');
-    btn.disabled = true;
-    btn.textContent = '浇水中...';
-    try {
-        const result = await api.waterTree(state.currentPair.id);
-        showToast(`+${result.points_added} 成长值${result.level_up ? ' 升级了！' : ''}`);
-        loadTree();
-    } catch (err) {
-        showToast(err.message);
-        btn.disabled = false;
-        btn.innerHTML = `${svgIcon('i-droplet', 'icon-sm')} 浇水`;
+function renderWaitingPage() {
+    $('#waiting-invite-code').textContent = state.currentPair?.invite_code || DEMO.pair.invite_code;
+}
+
+async function refreshPairStatus() {
+    if (!api.isLoggedIn()) {
+        renderWaitingPage();
+        return;
     }
+    await bootstrapSession();
 }
 
-// ── 危机预警 (1.4g) ──
-async function loadCrisisStatus() {
-    if (!state.currentPair) return;
-    try {
-        const crisis = await api.getCrisisStatus(state.currentPair.id);
-        state.crisisStatus = crisis;
-        renderCrisisCard(crisis);
-    } catch { /* 静默失败 */ }
+function demoMetric(label, value) {
+    return `<article class="stat-card"><span>${label}</span><strong>${value}</strong></article>`;
 }
 
-function renderCrisisCard(crisis) {
-    const card = document.getElementById('crisis-card');
-    if (!card) return;
+async function loadHomePage() {
+    const pair = getPairSnapshot();
+    const greetingName = state.me?.nickname || DEMO.me.nickname;
+    $('#home-greeting').textContent = `${greetingName}，今天也适合把关系照顾好`;
+    renderPairSelect();
 
-    const level = crisis.crisis_level || 'none';
-    if (level === 'none') {
-        hide(card);
+    if (!isLiveMode()) {
+        renderHome({
+            pair,
+            todayStatus: DEMO.todayStatus,
+            streak: DEMO.streak,
+            tree: DEMO.tree,
+            crisis: DEMO.crisis,
+            tasks: DEMO.tasks,
+            notifications: DEMO.notifications,
+            milestones: [],
+        }, true);
         return;
     }
 
-    show(card);
-    const badge = document.getElementById('crisis-badge');
-    const levelMap = {
-        mild:     { text: '轻度预警', cls: 'crisis-badge--mild' },
-        moderate: { text: '中度预警', cls: 'crisis-badge--moderate' },
-        severe:   { text: '重度预警', cls: 'crisis-badge--severe' },
-    };
-    const info = levelMap[level] || levelMap.mild;
-    badge.textContent = info.text;
-    badge.className = `crisis-badge ${info.cls}`;
-    // 边框颜色通过 data 属性或直接 class 控制
-    card.style.borderLeft = '';
-    card.setAttribute('data-level', level);
+    const results = await Promise.allSettled([
+        api.getTodayStatus(pair.id),
+        api.getCheckinStreak(pair.id),
+        api.getTreeStatus(pair.id),
+        api.getCrisisStatus(pair.id),
+        api.getDailyTasks(pair.id),
+        api.getNotifications(),
+        api.getMilestones(pair.id),
+    ]);
 
-    const intervention = crisis.intervention;
-    const interventionDiv = document.getElementById('crisis-intervention');
-    if (intervention && intervention.type !== 'none') {
-        show(interventionDiv);
-        document.getElementById('crisis-intervention-title').textContent = intervention.title || '干预建议';
-        document.getElementById('crisis-intervention-desc').textContent = intervention.description || '';
-        const items = intervention.action_items || [];
-        document.getElementById('crisis-action-items').innerHTML = items.map(i => `<div>• ${i}</div>`).join('');
-    } else {
-        hide(interventionDiv);
+    renderHome({
+        pair,
+        todayStatus: unwrapResult(results[0], DEMO.todayStatus),
+        streak: unwrapResult(results[1], DEMO.streak),
+        tree: unwrapResult(results[2], DEMO.tree),
+        crisis: unwrapResult(results[3], DEMO.crisis),
+        tasks: unwrapResult(results[4], DEMO.tasks),
+        notifications: unwrapResult(results[5], []),
+        milestones: unwrapResult(results[6], []),
+    }, false);
+}
+
+function unwrapResult(result, fallback) {
+    return result.status === 'fulfilled' ? result.value : fallback;
+}
+
+function renderPairSelect() {
+    const select = $('#home-pair-select');
+    const source = isLiveMode() ? state.pairs.filter((pair) => pair.status === 'active') : [DEMO.pair];
+    select.innerHTML = source.map((pair) => `<option value="${pair.id}">${escapeHtml(TYPE_LABELS[pair.type] || pair.type)} · ${escapeHtml(getPartnerDisplayName(pair))}</option>`).join('');
+    select.value = getPairSnapshot().id;
+}
+
+function renderHome(payload, isDemo) {
+    state.homeSnapshot = payload;
+    const pairName = getPartnerDisplayName(payload.pair);
+    $('#home-overview').innerHTML = `
+        <p class="eyebrow">${isDemo ? 'DEMO MODE' : 'CONNECTED'}</p>
+        <h3>${escapeHtml(TYPE_LABELS[payload.pair.type] || payload.pair.type)} · ${escapeHtml(pairName)}</h3>
+        <p>${isDemo ? '当前为演示数据，只展示核心功能状态。' : '当前展示的是这段关系的核心功能状态。'}</p>
+    `;
+
+    $('#home-metrics').innerHTML = [
+        demoMetric('连续打卡', `${payload.streak.streak || 0} 天`),
+        demoMetric('关系树', `${payload.tree.level_name || '种子'}`),
+        demoMetric('成长值', `${payload.tree.growth_points || 0}`),
+        demoMetric('当前预警', crisisLabel(payload.crisis.crisis_level || 'none')),
+    ].join('');
+
+    $('#home-status-panel').innerHTML = `
+    <div class="panel__header"><div><p class="panel__eyebrow">TODAY</p><h4>今日打卡状态</h4></div></div>
+    <div class="stack-list">
+      <div class="stack-item"><div><strong>我</strong><div class="stack-item__meta">${payload.todayStatus.my_done ? '已完成今日打卡' : '今天还没有提交'}</div></div><span class="pill">${payload.todayStatus.my_done ? '完成' : '待办'}</span></div>
+      <div class="stack-item"><div><strong>对方</strong><div class="stack-item__meta">${payload.todayStatus.partner_done ? '对方已经完成' : '对方尚未完成'}</div></div><span class="pill">${payload.todayStatus.partner_done ? '完成' : '等待中'}</span></div>
+    </div>
+    <div class="hero-actions">
+      <button class="button button--primary" type="button" onclick="showPage('checkin')">去打卡</button>
+      <button class="button button--ghost" type="button" onclick="showPage('report')">看报告</button>
+    </div>`;
+
+    $('#home-report-panel').innerHTML = `
+    <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>报告入口</h4></div></div>
+    <div class="empty-state">
+      ${payload.todayStatus.both_done ? '双方都已完成打卡，可以生成正式关系报告。' : '双方未全部完成时，网页端优先展示状态与下一步建议。'}
+    </div>
+    <div class="hero-actions">
+      <button class="button button--secondary" type="button" onclick="showPage('report')">进入报告页</button>
+    </div>`;
+
+    $('#home-tree-panel').innerHTML = `
+    <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>关系树成长</h4></div></div>
+    <div class="stack-item"><div>${svgIcon('i-tree')}</div><div><strong>${escapeHtml(payload.tree.level_name || '种子')}</strong><div class="stack-item__meta">当前成长值 ${payload.tree.growth_points || 0}</div></div></div>
+    <div class="progress-track"><span class="progress-track__fill" style="width:${payload.tree.progress_percent || 0}%"></span></div>
+    <div class="hero-actions">
+      <button class="button button--ghost" type="button" ${payload.tree.can_water ? '' : 'disabled'} onclick="handleWaterTree()">${payload.tree.can_water ? '浇水 +5' : '今日已浇水'}</button>
+    </div>`;
+
+    const crisis = payload.crisis || { crisis_level: 'none' };
+    const crisisIntervention = crisis.intervention ? `<div class="stack-item__meta">${escapeHtml(crisis.intervention.title || crisis.intervention.description || '')}</div>` : '<div class="stack-item__meta">暂无需要立即介入的强预警。</div>';
+    $('#home-crisis-panel').innerHTML = `
+    <div class="panel__header"><div><p class="panel__eyebrow">CRISIS</p><h4>危机预警</h4></div></div>
+    <div class="stack-item"><div>${svgIcon('i-alert')}</div><div><strong>${crisisLabel(crisis.crisis_level || 'none')}</strong>${crisisIntervention}</div></div>
+    <div class="hero-actions">
+      <button class="button button--ghost" type="button" onclick="openCrisisDetail()">查看详情</button>
+    </div>`;
+
+    const milestones = payload.milestones || [];
+    $('#home-milestones-panel').innerHTML = `
+        <div class="panel__header"><div><p class="panel__eyebrow">MILESTONES</p><h4>关键节点</h4></div></div>
+        ${milestones.length ? `<div class="stack-list">${milestones.slice(0, 2).map((item) => renderMilestoneItem(item, { isDemo, compact: true })).join('')}</div>` : '<div class="empty-state">还没有记录关系里程碑。</div>'}
+        <div class="hero-actions">
+            <button class="button button--ghost" type="button" onclick="showPage('milestones')">进入里程碑页</button>
+        </div>`;
+
+    const tasks = payload.tasks.tasks || [];
+    $('#home-tasks-panel').innerHTML = `
+    <div class="panel__header"><div><p class="panel__eyebrow">TASKS</p><h4>今日关系任务</h4></div></div>
+    <div class="stack-list">
+      ${tasks.length ? tasks.slice(0, 3).map((task) => renderTaskItem(task)).join('') : '<div class="empty-state">今天还没有生成任务。</div>'}
+    </div>`;
+
+    state.notifications = Array.isArray(payload.notifications) ? payload.notifications : payload.notifications || [];
+    syncNotifications();
+}
+
+function renderTaskItem(task) {
+    const done = task.status === 'completed';
+    return `
+    <div class="challenge-item">
+      <div>${done ? svgIcon('i-check') : svgIcon('i-target')}</div>
+      <div>
+        <strong>${escapeHtml(task.title)}</strong>
+        <div class="stack-item__meta">${escapeHtml(task.description || '')}</div>
+      </div>
+      ${done ? '<span class="pill">已完成</span>' : `<button class="text-button" type="button" onclick="completeTask('${task.id}')">完成</button>`}
+    </div>`;
+}
+
+function crisisLabel(level) {
+    return { none: '正常', mild: '轻度预警', moderate: '中度预警', severe: '严重预警' }[level] || '正常';
+}
+
+function syncNotifications() {
+    const button = $('#notification-toggle');
+    const count = $('#notification-count');
+    const list = $('#notification-drawer-list');
+    const notifications = state.notifications || [];
+    if (!notifications.length) {
+        button.classList.add('hidden');
+        list.innerHTML = '<div class="empty-state">暂无通知。</div>';
+        return;
     }
 
-    // 操作按钮状态
-    const ackBtn = document.getElementById('crisis-ack-btn');
-    const actionsDiv = document.getElementById('crisis-actions');
-    show(actionsDiv);
-    if (ackBtn) {
-        if (crisis.alert_status === 'acknowledged' || crisis.alert_status === 'resolved') {
-            ackBtn.textContent = '已确认';
-            ackBtn.disabled = true;
+    button.classList.remove('hidden');
+    const unread = notifications.filter((item) => !item.is_read).length;
+    count.classList.toggle('hidden', unread === 0);
+    count.textContent = unread > 9 ? '9+' : String(unread);
+    list.innerHTML = notifications.map((item) => `
+    <article class="notification-item">
+      <div>${svgIcon('i-bell')}</div>
+      <div>
+        <strong>${escapeHtml(item.content)}</strong>
+        <div class="notification-item__meta">${formatDate(item.created_at)}</div>
+      </div>
+    </article>`).join('');
+}
+
+function formatDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return `${date.getMonth() + 1}-${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatDateOnly(value) {
+    if (!value) return '未设置';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function maskPhone(phone) {
+    if (!phone) return '未绑定';
+    return String(phone).replace(/^(\d{3})\d+(\d{4})$/, '$1****$2');
+}
+
+function getAccountChannels(me) {
+    const channels = [];
+    if (me.email && !me.email.endsWith('@qinjian.local')) channels.push('邮箱账号');
+    if (me.phone) channels.push('手机号账号');
+    if (me.wechat_openid) channels.push('微信已绑定');
+    return channels.length ? channels.join(' / ') : '基础邮箱账号';
+}
+
+function milestoneTypeLabel(type) {
+    return {
+        anniversary: '纪念日',
+        proposal: '重要承诺',
+        wedding: '婚礼 / 领证',
+        friendship_day: '关系节点',
+        custom: '自定义',
+    }[type] || '里程碑';
+}
+
+function milestoneTimeText(item) {
+    if (typeof item.days_until === 'number' && item.days_until > 0) {
+        return `${item.days_until} 天后到来`;
+    }
+    if (typeof item.days_until === 'number' && item.days_until === 0) {
+        return '就是今天';
+    }
+    if (typeof item.days_since === 'number') {
+        return item.days_since === 0 ? '今天发生' : `已过去 ${item.days_since} 天`;
+    }
+    return '时间待确认';
+}
+
+function renderMilestoneItem(item, { isDemo = false, compact = false } = {}) {
+    return `
+    <article class="${compact ? 'stack-item' : 'timeline-card'}">
+      <div class="${compact ? '' : 'timeline-card__head'}">
+        <div>
+          <strong>${escapeHtml(item.title || '未命名里程碑')}</strong>
+          <div class="stack-item__meta">${escapeHtml(milestoneTypeLabel(item.type))} · ${escapeHtml(formatDateOnly(item.date))}</div>
+          <div class="stack-item__meta">${escapeHtml(milestoneTimeText(item))}</div>
+        </div>
+        <span class="pill">${item.reminder_sent ? '已提醒' : '待提醒'}</span>
+      </div>
+      ${compact ? '' : `<div class="timeline-card__actions">${isDemo ? '<span class="pill">演示态不可生成回顾</span>' : `<button class="button button--ghost" type="button" data-milestone-review="${item.id}">生成成长回顾</button>`}</div>`}
+    </article>`;
+}
+
+function renderCheckinPage() {
+    renderMoods();
+    renderOptionGroup('#mood-score-options', [1, 2, 3, 4].map((value) => ({ label: `${value} 分`, value: String(value), name: 'mood_score' })));
+    renderOptionGroup('#initiative-options', [
+        { label: '我更主动', value: 'me', name: 'interaction_initiative' },
+        { label: '对方更主动', value: 'partner', name: 'interaction_initiative' },
+        { label: '差不多', value: 'equal', name: 'interaction_initiative' },
+    ]);
+    renderOptionGroup('#deep-conversation-options', [
+        { label: '有', value: 'true', name: 'deep_conversation' },
+        { label: '没有', value: 'false', name: 'deep_conversation' },
+    ]);
+    renderOptionGroup('#task-completed-options', [
+        { label: '完成了', value: 'true', name: 'task_completed' },
+        { label: '还没有', value: 'false', name: 'task_completed' },
+    ]);
+}
+
+function renderMoods() {
+    const container = $('#mood-tags');
+    container.innerHTML = MOOD_TAGS.map((mood) => `<button class="tag${state.selectedMoods.includes(mood) ? ' is-selected' : ''}" type="button" data-mood="${mood}">${mood}</button>`).join('');
+}
+
+function renderOptionGroup(selector, options) {
+    const container = $(selector);
+    container.innerHTML = options.map((option) => `<button class="select-card" type="button" data-option-name="${option.name}" data-option-value="${option.value}">${option.label}</button>`).join('');
+}
+
+async function handleCheckinSubmit(event) {
+    event.preventDefault();
+    if (!isLiveMode()) {
+        showToast('演示态下不写入数据，请先登录并建立关系');
+        return;
+    }
+
+    const content = $('#checkin-content').value.trim();
+    if (!content) {
+        showToast('请先写下今天的感受');
+        return;
+    }
+
+    const payload = {
+        content,
+        mood_tags: state.selectedMoods,
+        image_url: state.uploadedImageUrl,
+        voice_url: state.uploadedVoiceUrl,
+        mood_score: parseNullableInt(getSelectedValue('mood_score')),
+        interaction_freq: parseNullableInt($('#interaction-frequency').value),
+        interaction_initiative: getSelectedValue('interaction_initiative'),
+        deep_conversation: parseNullableBool(getSelectedValue('deep_conversation')),
+        task_completed: parseNullableBool(getSelectedValue('task_completed')),
+    };
+
+    const button = $('#checkin-submit-btn');
+    button.disabled = true;
+    button.textContent = '提交中...';
+
+    try {
+        await api.submitCheckin(state.currentPair.id, payload);
+        showToast('今日打卡已提交');
+        resetCheckinForm();
+        await showPage('home');
+    } catch (error) {
+        showToast(error.message || '提交失败');
+    } finally {
+        button.disabled = false;
+        button.textContent = '提交今日打卡';
+    }
+}
+
+function getSelectedValue(name) {
+    return document.querySelector(`[data-selected-name="${name}"]`)?.dataset.selectedValue || null;
+}
+
+function parseNullableInt(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+function parseNullableBool(value) {
+    if (value === null || value === undefined || value === '') return null;
+    return value === 'true';
+}
+
+function resetCheckinForm() {
+    $('#checkin-form').reset();
+    state.selectedMoods = [];
+    state.uploadedImageUrl = null;
+    state.uploadedVoiceUrl = null;
+    renderCheckinPage();
+    $('#image-upload-preview').innerHTML = '';
+    $('#voice-upload-preview').innerHTML = '';
+    $$('[data-selected-name]').forEach((item) => {
+        delete item.dataset.selectedName;
+        delete item.dataset.selectedValue;
+        item.classList.remove('select-card--active');
+    });
+}
+
+async function handleUpload(type, file) {
+    if (!isLiveMode()) {
+        showToast('演示态下不上传文件');
+        return;
+    }
+
+    try {
+        const result = await api.uploadFile(type, file);
+        if (type === 'image') {
+            state.uploadedImageUrl = result.url;
+            $('#image-upload-preview').innerHTML = `<img class="upload-preview__image" src="${resolveAssetUrl(result.url)}" alt="上传图片预览">`;
         } else {
-            ackBtn.textContent = '已知悉';
-            ackBtn.disabled = false;
+            state.uploadedVoiceUrl = result.url;
+            $('#voice-upload-preview').innerHTML = `<div class="upload-preview__chip">${svgIcon('i-mic')} 已上传语音附件</div>`;
+        }
+        showToast(type === 'image' ? '图片已上传' : '语音已上传');
+    } catch (error) {
+        showToast(error.message || '上传失败');
+    }
+}
+
+async function loadReportPage() {
+    if (!isLiveMode()) {
+        renderReport(DEMO.report[state.selectedReportType], DEMO.history, DEMO.trend, true);
+        return;
+    }
+
+    const pairId = state.currentPair.id;
+    const [latest, history, trend] = await Promise.allSettled([
+        api.getLatestReport(pairId, state.selectedReportType),
+        api.getReportHistory(pairId, state.selectedReportType, 6),
+        state.selectedReportType === 'daily' ? api.getHealthTrend(pairId, 14) : Promise.resolve({ trend: [] }),
+    ]);
+
+    renderReport(
+        unwrapResult(latest, null),
+        unwrapResult(history, []),
+        unwrapResult(trend, { trend: [] }),
+        false,
+    );
+}
+
+function renderReport(report, history, trendData, isDemo) {
+    const container = $('#report-main');
+
+    if (report && report.status === 'pending') {
+        container.innerHTML = `
+            <div class="empty-state">
+                当前${formatReportType(state.selectedReportType)}正在后台生成中。页面会在拿到结果后刷新；如果网络波动，也可以稍后再次进入本页查看。
+            </div>`;
+    } else if (report && report.status === 'failed') {
+        container.innerHTML = `
+            <div class="empty-state">
+                当前${formatReportType(state.selectedReportType)}生成失败，请稍后重试。
+            </div>`;
+    } else if (!report || report.status !== 'completed') {
+        container.innerHTML = `
+      <div class="empty-state">
+        当前还没有可展示的${state.selectedReportType === 'daily' ? '日报' : state.selectedReportType === 'weekly' ? '周报' : '月报'}。${isDemo ? '你现在看到的是演示状态。' : '完成打卡并触发生成后，这里会显示最新报告。'}
+      </div>`;
+    } else {
+        const content = report.content || {};
+        const score = content.health_score || content.overall_health_score || 72;
+        const highlights = (content.highlights || content.weekly_highlights || content.strengths || []).slice(0, 4);
+        const concerns = (content.concerns || content.growth_areas || content.action_plan || []).slice(0, 4);
+        container.innerHTML = `
+      <div class="score-ring" style="--score:${Math.max(1, Math.min(100, score))}"><span>${score}</span></div>
+      <h4>${state.selectedReportType === 'daily' ? '今日关系指数' : state.selectedReportType === 'weekly' ? '周关系指数' : '月关系指数'}</h4>
+      <p class="muted-copy">${escapeHtml(content.insight || content.encouragement || content.executive_summary || '系统已经生成当前阶段的关系洞察。')}</p>
+      ${content.suggestion || content.trend_description ? `<div class="hero-card hero-card--accent"><strong>本阶段建议</strong><p>${escapeHtml(content.suggestion || content.trend_description)}</p></div>` : ''}
+            ${renderAttachmentSignals(content)}
+      ${renderTrend(trendData)}
+      <div class="layout-grid">
+        <div class="panel"><div class="panel__header"><div><p class="panel__eyebrow">HIGHLIGHTS</p><h4>积极信号</h4></div></div>${renderBulletList(highlights, '当前没有高亮项')}</div>
+        <div class="panel"><div class="panel__header"><div><p class="panel__eyebrow">FOCUS</p><h4>需要关注</h4></div></div>${renderBulletList(concerns, '当前没有额外提醒')}</div>
+      </div>`;
+    }
+
+    const list = $('#report-history-list');
+    if (!history.length) {
+        list.innerHTML = '<div class="empty-state">当前没有历史报告记录。</div>';
+        return;
+    }
+
+    list.innerHTML = history.map((item) => `
+    <article class="stack-item">
+      <div>
+        <strong>${formatReportType(state.selectedReportType)} · ${escapeHtml(item.report_date || '未命名')}</strong>
+        <div class="stack-item__meta">状态：${escapeHtml(item.status || 'completed')}</div>
+      </div>
+      <span class="pill">已生成</span>
+    </article>`).join('');
+}
+
+function renderTrend(trendData) {
+    const points = trendData?.trend || [];
+    if (points.length < 2) return '';
+    const width = 280;
+    const height = 90;
+    const pad = 10;
+    const coords = points.map((point, index) => {
+        const x = pad + (index / (points.length - 1)) * (width - pad * 2);
+        const y = height - pad - ((point.score || 0) / 100) * (height - pad * 2);
+        return `${x},${y}`;
+    });
+    return `
+    <div class="panel">
+      <div class="panel__header"><div><p class="panel__eyebrow">TREND</p><h4>近阶段变化</h4></div></div>
+      <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto">
+        <polyline points="${coords.join(' ')}" fill="none" stroke="#d76848" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      </svg>
+    </div>`;
+}
+
+function renderBulletList(items, emptyText) {
+    if (!items.length) {
+        return `<div class="empty-state">${emptyText}</div>`;
+    }
+    return `<div class="stack-list">${items.map((item) => `<div class="stack-item"><div>${svgIcon('i-check')}</div><div>${escapeHtml(item)}</div></div>`).join('')}</div>`;
+}
+
+function renderAttachmentSignals(content) {
+    const signals = content?.attachment_signals;
+    if (!signals) {
+        return '';
+    }
+
+    const buildItems = (data) => {
+        if (!data) {
+            return [];
+        }
+
+        const items = [];
+        if (data.image) {
+            items.push(`图片情绪：${data.image.mood || 'unknown'}`);
+            items.push(`图片信号：${data.image.social_signal || '无'}`);
+            items.push(`图片评分：${data.image.score ?? '--'}`);
+        }
+        if (data.voice) {
+            items.push(`语音语气：${data.voice.tone || 'unknown'}`);
+            items.push(`背景声音：${data.voice.background_sound || '未知'}`);
+            items.push(`关系线索：${data.voice.relationship_signal || '无'}`);
+            if (data.voice.transcript) {
+                items.push(`语音转写：${data.voice.transcript}`);
+            }
+        }
+        return items;
+    };
+
+    const cards = [];
+    if (signals.a || signals.b) {
+        const aItems = buildItems(signals.a);
+        const bItems = buildItems(signals.b);
+        if (aItems.length) {
+            cards.push(`<div class="panel"><div class="panel__header"><div><p class="panel__eyebrow">ATTACHMENT</p><h4>A 方附件线索</h4></div></div>${renderBulletList(aItems, '当前没有附件分析结果')}</div>`);
+        }
+        if (bItems.length) {
+            cards.push(`<div class="panel"><div class="panel__header"><div><p class="panel__eyebrow">ATTACHMENT</p><h4>B 方附件线索</h4></div></div>${renderBulletList(bItems, '当前没有附件分析结果')}</div>`);
+        }
+    } else {
+        const items = buildItems(signals);
+        if (items.length) {
+            cards.push(`<div class="panel"><div class="panel__header"><div><p class="panel__eyebrow">ATTACHMENT</p><h4>附件线索</h4></div></div>${renderBulletList(items, '当前没有附件分析结果')}</div>`);
         }
     }
-}
 
-async function handleCrisisAcknowledge() {
-    const crisis = state.crisisStatus;
-    if (!crisis || !crisis.alert_id) { showToast('无可操作的预警'); return; }
-    try {
-        await api.acknowledgeCrisisAlert(crisis.alert_id);
-        showToast('已确认知悉预警');
-        const btn = document.getElementById('crisis-ack-btn');
-        if (btn) { btn.textContent = '已确认'; btn.disabled = true; }
-        state.crisisStatus.alert_status = 'acknowledged';
-    } catch (err) { showToast(err.message); }
-}
-
-async function showCrisisResources() {
-    try {
-        const data = await api.getCrisisResources();
-        const hotlines = (data.hotlines || []).map(h => `
-            <div class="notification-item">
-                <div class="flex-1">
-                    <div class="text-sm font-semibold">${h.name}</div>
-                    <div class="text-xs text-muted">${h.hours}</div>
-                </div>
-                <a href="tel:${h.number}" class="text-sm font-semibold text-brand no-underline">${h.number}</a>
-            </div>
-        `).join('');
-        const online = (data.online || []).map(o => `
-            <div class="notification-item">
-                <a href="${o.url}" target="_blank" class="font-semibold text-accent no-underline">${o.name}</a>
-                <span class="text-xs text-muted ml-2">${o.desc}</span>
-            </div>
-        `).join('');
-        const tips = (data.tips || []).map(t => `<div class="text-sm text-secondary py-1">• ${t}</div>`).join('');
-
-        openModal(`
-            <div class="modal-title text-center">专业帮助资源</div>
-            <div class="mb-4">
-                <div class="text-sm font-semibold mb-2">${svgIcon('i-phone', 'icon-sm')} 热线电话</div>
-                ${hotlines}
-            </div>
-            <div class="mb-4">
-                <div class="text-sm font-semibold mb-2">${svgIcon('i-external-link', 'icon-sm')} 在线咨询平台</div>
-                ${online}
-            </div>
-            <div class="mb-4">
-                <div class="text-sm font-semibold mb-2">${svgIcon('i-lightbulb', 'icon-sm')} 温馨提示</div>
-                ${tips}
-            </div>
-            ${state.crisisStatus?.alert_id ? `<button class="btn btn-primary btn-block mt-2" onclick="handleCrisisEscalate()">升级为专业求助</button>` : ''}
-            <button class="btn btn-secondary btn-block mt-2" onclick="closeModal()">关闭</button>
-        `);
-    } catch (err) { showToast(err.message); }
-}
-
-async function handleCrisisEscalate() {
-    const crisis = state.crisisStatus;
-    if (!crisis || !crisis.alert_id) return;
-    try {
-        await api.escalateCrisisAlert(crisis.alert_id, '用户主动寻求专业帮助');
-        showToast('已标记为专业求助');
-        closeModal();
-        loadCrisisStatus();
-    } catch (err) { showToast(err.message); }
-}
-
-async function showCrisisDetail() {
-    if (!state.currentPair) return;
-    try {
-        const [history, alerts] = await Promise.all([
-            api.getCrisisHistory(state.currentPair.id, 30).catch(() => ({ history: [] })),
-            api.getCrisisAlerts(state.currentPair.id, null, 10).catch(() => []),
-        ]);
-        renderCrisisDetailModal(history, alerts);
-    } catch (err) { showToast(err.message); }
-}
-
-function renderCrisisDetailModal(historyData, alerts) {
-    const history = historyData.history || [];
-    const crisis = state.crisisStatus || {};
-
-    const levelColor = { none: 'var(--success-400)', mild: 'var(--warning-400)', moderate: '#F97316', severe: 'var(--danger-400)' };
-    const levelLabel = { none: '正常', mild: '轻度', moderate: '中度', severe: '重度' };
-    const statusLabel = { active: '活跃', acknowledged: '已确认', resolved: '已解决', escalated: '已升级' };
-
-    // 趋势图（简易 SVG）
-    let trendSvg = '';
-    const validHistory = history.filter(h => h.health_score != null).slice(0, 14).reverse();
-    if (validHistory.length >= 2) {
-        const w = 300, h = 80, pad = 10;
-        const coords = validHistory.map((p, i) => {
-            const x = pad + (i / (validHistory.length - 1)) * (w - 2 * pad);
-            const y = h - pad - ((p.health_score || 50) / 100) * (h - 2 * pad);
-            return `${x},${y}`;
-        });
-        const levelDots = validHistory.map((p, i) => {
-            const [x, y] = coords[i].split(',');
-            const c = levelColor[p.crisis_level] || levelColor.none;
-            return `<circle cx="${x}" cy="${y}" r="4" fill="${c}" stroke="white" stroke-width="1.5"/>`;
-        }).join('');
-
-        trendSvg = `
-            <div class="mb-4">
-                <div class="text-sm font-semibold mb-2">健康趋势 (近${validHistory.length}次)</div>
-                <svg viewBox="0 0 ${w} ${h}" class="trend-chart-svg">
-                    <polyline points="${coords.join(' ')}" fill="none" stroke="var(--primary-400)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${levelDots}
-                </svg>
-                <div class="flex gap-3 justify-center mt-2">
-                    ${Object.entries(levelLabel).map(([k, v]) => `<span class="text-xs" style="color:${levelColor[k]}">● ${v}</span>`).join('')}
-                </div>
-            </div>`;
+    if (!cards.length) {
+        return '';
     }
 
-    // 预警历史列表
-    const alertsList = alerts.length > 0
-        ? alerts.map(a => `
-            <div class="notification-item ${a.status === 'active' ? 'notification-item--unread' : ''} mb-1">
-                <div class="crisis-dot" style="background:${levelColor[a.level] || levelColor.none}"></div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-sm font-semibold">${levelLabel[a.level] || a.level}预警</div>
-                    <div class="text-xs text-muted">${a.intervention_title || '无干预建议'}</div>
-                </div>
-                <div class="text-right flex-shrink-0">
-                    <div class="text-xs" style="color:${levelColor[a.level]}">${statusLabel[a.status] || a.status}</div>
-                    <div class="notification-item__time">${a.created_at ? new Date(a.created_at).toLocaleDateString() : ''}</div>
-                </div>
-            </div>
-        `).join('')
-        : '<div class="text-center text-muted text-sm p-3">暂无预警记录</div>';
+    return `<div class="layout-grid">${cards.join('')}</div>`;
+}
 
-    // 当前状态
-    const currentLevel = crisis.crisis_level || 'none';
-    const currentInfo = { text: levelLabel[currentLevel] || '正常', color: levelColor[currentLevel] || levelColor.none };
-    const levelIconId = { severe: 'i-alert-triangle', moderate: 'i-alert-circle', mild: 'i-info', none: 'i-check-circle' };
+function formatReportType(type) {
+    return { daily: '日报', weekly: '周报', monthly: '月报' }[type] || '报告';
+}
 
-    // 操作区
-    let actionButtons = '';
-    if (crisis.alert_id && crisis.alert_status === 'active') {
-        actionButtons = `
-            <div class="flex gap-2 mt-4">
-                <button class="btn btn-sm btn-secondary flex-1" onclick="handleCrisisAcknowledge();closeModal()">确认知悉</button>
-                <button class="btn btn-sm btn-outline flex-1" onclick="handleCrisisResolve()">标记解决</button>
-            </div>`;
-    } else if (crisis.alert_id && crisis.alert_status === 'acknowledged') {
-        actionButtons = `
-            <div class="flex gap-2 mt-4">
-                <button class="btn btn-sm btn-outline flex-1" onclick="handleCrisisResolve()">标记解决</button>
-                <button class="btn btn-sm btn-outline flex-1 text-brand" onclick="showCrisisResources()">专业帮助</button>
-            </div>`;
+async function generateReport() {
+    if (!isLiveMode()) {
+        showToast('演示态下不触发真实生成');
+        return;
+    }
+
+    const button = $('#report-generate-btn');
+    button.disabled = true;
+    button.textContent = '生成中...';
+    const reportType = state.selectedReportType;
+
+    try {
+        if (reportType === 'daily') {
+            await api.generateDailyReport(state.currentPair.id);
+        } else if (reportType === 'weekly') {
+            await api.generateWeeklyReport(state.currentPair.id);
+        } else {
+            await api.generateMonthlyReport(state.currentPair.id);
+        }
+
+        button.textContent = '等待结果...';
+        showToast('已触发报告生成，正在等待结果');
+
+        const report = await api.waitForReport(state.currentPair.id, reportType);
+        await loadReportPage();
+
+        if (report?.status === 'completed') {
+            showToast(`${formatReportType(reportType)}已生成完成`);
+        } else if (report?.status === 'failed') {
+            showToast(`${formatReportType(reportType)}生成失败，请稍后重试`);
+        } else {
+            showToast(`${formatReportType(reportType)}仍在后台生成，可稍后刷新查看`);
+        }
+    } catch (error) {
+        showToast(error.message || '生成失败');
+    } finally {
+        button.disabled = false;
+        button.textContent = '生成当前报告';
+    }
+}
+
+async function loadProfilePage() {
+    if (!api.isLoggedIn()) {
+        $('#profile-summary').innerHTML = `<p class="eyebrow">PROFILE</p><h3>当前处于演示态</h3><p>登录后这里会显示你的账号、关系状态和解绑入口。</p>`;
+        $('#profile-account-panel').innerHTML = '<div class="empty-state">演示态下不显示真实账户资料。</div>';
+        $('#profile-pair-panel').innerHTML = '<div class="empty-state">演示态下不显示真实账户信息。</div>';
+        return;
+    }
+
+    const me = state.me || await api.getMe();
+    state.me = me;
+    const pair = state.currentPair;
+    const allPairs = state.pairs || [];
+    const activePairs = allPairs.filter((item) => item.status === 'active');
+    const pendingPairs = allPairs.filter((item) => item.status === 'pending');
+    const unbindStatus = pair
+        ? await api.getUnbindStatus(pair.id).catch(() => ({ has_request: false }))
+        : { has_request: false };
+
+    $('#profile-summary').innerHTML = `
+    <p class="eyebrow">ACCOUNT</p>
+    <h3>${escapeHtml(me.nickname || '用户')}</h3>
+        <p>${escapeHtml(me.email || '未填写邮箱')} · ${pair ? '已绑定关系' : '未绑定关系'}</p>
+        ${state.profileFeedback ? `<div class="profile-banner"><strong>已同步更新</strong><div>${escapeHtml(state.profileFeedback)}</div></div>` : ''}
+        <div class="metric-strip">
+            <article class="mini-stat"><span>活跃关系</span><strong>${activePairs.length}</strong></article>
+            <article class="mini-stat"><span>待加入关系</span><strong>${pendingPairs.length}</strong></article>
+            <article class="mini-stat"><span>当前对象</span><strong>${escapeHtml(pair ? getPartnerDisplayName(pair) : '未设置')}</strong></article>
+        </div>`;
+
+    $('#profile-account-panel').innerHTML = `
+        <div class="panel__header"><div><p class="panel__eyebrow">ACCOUNT DETAIL</p><h4>账户信息</h4></div></div>
+        <div class="detail-list">
+            <div class="detail-list__item"><span>昵称</span><strong>${escapeHtml(me.nickname || '未设置')}</strong></div>
+            <div class="detail-list__item"><span>邮箱</span><strong>${escapeHtml(me.email || '未绑定')}</strong></div>
+            <div class="detail-list__item"><span>手机号</span><strong>${escapeHtml(maskPhone(me.phone))}</strong></div>
+            <div class="detail-list__item"><span>登录渠道</span><strong>${escapeHtml(getAccountChannels(me))}</strong></div>
+            <div class="detail-list__item"><span>账户创建时间</span><strong>${escapeHtml(formatDateOnly(me.created_at))}</strong></div>
+            <div class="detail-list__item"><span>账户 ID</span><strong>${escapeHtml(String(me.id).slice(0, 8).toUpperCase())}</strong></div>
+        </div>`;
+
+    $('#profile-pair-panel').innerHTML = pair
+        ? `<div class="panel__header"><div><p class="panel__eyebrow">RELATION</p><h4>当前关系</h4></div></div>
+                 <p class="panel-inline-hint">直接点击下面的条目即可处理备注或解绑，不再需要额外找按钮。</p>
+             <div class="metric-strip">
+                 <article class="mini-stat"><span>关系类型</span><strong>${escapeHtml(TYPE_LABELS[pair.type] || pair.type)}</strong></article>
+                 <article class="mini-stat"><span>当前状态</span><strong>${pair.status === 'active' ? '已激活' : '等待加入'}</strong></article>
+                 <article class="mini-stat"><span>邀请码</span><strong>${escapeHtml(pair.invite_code || '无')}</strong></article>
+             </div>
+                 <div class="stack-item stack-item--static"><div>${svgIcon('i-link')}</div><div class="stack-item__content"><strong>${escapeHtml(getPartnerDisplayName(pair))}</strong><div class="stack-item__meta">创建于 ${escapeHtml(formatDateOnly(pair.created_at))} · ${pair.status === 'active' ? '你们已经在共享关系数据' : '对方加入后会开始共享数据'}</div></div></div>
+                 <button class="stack-item stack-item--action" type="button" onclick="openPartnerNicknameEditor()" aria-label="编辑对方备注">
+                     <div>${svgIcon('i-edit')}</div>
+                     <div class="stack-item__content"><strong>对方备注</strong><div class="stack-item__meta">${escapeHtml(pair.custom_partner_nickname || '尚未设置，当前默认显示系统昵称')}</div></div>
+                     <div class="stack-item__aside"><span class="stack-item__hint">点击修改</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
+                 </button>
+                 <button class="stack-item stack-item--action" type="button" onclick="openUnbindPanel()" aria-label="管理解绑状态">
+                     <div>${svgIcon('i-refresh')}</div>
+                     <div class="stack-item__content"><strong>解绑状态</strong><div class="stack-item__meta">${unbindStatus.has_request ? (unbindStatus.requested_by_me ? `你已发起解绑，剩余 ${unbindStatus.days_remaining} 天。` : '对方已发起解绑，等待你确认。') : '当前没有进行中的解绑申请。'}</div></div>
+                     <div class="stack-item__aside"><span class="stack-item__hint">点击处理</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
+                 </button>`
+        : '<div class="empty-state">当前没有激活关系。</div>';
+}
+
+async function openUnbindPanel() {
+    if (!isLiveMode()) {
+        showToast('演示态下不可操作解绑');
+        return;
+    }
+    try {
+        const status = await api.getUnbindStatus(state.currentPair.id);
+        const html = status.has_request
+            ? `<h3>解绑状态</h3><p>${status.requested_by_me ? `你已发起解绑，剩余 ${status.days_remaining} 天。` : '对方已经发起解绑，你可以确认解除。'}</p>
+         <div class="hero-actions">
+           ${status.requested_by_me && status.days_remaining > 0 ? `<button class="button button--ghost" type="button" onclick="cancelUnbind()">撤回</button>` : ''}
+           <button class="button button--danger" type="button" onclick="confirmUnbind()">确认解绑</button>
+         </div>`
+            : `<h3>发起解绑</h3><p>解绑后将无法继续共享打卡和报告。</p><div class="hero-actions"><button class="button button--danger" type="button" onclick="requestUnbind()">发起解绑</button></div>`;
+        openModal(html);
+    } catch (error) {
+        showToast(error.message || '读取解绑状态失败');
+    }
+}
+
+function openPartnerNicknameEditor() {
+    if (!isLiveMode()) {
+        showToast('演示态下不可修改备注');
+        return;
+    }
+
+    const pair = state.currentPair;
+    if (!pair) {
+        showToast('当前没有可编辑的关系');
+        return;
     }
 
     openModal(`
-        <div class="modal-title text-center">危机预警详情</div>
-        <div class="text-center mb-4">
-            <div class="crisis-status-circle" style="background:${currentInfo.color}20">
-                <span style="color:${currentInfo.color}">${svgIcon(levelIconId[currentLevel] || 'i-info', 'icon-lg')}</span>
-            </div>
-            <div class="text-base font-semibold" style="color:${currentInfo.color}">${currentInfo.text}${currentLevel !== 'none' ? '预警' : ''}</div>
-            ${crisis.health_score != null ? `<div class="text-xs text-muted mt-1">健康指数 ${crisis.health_score}</div>` : ''}
-            ${crisis.previous_level && crisis.previous_level !== currentLevel ? `<div class="text-xs text-muted mt-1">上次: ${levelLabel[crisis.previous_level] || crisis.previous_level}</div>` : ''}
-        </div>
-        ${trendSvg}
-        <div class="mb-2">
-            <div class="text-sm font-semibold mb-2">预警记录</div>
-            ${alertsList}
-        </div>
-        ${actionButtons}
-        <button class="btn btn-secondary btn-block mt-3" onclick="closeModal()">关闭</button>
+      <h3>编辑对方备注</h3>
+      <p class="muted-copy">备注名会优先显示在首页、配对列表和个人中心，方便你在多段关系之间切换。</p>
+      <label class="field">
+        <span>备注名</span>
+        <input id="partner-nickname-input" class="input" type="text" maxlength="24" placeholder="例如：宝宝 / 搭子 / 育儿搭档" value="${escapeHtml(pair.custom_partner_nickname || '')}">
+      </label>
+      <div class="hero-actions">
+        <button class="button button--ghost" type="button" onclick="closeModal()">取消</button>
+        <button class="button button--primary" type="button" onclick="savePartnerNickname()">保存备注</button>
+      </div>
     `);
 }
 
-async function handleCrisisResolve() {
-    const crisis = state.crisisStatus;
-    if (!crisis || !crisis.alert_id) { showToast('无可操作的预警'); return; }
-    closeModal();
-    const result = await openInputModal('标记预警已解决', [
-        { key: 'note', label: '解决备注（选填）', type: 'text', placeholder: '简要描述如何解决的' }
-    ]);
-    if (result === null) return;
-    try {
-        await api.resolveCrisisAlert(crisis.alert_id, result.note || '');
-        showToast('预警已标记为解决');
-        loadCrisisStatus();
-    } catch (err) { showToast(err.message); }
-}
-
-// ── 每日任务 (1.4h) ──
-async function loadDailyTasks() {
-    if (!state.currentPair) return;
-    try {
-        const data = await api.getDailyTasks(state.currentPair.id);
-        renderDailyTasks(data);
-    } catch { /* 静默失败 */ }
-}
-
-function renderDailyTasks(data) {
-    const card = document.getElementById('tasks-card');
-    if (!card) return;
-
-    const tasks = data.tasks || [];
-    if (tasks.length === 0) {
-        hide(card);
+async function savePartnerNickname() {
+    if (!isLiveMode() || !state.currentPair) {
+        showToast('当前不可修改备注');
         return;
     }
 
-    show(card);
+    const input = $('#partner-nickname-input');
+    const customNickname = input?.value.trim() || '';
 
-    // 依恋类型标签
-    const attachLabel = document.getElementById('tasks-attachment-label');
-    const typeLabels = { secure: '安全型', anxious: '焦虑型', avoidant: '回避型', fearful: '恐惧型' };
-    if (data.attachment_a || data.attachment_b) {
-        attachLabel.textContent = `${typeLabels[data.attachment_a] || '待分析'} + ${typeLabels[data.attachment_b] || '待分析'}`;
-    }
-
-    // 任务列表
-    const list = document.getElementById('tasks-list');
-    const categoryIcons = { communication: 'i-message-circle', activity: 'i-zap', reflection: 'i-lightbulb' };
-    list.innerHTML = tasks.map(t => `
-        <div id="task-${t.id}" class="task-item${t.status === 'completed' ? ' task-item--done' : ''}" onclick="completeTaskItem('${t.id}')">
-            <div class="task-item__icon">
-                ${t.status === 'completed'
-                    ? svgIcon('i-check-circle', 'icon-sm')
-                    : svgIcon(categoryIcons[t.category] || 'i-target', 'icon-sm')}
-            </div>
-            <div class="task-item__content">
-                <div class="task-item__title">${t.title}</div>
-                <div class="task-item__desc">${t.description}</div>
-            </div>
-        </div>
-    `).join('');
-
-    // 组合洞察
-    const insight = document.getElementById('tasks-insight');
-    if (data.combination_insight) {
-        insight.innerHTML = `${svgIcon('i-lightbulb', 'icon-sm')} ${data.combination_insight}`;
-    }
-}
-
-async function completeTaskItem(taskId) {
     try {
-        await api.completeTask(taskId);
-        const el = document.getElementById(`task-${taskId}`);
-        if (el) {
-            el.classList.add('task-item--done');
-            const iconEl = el.querySelector('.task-item__icon');
-            if (iconEl) iconEl.innerHTML = svgIcon('i-check-circle', 'icon-sm');
+        const updatedPair = await api.updatePartnerNickname(state.currentPair.id, customNickname);
+        upsertPair(updatedPair);
+        state.profileFeedback = customNickname
+            ? `“${customNickname}” 已同步到首页、当前关系列表和个人中心。`
+            : '备注名已清空，页面已恢复显示默认对象名称。';
+        closeModal();
+        showToast(customNickname ? '备注已更新' : '备注已清空');
+
+        if (state.currentPage === 'profile') {
+            await loadProfilePage();
         }
-        showToast('任务完成');
-    } catch (err) { showToast(err.message); }
-}
 
-// ── 社群技巧 ──
-async function loadTips() {
-    if (!state.currentPair) return;
-    try {
-        const data = await api.getCommunityTips(state.currentPair.type);
-        renderTips(data.tips || []);
-    } catch { /* 静默 */ }
-}
-
-function renderTips(tips) {
-    const card = document.getElementById('tips-card');
-    if (!card || !tips.length) return;
-    show(card);
-    const tip = tips[Math.floor(Math.random() * tips.length)];
-    document.getElementById('tip-title').textContent = tip.title;
-    document.getElementById('tip-text').textContent = tip.content;
-}
-
-// ── 里程碑 (1.4i) ──
-async function loadMilestones() {
-    if (!state.currentPair) return;
-    try {
-        const data = await api.getMilestones(state.currentPair.id);
-        renderMilestones(data.milestones || []);
-    } catch { /* 静默 */ }
-}
-
-function renderMilestones(milestones) {
-    const card = document.getElementById('milestones-card');
-    if (!card) return;
-    show(card);
-    const list = document.getElementById('milestones-list');
-    if (!milestones.length) {
-        list.innerHTML = '<div class="text-center text-muted text-sm p-3">还没有里程碑，点击右上角添加一个吧</div>';
-        return;
-    }
-    const typeIcons = { anniversary: 'i-heart', proposal: 'i-ring', wedding: 'i-ring', friendship_day: 'i-handshake', custom: 'i-star' };
-    list.innerHTML = milestones.map(m => `
-        <div class="milestone-item" onclick="viewMilestoneReport('${m.id}')">
-            <div class="milestone-item__icon">
-                ${svgIcon(typeIcons[m.type] || 'i-star', 'icon-sm')}
-            </div>
-            <div class="milestone-item__content">
-                <div class="milestone-item__title">${m.title}</div>
-                <div class="milestone-item__date">${m.date}</div>
-            </div>
-            <span class="milestone-item__action">查看回顾 ${svgIcon('i-chevron-right', 'icon-xs')}</span>
-        </div>
-    `).join('');
-}
-
-async function viewMilestoneReport(milestoneId) {
-    try {
-        showToast('正在生成回顾报告...');
-        const data = await api.getMilestoneReport(milestoneId);
-        const r = data.report || {};
-        const strengths = (r.strengths_discovered || []).map(s => `<div class="text-sm text-secondary py-half">• ${s}</div>`).join('');
-        openModal(`
-            <div class="modal-title text-center">${svgIcon('i-book-open', 'icon-sm')} 里程碑回顾</div>
-            <div class="text-sm text-secondary mb-4 leading-tall">${r.growth_story || '回忆正在生成中...'}</div>
-            ${strengths ? `<div class="mb-4"><div class="text-sm font-semibold mb-2">${svgIcon('i-target', 'icon-sm')} 发现的优势</div>${strengths}</div>` : ''}
-            ${r.blessing ? `<div class="report-insight text-center italic">${svgIcon('i-heart', 'icon-sm')} ${r.blessing}</div>` : ''}
-            <button class="btn btn-secondary btn-block mt-4" onclick="closeModal()">关闭</button>
-        `);
-    } catch (err) { showToast(err.message); }
-}
-
-// ── 通知中心 (1.4j) ──
-async function loadNotifications() {
-    const bell = document.getElementById('notification-bell');
-    if (!bell) return;
-    try {
-        const data = await api.getNotifications();
-        const notifications = data || [];
-        if (notifications.length > 0) {
-            show(bell);
-            const unread = notifications.filter(n => !n.is_read).length;
-            const badge = document.getElementById('notification-badge');
-            if (unread > 0 && badge) {
-                show(badge);
-                badge.textContent = unread > 9 ? '9+' : unread;
-            }
-            state.notifications = notifications;
-        }
-    } catch { /* 静默 */ }
-}
-
-function renderNotificationPanel() {
-    const panel = document.getElementById('notification-panel');
-    if (!panel) return;
-    const isVisible = !panel.classList.contains('hidden');
-    if (isVisible) { hide(panel); return; }
-    show(panel);
-    const list = document.getElementById('notification-list');
-    const notifications = state.notifications || [];
-    if (!notifications.length) {
-        list.innerHTML = `<div class="text-center text-muted text-sm p-3">暂无通知</div>`;
-        return;
-    }
-    const typeIcons = { crisis: 'i-alert-triangle', task: 'i-target', tip: 'i-lightbulb', milestone: 'i-trophy' };
-    list.innerHTML = notifications.slice(0, 20).map(n => `
-        <div class="notification-item${n.is_read ? '' : ' notification-item--unread'}">
-            ${svgIcon(typeIcons[n.type] || 'i-bell', 'icon-sm')}
-            <div class="flex-1">
-                <div>${n.content}</div>
-                <div class="notification-item__time">${new Date(n.created_at).toLocaleDateString()}</div>
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderHomeStatus(status, streak) {
-    const myDot = document.getElementById('status-my-dot');
-    const partnerDot = document.getElementById('status-partner-dot');
-
-    myDot.className = `status-dot ${status.my_done ? 'done' : ''}`;
-    partnerDot.className = `status-dot ${status.partner_done ? 'done' : status.my_done ? 'waiting' : ''}`;
-
-    document.getElementById('status-my-label').textContent = status.my_done ? '已打卡' : '未打卡';
-    document.getElementById('status-partner-label').textContent = status.partner_done ? '已打卡' : '等待中...';
-
-    const checkinBtn = document.getElementById('home-checkin-btn');
-    if (status.my_done) {
-        checkinBtn.textContent = '今日已打卡';
-        checkinBtn.disabled = true;
-    } else {
-        checkinBtn.textContent = '开始打卡';
-        checkinBtn.disabled = false;
-    }
-
-    // 连续打卡天数
-    const streakEl = document.getElementById('streak-count');
-    if (streakEl) streakEl.textContent = streak.streak || 0;
-
-    // 报告按钮逻辑
-    const reportBtn = document.getElementById('home-report-btn');
-    if (status.both_done) {
-        show(reportBtn);
-        if (status.has_report) {
-            reportBtn.textContent = '查看今日报告';
-            reportBtn.onclick = () => showPage('report');
+        if (state.currentPage === 'home') {
+            renderPairSelect();
+            await loadHomePage();
         } else {
-            reportBtn.textContent = 'AI 正在生成报告...';
-            _pollForReport();
+            renderPairPage();
         }
-    } else if (status.my_done && !status.partner_done) {
-        show(reportBtn);
-        if (status.has_solo_report) {
-            reportBtn.textContent = '查看个人情感日记';
-            reportBtn.onclick = () => { state.viewSolo = true; showPage('report'); };
-        } else {
-            reportBtn.textContent = '个人日记生成中...';
-            _pollForSoloReport();
-        }
-    } else {
-        hide(reportBtn);
+    } catch (error) {
+        showToast(error.message || '保存失败');
     }
 }
 
-async function _pollForReport() {
-    for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-            const status = await api.getTodayStatus(state.currentPair.id);
-            if (status.has_report) {
-                const btn = document.getElementById('home-report-btn');
-                btn.textContent = '查看今日报告';
-                btn.onclick = () => showPage('report');
-                showToast('AI 报告已生成');
-                return;
-            }
-        } catch { break; }
-    }
-}
-
-async function _pollForSoloReport() {
-    for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-            const status = await api.getTodayStatus(state.currentPair.id);
-            if (status.has_solo_report) {
-                const btn = document.getElementById('home-report-btn');
-                btn.textContent = '查看个人情感日记';
-                btn.onclick = () => { state.viewSolo = true; showPage('report'); };
-                showToast('你的个人日记已生成');
-                return;
-            }
-        } catch { break; }
-    }
-}
-
-// ── 打卡 (1.4c) ──
-function initCheckin() {
-    // 结构化选项通用处理（单选组）
-    const radioGroups = [
-        { selector: '.mood-score-option', groupClass: 'mood-score-option' },
-        { selector: '.initiative-option', groupClass: 'initiative-option' },
-        { selector: '.deep-conv-option', groupClass: 'deep-conv-option' },
-        { selector: '.task-option', groupClass: 'task-option' },
-    ];
-    radioGroups.forEach(({ selector, groupClass }) => {
-        document.querySelectorAll(selector).forEach(opt => {
-            opt.addEventListener('click', () => {
-                document.querySelectorAll(`.${groupClass}`).forEach(o => o.classList.remove('selected'));
-                opt.classList.add('selected');
-                const radio = opt.querySelector('input[type="radio"]');
-                if (radio) radio.checked = true;
-            });
-        });
-    });
-
-    // 情绪标签 (1.4c: .mood-tag → .tag[data-mood])
-    document.querySelectorAll('.tag[data-mood]').forEach(tag => {
-        tag.addEventListener('click', () => {
-            tag.classList.toggle('selected');
-            const mood = tag.dataset.mood;
-            if (state.selectedMoods.includes(mood)) {
-                state.selectedMoods = state.selectedMoods.filter(m => m !== mood);
-            } else {
-                state.selectedMoods.push(mood);
-            }
-        });
-    });
-
-    // 图片上传
-    const imageInput = document.getElementById('checkin-image-input');
-    const imagePreview = document.getElementById('checkin-image-preview');
-    document.getElementById('checkin-image-btn')?.addEventListener('click', () => imageInput.click());
-    imageInput?.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 10 * 1024 * 1024) { showToast('图片不能超过10MB'); return; }
-
-        try {
-            showToast('上传中...');
-            const result = await api.uploadFile('image', file);
-            state.uploadedImageUrl = result.url;
-            imagePreview.innerHTML = `<img src="${API_BASE.replace('/api/v1', '')}${result.url}" class="media-preview__img">`;
-            showToast('图片已添加');
-        } catch (err) { showToast(err.message); }
-    });
-
-    // 语音上传 (1.4d: var(--mint-light) → var(--success-50), var(--mint) → var(--success-500))
-    const voiceInput = document.getElementById('checkin-voice-input');
-    document.getElementById('checkin-voice-btn')?.addEventListener('click', () => voiceInput.click());
-    voiceInput?.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        try {
-            showToast('上传中...');
-            const result = await api.uploadFile('voice', file);
-            state.uploadedVoiceUrl = result.url;
-            document.getElementById('checkin-voice-preview').innerHTML = `
-                <div class="media-preview media-preview--voice">
-                    ${svgIcon('i-mic', 'icon-sm')} 语音已添加 (${(file.size / 1024).toFixed(0)}KB)
-                </div>`;
-            showToast('语音已添加');
-        } catch (err) { showToast(err.message); }
-    });
-
-    // 提交打卡
-    document.getElementById('checkin-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const content = document.getElementById('checkin-content').value.trim();
-        if (!content) { showToast('写点什么吧'); return; }
-
-        // 收集结构化字段
-        const moodScoreEl = document.querySelector('input[name="mood-score"]:checked');
-        const initiativeEl = document.querySelector('input[name="initiative"]:checked');
-        const deepConvEl = document.querySelector('input[name="deep-conv"]:checked');
-        const taskDoneEl = document.querySelector('input[name="task-done"]:checked');
-        const interactionFreq = parseInt(document.getElementById('checkin-interaction-freq')?.value) || null;
-
-        const btn = document.getElementById('checkin-submit-btn');
-        btn.disabled = true;
-        btn.textContent = '提交中...';
-
-        try {
-            await api.submitCheckin(
-                state.currentPair.id, content, state.selectedMoods,
-                state.uploadedImageUrl, state.uploadedVoiceUrl,
-                moodScoreEl ? parseInt(moodScoreEl.value) : null,
-                interactionFreq,
-                initiativeEl ? initiativeEl.value : null,
-                deepConvEl ? deepConvEl.value === 'true' : null,
-                taskDoneEl ? taskDoneEl.value === 'true' : null,
-            );
-            showToast('打卡成功！');
-            // 重置表单
-            state.selectedMoods = [];
-            state.uploadedImageUrl = null;
-            state.uploadedVoiceUrl = null;
-            document.querySelectorAll('.tag[data-mood]').forEach(t => t.classList.remove('selected'));
-            document.querySelectorAll('.mood-score-option, .initiative-option, .deep-conv-option, .task-option').forEach(t => t.classList.remove('selected'));
-            document.querySelectorAll('#checkin-form input[type="radio"]').forEach(r => r.checked = false);
-            document.getElementById('checkin-content').value = '';
-            document.getElementById('checkin-image-preview').innerHTML = '';
-            document.getElementById('checkin-voice-preview').innerHTML = '';
-            if (document.getElementById('checkin-interaction-freq')) document.getElementById('checkin-interaction-freq').value = '';
-            showPage('home');
-        } catch (err) { showToast(err.message); }
-        btn.disabled = false;
-        btn.textContent = '提交打卡';
-    });
-}
-
-// ── 报告 (1.4k) ──
-async function loadReports() {
-    if (!state.currentPair) return;
-    const container = document.getElementById('report-content');
-
-    // 如果从首页点击了 solo 日记入口
-    if (state.viewSolo) {
-        state.viewSolo = false;
-        try {
-            const soloReport = await api.getLatestReport(state.currentPair.id, 'solo').catch(() => null);
-            if (soloReport && soloReport.status === 'completed') {
-                renderSoloReport(soloReport);
-                return;
-            }
-        } catch { }
-    }
-
-    try {
-        const [dailyReport, soloReport, trendData] = await Promise.all([
-            api.getLatestReport(state.currentPair.id, 'daily').catch(() => null),
-            api.getLatestReport(state.currentPair.id, 'solo').catch(() => null),
-            api.getHealthTrend(state.currentPair.id, 14).catch(() => ({ trend: [], direction: 'insufficient_data' })),
-        ]);
-
-        if (dailyReport && dailyReport.status === 'completed') {
-            state.latestReport = dailyReport;
-            renderReport(dailyReport, trendData);
-        } else if (soloReport && soloReport.status === 'completed') {
-            renderSoloReport(soloReport);
-        } else {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">${svgIcon('i-bar-chart', 'icon-xl')}</div>
-                    <div class="empty-title">暂无报告</div>
-                    <div class="empty-desc">每次打卡即可生成个人日记，双方完成后还有关系健康报告</div>
-                </div>`;
-        }
-    } catch (err) {
-        console.error('加载报告失败', err);
-    }
-}
-
-function getMoodEmoji(score) {
-    if (!score) return svgIcon('i-meh', 'icon-lg');
-    if (score >= 8) return svgIcon('i-smile', 'icon-lg');
-    if (score >= 6) return svgIcon('i-smile', 'icon-lg');
-    if (score >= 4) return svgIcon('i-meh', 'icon-lg');
-    if (score >= 2) return svgIcon('i-frown', 'icon-lg');
-    return svgIcon('i-frown', 'icon-lg');
-}
-
-function renderReport(report, trendData) {
-    const c = report.content;
-    const container = document.getElementById('report-content');
-
-    // 趋势图 SVG (1.4d: var(--coral-500) → var(--primary-500))
-    let trendSvg = '';
-    if (trendData?.trend?.length >= 2) {
-        const points = trendData.trend;
-        const w = 320, h = 80, pad = 10;
-        const maxScore = 100, minScore = 0;
-        const coords = points.map((p, i) => {
-            const x = pad + (i / (points.length - 1)) * (w - 2 * pad);
-            const y = h - pad - ((p.score - minScore) / (maxScore - minScore)) * (h - 2 * pad);
-            return `${x},${y}`;
-        });
-        const directionIcon = trendData.direction === 'improving' ? svgIcon('i-trending-up', 'icon-sm') : trendData.direction === 'declining' ? svgIcon('i-trending-down', 'icon-sm') : svgIcon('i-activity', 'icon-sm');
-        const directionText = trendData.direction === 'improving' ? '持续上升' : trendData.direction === 'declining' ? '需要关注' : '保持稳定';
-
-        trendSvg = `
-            <div class="card mt-4">
-                <div class="card__header">
-                    <div class="card__header-title">${directionIcon} 健康趋势</div>
-                    <span class="text-xs text-muted">${directionText} · 近${points.length}天</span>
-                </div>
-                <svg viewBox="0 0 ${w} ${h}" class="trend-chart-svg">
-                    <defs>
-                        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="var(--primary-500)" stop-opacity="0.3"/>
-                            <stop offset="100%" stop-color="var(--primary-500)" stop-opacity="0"/>
-                        </linearGradient>
-                    </defs>
-                    <polygon points="${coords.join(' ')} ${w - pad},${h - pad} ${pad},${h - pad}" fill="url(#trendGrad)"/>
-                    <polyline points="${coords.join(' ')}" fill="none" stroke="var(--primary-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${points.map((p, i) => {
-                        const [x, y] = coords[i].split(',');
-                        return `<circle cx="${x}" cy="${y}" r="3" fill="var(--primary-500)"/>`;
-                    }).join('')}
-                </svg>
-            </div>`;
-    }
-
-    container.innerHTML = `
-        <div class="health-gauge">
-            <div class="gauge-circle" style="--score: ${c.health_score || 50}">
-                <span class="gauge-score">${c.health_score || '--'}</span>
-                <span class="gauge-label">健康指数</span>
-            </div>
-        </div>
-
-        ${c.insight ? `<div class="report-insight">${c.insight}</div>` : ''}
-        ${c.suggestion ? `<div class="report-suggestion">${c.suggestion}</div>` : ''}
-
-        ${trendSvg}
-
-        <div class="card mt-4">
-            <h3 class="text-base mb-3">情绪分析</h3>
-            <div class="checkin-status">
-                <div class="status-item">
-                    <div class="mb-1">${getMoodEmoji(c.mood_a?.score)}</div>
-                    <div class="text-sm text-secondary">A方: ${c.mood_a?.label || '--'}</div>
-                    <div class="text-xl font-semibold mt-1 mono">${c.mood_a?.score || '--'}/10</div>
-                </div>
-                <div class="status-item">
-                    <div class="mb-1">${getMoodEmoji(c.mood_b?.score)}</div>
-                    <div class="text-sm text-secondary">B方: ${c.mood_b?.label || '--'}</div>
-                    <div class="text-xl font-semibold mt-1 mono">${c.mood_b?.score || '--'}/10</div>
-                </div>
-            </div>
-        </div>
-
-        ${c.communication_quality ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-message-circle', 'icon-sm')} 沟通质量 ${c.communication_quality.score || '--'}/10</h3>
-                <p class="text-sm text-secondary">${c.communication_quality.note || ''}</p>
-            </div>` : ''}
-
-        ${c.emotional_sync ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-activity', 'icon-sm')} 情绪同步度 ${c.emotional_sync.score || '--'}/100</h3>
-                <p class="text-sm text-secondary">${c.emotional_sync.note || ''}</p>
-            </div>` : ''}
-
-        ${c.interaction_balance ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-handshake', 'icon-sm')} 互动平衡度 ${c.interaction_balance.score || '--'}/100</h3>
-                <p class="text-sm text-secondary">${c.interaction_balance.note || ''}</p>
-            </div>` : ''}
-
-        ${c.highlights?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-star', 'icon-sm')} 今日亮点</h3>
-                ${c.highlights.map(h => `<div class="text-sm text-secondary py-1">• ${h}</div>`).join('')}
-            </div>` : ''}
-
-        ${c.concerns?.length ? `
-            <div class="report-warning">
-                <h3 class="text-base mb-2">${svgIcon('i-alert-triangle', 'icon-sm')} 需要关注</h3>
-                ${c.concerns.map(con => `<div class="text-sm text-secondary py-1">• ${con}</div>`).join('')}
-            </div>` : ''}
-
-        ${c.risk_signals?.length ? `
-            <div class="report-danger">
-                <h3 class="text-base mb-2">${svgIcon('i-alert-circle', 'icon-sm')} 风险信号</h3>
-                ${c.risk_signals.map(r => `<div class="text-sm text-danger py-1">• ${r}</div>`).join('')}
-                <p class="text-xs text-muted mt-2">建议关注戈特曼「末日四骑士」模型，必要时寻求专业咨询</p>
-            </div>` : ''}
-
-        ${c.theory_tag ? `
-            <div class="text-center mt-3">
-                <span class="privacy-badge">${svgIcon('i-book-open', 'icon-xs')} ${c.theory_tag}</span>
-            </div>` : ''}
-
-        <!-- 周报/月报按钮 -->
-        <div class="flex gap-2 mt-4">
-            <button onclick="generateWeekly()" class="btn btn-outline flex-1">
-                ${svgIcon('i-clipboard', 'icon-sm')} 生成周报
-            </button>
-            <button onclick="generateMonthly()" class="btn btn-outline flex-1">
-                ${svgIcon('i-pie-chart', 'icon-sm')} 生成月报
-            </button>
-        </div>
-
-        <div class="text-center mt-4">
-            <span class="privacy-badge">${svgIcon('i-lock', 'icon-xs')} 数据已加密 · 仅AI可见原始内容</span>
-        </div>
-        <div class="text-center mt-2">
-            <span class="text-xs text-muted">本报告由AI生成，仅供参考</span>
-        </div>
-    `;
-}
-
-function renderSoloReport(report) {
-    const c = report.content;
-    const container = document.getElementById('report-content');
-
-    container.innerHTML = `
-        <div class="text-center mb-4">
-            <span class="btn btn-sm btn-secondary cursor-pointer" onclick="state.viewSolo=false;loadReports()">${svgIcon('i-arrow-left', 'icon-xs')} 查看关系报告</span>
-        </div>
-
-        <div class="health-gauge">
-            <div class="gauge-circle" style="--score: ${c.health_score || 50}">
-                <span class="gauge-score">${c.health_score || '--'}</span>
-                <span class="gauge-label">个人情绪指数</span>
-            </div>
-        </div>
-
-        <div class="card card--accent text-center">
-            <div class="text-2xl mb-2">${getMoodEmoji(c.mood?.score)} ${c.mood?.label || ''}</div>
-            <div class="text-sm opacity-90">情绪得分 ${c.mood?.score || '--'}/10</div>
-        </div>
-
-        ${c.self_insight ? `<div class="report-insight">${c.self_insight}</div>` : ''}
-
-        ${c.emotional_pattern ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-brain', 'icon-sm')} 情绪模式解读</h3>
-                <p class="text-sm text-secondary leading-relaxed">${c.emotional_pattern}</p>
-                ${c.theory_tag ? `<div class="text-xs text-muted mt-2">${svgIcon('i-book-open', 'icon-xs')} ${c.theory_tag}</div>` : ''}
-            </div>` : ''}
-
-        ${c.self_care_tip ? `<div class="report-suggestion">${c.self_care_tip}</div>` : ''}
-
-        ${c.relationship_note ? `
-            <div class="card text-center">
-                <div class="text-sm text-secondary leading-relaxed">${svgIcon('i-heart', 'icon-sm')} ${c.relationship_note}</div>
-            </div>` : ''}
-
-        <div class="text-center mt-4">
-            <span class="privacy-badge">${svgIcon('i-lock', 'icon-xs')} 仅你可见 · 对方无法查看你的个人日记</span>
-        </div>
-        <div class="text-center mt-2">
-            <span class="text-xs text-muted">本日记由AI生成，仅供参考</span>
-        </div>
-    `;
-}
-
-// ── 报告生成 ──
-async function triggerReport() {
-    if (!state.currentPair) return;
-    const btn = document.getElementById('home-report-btn');
-    btn.disabled = true;
-    btn.textContent = '深度分析中...';
-
-    try {
-        const report = await api.generateDailyReport(state.currentPair.id);
-        if (report.status === 'pending') {
-            showToast('AI生成中，预计需等几十秒', 5000);
-            _pollReportStatus('daily', btn, '查看今日报告', () => showPage('report'));
-        } else {
-            showToast('报告已生成');
-            showPage('report');
-            btn.disabled = false;
-            btn.textContent = '查看今日报告';
-        }
-    } catch (err) {
-        showToast(err.message);
-        btn.disabled = false;
-        btn.textContent = '重新生成报告';
-    }
-}
-
-async function generateWeekly() {
-    if (!state.currentPair) return;
-    try {
-        showToast('提取周报特征...');
-        const report = await api.generateWeeklyReport(state.currentPair.id);
-        if (report.status === 'pending') {
-            showToast('大模型深入汇总中，请耐心等候...', 5000);
-            _pollReportStatus('weekly', null, null, showWeeklyReport);
-        } else {
-            showWeeklyReport(report);
-        }
-    } catch (err) { showToast(err.message); }
-}
-
-async function generateMonthly() {
-    if (!state.currentPair) return;
-    try {
-        showToast('提取月报特征...');
-        const report = await api.generateMonthlyReport(state.currentPair.id);
-        if (report.status === 'pending') {
-            showToast('计算月度长周期趋势，请稍候...', 5000);
-            _pollReportStatus('monthly', null, null, showMonthlyReport);
-        } else {
-            showMonthlyReport(report);
-        }
-    } catch (err) { showToast(err.message); }
-}
-
-function _pollReportStatus(type, btn, btnText, callback) {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-        attempts++;
-        try {
-            const r = await api.getLatestReport(state.currentPair.id, type);
-            if (r && r.status === 'completed') {
-                clearInterval(interval);
-                showToast('分析完成');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = btnText;
-                }
-                if (callback) callback(r);
-            } else if (r && r.status === 'failed') {
-                clearInterval(interval);
-                showToast('AI 分析失败，可能有网络波动', 4000);
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = '重新生成报告';
-                }
-            }
-        } catch { /* 忽略瞬时断网错误 */ }
-
-        if (attempts > 30) { // 90 秒超时
-            clearInterval(interval);
-            showToast('请求超时，请稍后刷新页面查看');
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = '查看/重新生成';
-            }
-        }
-    }, 3000);
-}
-
-function showWeeklyReport(report) {
-    const c = report.content;
-    const container = document.getElementById('report-content');
-    const dirIcon = c.trend === 'improving' ? svgIcon('i-trending-up', 'icon-sm') : c.trend === 'declining' ? svgIcon('i-trending-down', 'icon-sm') : svgIcon('i-activity', 'icon-sm');
-
-    container.innerHTML = `
-        <div class="text-center mb-4">
-            <span class="btn btn-sm btn-secondary cursor-pointer" onclick="loadReports()">${svgIcon('i-arrow-left', 'icon-xs')} 返回日报</span>
-        </div>
-        <div class="health-gauge">
-            <div class="gauge-circle" style="--score: ${c.overall_health_score || 50}">
-                <span class="gauge-score">${c.overall_health_score || '--'}</span>
-                <span class="gauge-label">周健康指数</span>
-            </div>
-        </div>
-        <div class="card card--accent text-center">
-            <div class="text-sm opacity-90">${dirIcon} 本周趋势</div>
-            <div class="text-base mt-2">${c.trend_description || ''}</div>
-        </div>
-        ${c.encouragement ? `<div class="report-insight">${c.encouragement}</div>` : ''}
-        ${c.weekly_highlights?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-star', 'icon-sm')} 本周亮点</h3>
-                ${c.weekly_highlights.map(h => `<div class="text-sm text-secondary py-1">• ${h}</div>`).join('')}
-            </div>` : ''}
-        ${c.action_plan?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-sparkles', 'icon-sm')} 行动建议</h3>
-                ${c.action_plan.map(a => `<div class="report-suggestion my-1">${a}</div>`).join('')}
-            </div>` : ''}
-        <div class="text-center mt-4">
-            <span class="text-xs text-muted">本周报由AI生成，仅供参考</span>
-        </div>
-    `;
-}
-
-function showMonthlyReport(report) {
-    const c = report.content;
-    const container = document.getElementById('report-content');
-
-    container.innerHTML = `
-        <div class="text-center mb-4">
-            <span class="btn btn-sm btn-secondary cursor-pointer" onclick="loadReports()">${svgIcon('i-arrow-left', 'icon-xs')} 返回日报</span>
-        </div>
-        <div class="health-gauge">
-            <div class="gauge-circle" style="--score: ${c.overall_health_score || 50}">
-                <span class="gauge-score">${c.overall_health_score || '--'}</span>
-                <span class="gauge-label">月健康指数</span>
-            </div>
-        </div>
-        ${c.executive_summary ? `<div class="card card--accent"><div class="text-sm leading-relaxed">${c.executive_summary}</div></div>` : ''}
-        ${c.strengths?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-trophy', 'icon-sm')} 关系优势</h3>
-                ${c.strengths.map(s => `<div class="text-sm text-secondary py-1">• ${s}</div>`).join('')}
-            </div>` : ''}
-        ${c.growth_areas?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-sprout', 'icon-sm')} 成长空间</h3>
-                ${c.growth_areas.map(g => `<div class="text-sm text-secondary py-1">• ${g}</div>`).join('')}
-            </div>` : ''}
-        ${c.next_month_goals?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-target', 'icon-sm')} 下月目标</h3>
-                ${c.next_month_goals.map(g => `<div class="report-suggestion my-1">${g}</div>`).join('')}
-            </div>` : ''}
-        ${c.professional_note ? `<div class="report-insight">${c.professional_note}</div>` : ''}
-        <div class="text-center mt-4">
-            <span class="text-xs text-muted">本月报由AI生成，仅供参考</span>
-        </div>
-    `;
-}
-
-// ── 个人中心 (1.4m) ──
-async function loadProfile() {
-    // 显示昵称 — 使用新的 .profile-card__name 选择器
-    const nicknameEl = document.querySelector('#page-profile .profile-card__name');
-    if (nicknameEl) {
-        try {
-            const me = await api.request('GET', '/auth/me');
-            nicknameEl.textContent = me.nickname || '用户';
-        } catch { /* ignore */ }
-    }
-
-    if (!state.currentPair) {
-        document.getElementById('profile-pair-type').textContent = '未配对';
-        document.getElementById('profile-pair-status').textContent = '去配对页面建立关系吧';
-        const unbindSection = document.getElementById('unbind-section');
-        hide(unbindSection);
-        return;
-    }
-
-    const typeMap = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
-    document.getElementById('profile-pair-type').textContent = typeMap[state.currentPair.type] || state.currentPair.type;
-    document.getElementById('profile-pair-status').textContent = '已配对';
-
-    await loadUnbindStatus();
-}
-
-async function loadUnbindStatus() {
-    const section = document.getElementById('unbind-section');
-    const statusText = document.getElementById('unbind-status-text');
-    const actions = document.getElementById('unbind-actions');
-    if (!section || !state.currentPair) return;
-
-    try {
-        const status = await api.getUnbindStatus(state.currentPair.id);
-        if (!status.has_request) {
-            show(section);
-            statusText.textContent = '解除配对后双方将无法继续打卡和查看报告';
-            actions.innerHTML = `<button class="btn btn-outline btn-sm btn--unbind" onclick="handleRequestUnbind()">发起解绑</button>`;
-        } else {
-            show(section);
-            if (status.requested_by_me) {
-                statusText.textContent = `你已发起解绑请求，冷静期剩余 ${status.days_remaining} 天。对方确认后立即生效，或冷静期结束后你可强制解绑。`;
-                if (status.can_force_unbind) {
-                    actions.innerHTML = `
-                        <button class="btn btn-outline btn-sm btn--unbind" onclick="handleConfirmUnbind()">确认解绑</button>
-                        <button class="btn btn-outline btn-sm" onclick="handleCancelUnbind()">撤回请求</button>
-                    `;
-                } else {
-                    actions.innerHTML = `<button class="btn btn-outline btn-sm" onclick="handleCancelUnbind()">撤回请求</button>`;
-                }
-            } else {
-                statusText.textContent = '对方已发起解绑请求，确认后立即解除配对关系。';
-                actions.innerHTML = `
-                    <button class="btn btn-outline btn-sm btn--unbind" onclick="handleConfirmUnbind()">确认解绑</button>
-                `;
-            }
-        }
-    } catch (err) {
-        console.error('加载解绑状态失败', err);
-    }
-}
-
-async function handleRequestUnbind() {
-    if (!confirm('确定要发起解绑吗？对方确认后立即生效，或等待7天冷静期后你可强制解绑。')) return;
+async function requestUnbind() {
     try {
         await api.requestUnbind(state.currentPair.id);
+        closeModal();
         showToast('解绑请求已发起');
-        loadUnbindStatus();
-    } catch (err) { showToast(err.message); }
+    } catch (error) {
+        showToast(error.message || '操作失败');
+    }
 }
 
-async function handleConfirmUnbind() {
-    if (!confirm('确定要解除配对吗？此操作不可撤销。')) return;
+async function confirmUnbind() {
     try {
-        const result = await api.confirmUnbind(state.currentPair.id);
-        showToast(result.message);
-        state.currentPair = null;
-        hide(document.getElementById('tab-bar'));
-        showPage('pair');
-    } catch (err) { showToast(err.message); }
+        await api.confirmUnbind(state.currentPair.id);
+        closeModal();
+        showToast('配对已解除');
+        await bootstrapSession();
+    } catch (error) {
+        showToast(error.message || '操作失败');
+    }
 }
 
-async function handleCancelUnbind() {
+async function cancelUnbind() {
     try {
         await api.cancelUnbind(state.currentPair.id);
+        closeModal();
         showToast('解绑请求已撤回');
-        loadUnbindStatus();
-    } catch (err) { showToast(err.message); }
-}
-
-// ══════════════════════════════════════
-// Phase 2: 新功能页面逻辑
-// ══════════════════════════════════════
-
-// ── 异地恋模式 ──
-async function loadLongDistance() {
-    if (!state.currentPair) return;
-    try {
-        const data = await api.getLongDistanceDashboard(state.currentPair.id);
-        const card = document.getElementById('ld-status-card');
-        const daysEl = document.getElementById('ld-days-apart');
-        const distEl = document.getElementById('ld-distance');
-
-        if (data.days_since_last_meet != null) {
-            daysEl.textContent = data.days_since_last_meet + ' 天';
-        }
-        if (data.distance) {
-            distEl.textContent = data.distance;
-        }
-
-        // 渲染已完成活动
-        const completedEl = document.getElementById('ld-completed');
-        const activities = data.completed_activities || data.recent_activities || [];
-        if (activities.length > 0) {
-            completedEl.innerHTML = activities.slice(0, 5).map(a => `
-                <div class="notification-item mb-1">
-                    ${svgIcon('i-check-circle', 'icon-sm text-brand')}
-                    <div class="flex-1">
-                        <div class="text-sm">${a.title || a.name || '活动'}</div>
-                        <div class="text-xs text-muted">${a.completed_at ? new Date(a.completed_at).toLocaleDateString() : ''}</div>
-                    </div>
-                </div>
-            `).join('');
-        } else {
-            completedEl.innerHTML = '<div class="text-sm text-muted text-center p-3">还没有完成的活动</div>';
-        }
-
-        // 渲染当前活动
-        if (data.current_activity) {
-            renderLdActivity(data.current_activity);
-        }
-    } catch (err) {
-        console.error('加载异地恋数据失败', err);
+    } catch (error) {
+        showToast(error.message || '操作失败');
     }
 }
 
-async function suggestLdActivity() {
-    if (!state.currentPair) return;
-    const btn = document.getElementById('ld-suggest-btn');
-    btn.disabled = true;
+async function loadMilestonesPage() {
+    if (!isLiveMode()) {
+        renderMilestones(DEMO.milestones, true);
+        return;
+    }
+
     try {
-        const data = await api.suggestActivity(state.currentPair.id);
-        renderLdActivity(data);
-    } catch (err) {
-        showToast(err.message);
+        const milestones = await api.getMilestones(state.currentPair.id);
+        renderMilestones(milestones, false);
+    } catch (error) {
+        $('#milestone-summary').innerHTML = `
+        <p class="eyebrow">LIVE DATA</p>
+        <h3>里程碑暂时不可用</h3>
+        <p>${escapeHtml(error.message || '读取失败，请稍后重试。')}</p>`;
+        $('#milestone-list').innerHTML = '<div class="timeline-empty">当前无法读取里程碑，请稍后刷新。</div>';
+    }
+}
+
+function renderMilestones(milestones, isDemo) {
+    const list = Array.isArray(milestones) ? milestones : [];
+    const upcoming = list.filter((item) => typeof item.days_until === 'number' && item.days_until >= 0);
+    const past = list.filter((item) => typeof item.days_since === 'number' && item.days_since > 0);
+    const nextMilestone = upcoming[0] || list[0] || null;
+
+    $('#milestone-summary').innerHTML = `
+    <p class="eyebrow">${isDemo ? 'DEMO TIMELINE' : 'PAIR TIMELINE'}</p>
+    <h3>${nextMilestone ? escapeHtml(nextMilestone.title) : '还没有记录关键节点'}</h3>
+    <p>${nextMilestone ? `${escapeHtml(milestoneTypeLabel(nextMilestone.type))} · ${escapeHtml(milestoneTimeText(nextMilestone))}` : '从纪念日、重要承诺或育儿关键事件开始，让系统记住你们的重要时刻。'}</p>
+    <div class="metric-strip">
+      <article class="mini-stat"><span>总节点数</span><strong>${list.length}</strong></article>
+      <article class="mini-stat"><span>待到来</span><strong>${upcoming.length}</strong></article>
+      <article class="mini-stat"><span>已纪念</span><strong>${past.length}</strong></article>
+    </div>`;
+
+    $('#milestone-list').innerHTML = list.length
+        ? list.map((item) => renderMilestoneItem(item, { isDemo })).join('')
+        : '<div class="timeline-empty">还没有里程碑，先补一个对你们最重要的时间点。</div>';
+}
+
+async function handleMilestoneSubmit(event) {
+    event.preventDefault();
+    if (!isLiveMode()) {
+        showToast('演示态下不写入里程碑');
+        return;
+    }
+
+    const type = $('#milestone-type-input').value;
+    const title = $('#milestone-title-input').value.trim();
+    const milestoneDate = $('#milestone-date-input').value;
+    if (!title || !milestoneDate) {
+        showToast('请填写标题和日期');
+        return;
+    }
+
+    const button = $('#milestone-submit-btn');
+    button.disabled = true;
+    button.textContent = '保存中...';
+
+    try {
+        await api.createMilestone(state.currentPair.id, type, title, milestoneDate);
+        $('#milestone-form').reset();
+        showToast('里程碑已保存');
+        await Promise.all([loadMilestonesPage(), loadHomePage()]);
+    } catch (error) {
+        showToast(error.message || '保存失败');
     } finally {
-        btn.disabled = false;
+        button.disabled = false;
+        button.textContent = '保存里程碑';
     }
 }
 
-function renderLdActivity(activity) {
-    const el = document.getElementById('ld-activity');
-    el.innerHTML = `
-        <div class="card--inner text-center">
-            <div class="text-base font-semibold mb-2">${activity.title || activity.name || '同步活动'}</div>
-            <div class="text-sm text-secondary mb-3 leading-relaxed">${activity.description || ''}</div>
-            ${activity.id ? `<button class="btn btn-primary btn-sm" onclick="completeLdActivity('${activity.id}')">
-                ${svgIcon('i-check', 'icon-sm')} 标记完成
-            </button>` : ''}
-        </div>
-    `;
-}
+async function openMilestoneReview(milestoneId) {
+    if (!isLiveMode()) {
+        showToast('演示态下不生成真实回顾');
+        return;
+    }
 
-async function completeLdActivity(activityId) {
+    openModal('<h3>生成中</h3><p class="muted-copy">正在汇总历史报告并生成这个节点的成长回顾，请稍候。</p>');
     try {
-        await api.completeActivity(activityId);
-        showToast('活动已完成');
-        loadLongDistance();
-    } catch (err) { showToast(err.message); }
-}
-
-// ── 依恋风格测试 ──
-async function startAttachmentTest() {
-    if (!state.currentPair) { showToast('请先完成配对'); return; }
-    const btn = document.getElementById('attachment-start-btn');
-    btn.disabled = true;
-    btn.innerHTML = `${svgIcon('i-refresh', 'icon-sm spin')} AI 分析中...`;
-
-    try {
-        const data = await api.triggerAttachmentAnalysis(state.currentPair.id);
-        renderAttachmentResult(data);
-    } catch (err) {
-        showToast(err.message);
-        btn.disabled = false;
-        btn.innerHTML = `${svgIcon('i-sparkles', 'icon-sm')} 开始AI分析`;
+        const payload = await api.generateMilestoneReview(milestoneId);
+        const review = payload.review || {};
+        openModal(`
+        <h3>关系成长回顾</h3>
+        <p class="muted-copy">${escapeHtml(review.growth_story || review.summary || review.executive_summary || '系统已生成该里程碑对应的关系回顾。')}</p>
+        ${review.highlights?.length ? `<div class="stack-list">${review.highlights.map((item) => `<div class="stack-item"><div>${svgIcon('i-check')}</div><div>${escapeHtml(item)}</div></div>`).join('')}</div>` : ''}
+        ${review.blessing ? `<div class="hero-card hero-card--accent"><strong>祝福语</strong><p>${escapeHtml(review.blessing)}</p></div>` : ''}
+        ${(review.suggestions || review.action_plan || []).length ? `<div class="hero-card hero-card--accent"><strong>下一步建议</strong><p>${escapeHtml((review.suggestions || review.action_plan).join('；'))}</p></div>` : ''}
+        <div class="hero-actions"><button class="button button--ghost" type="button" onclick="closeModal()">关闭</button></div>`);
+    } catch (error) {
+        openModal(`
+        <h3>生成失败</h3>
+        <p class="muted-copy">${escapeHtml(error.message || '暂时无法生成回顾，请稍后重试。')}</p>
+        <div class="hero-actions"><button class="button button--ghost" type="button" onclick="closeModal()">关闭</button></div>`);
     }
 }
 
-function renderAttachmentResult(data) {
-    const intro = document.getElementById('attachment-intro');
-    const result = document.getElementById('attachment-result');
-    const content = document.getElementById('attachment-result-content');
+async function loadLongDistancePage() {
+    if (!isLiveMode()) {
+        renderLongDistance(DEMO.longdistance, true);
+        return;
+    }
 
-    hide(intro);
-    show(result);
-
-    const a = data.analysis || data;
-    const styleNames = {
-        secure: '安全型', anxious: '焦虑型', avoidant: '回避型',
-        fearful: '恐惧型', 'anxious-preoccupied': '焦虑-沉迷型',
-        'dismissive-avoidant': '疏离-回避型', 'fearful-avoidant': '恐惧-回避型'
-    };
-    const styleColors = {
-        secure: 'var(--success-500)', anxious: 'var(--warning-500)',
-        avoidant: 'var(--accent-400)', fearful: 'var(--danger-500)'
-    };
-
-    const styleName = styleNames[a.attachment_style] || a.attachment_style || '分析中';
-    const styleColor = styleColors[a.attachment_style] || 'var(--primary-500)';
-
-    content.innerHTML = `
-        <div class="health-gauge">
-            <div class="gauge-circle" style="--score:${a.confidence || 75}">
-                <span class="gauge-score gauge-score--label" style="color:${styleColor}">${styleName}</span>
-                <span class="gauge-label">依恋风格</span>
-            </div>
-        </div>
-
-        ${a.description ? `<div class="card card--accent"><div class="text-sm leading-relaxed">${a.description}</div></div>` : ''}
-
-        ${a.strengths?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-star', 'icon-sm')} 你的优势</h3>
-                ${a.strengths.map(s => `<div class="text-sm text-secondary py-1">• ${s}</div>`).join('')}
-            </div>` : ''}
-
-        ${a.growth_areas?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-sprout', 'icon-sm')} 成长空间</h3>
-                ${a.growth_areas.map(g => `<div class="text-sm text-secondary py-1">• ${g}</div>`).join('')}
-            </div>` : ''}
-
-        ${a.suggestions?.length ? `
-            <div class="card">
-                <h3 class="text-base mb-2">${svgIcon('i-lightbulb', 'icon-sm')} 改善建议</h3>
-                ${a.suggestions.map(s => `<div class="report-suggestion my-1">${s}</div>`).join('')}
-            </div>` : ''}
-
-        <div class="text-center mt-3">
-            <span class="privacy-badge">${svgIcon('i-lock', 'icon-xs')} 分析结果仅你可见</span>
-        </div>
-        <button class="btn btn-secondary btn-block mt-3" onclick="resetAttachmentTest()">重新分析</button>
-    `;
+    const [health, activities] = await Promise.allSettled([
+        api.getLongDistanceHealth(state.currentPair.id),
+        api.getLongDistanceActivities(state.currentPair.id),
+    ]);
+    renderLongDistance({
+        ...unwrapResult(health, DEMO.longdistance),
+        activities: unwrapResult(activities, DEMO.longdistance.activities),
+    }, false);
 }
 
-function resetAttachmentTest() {
-    const intro = document.getElementById('attachment-intro');
-    const result = document.getElementById('attachment-result');
-    const btn = document.getElementById('attachment-start-btn');
-    show(intro);
-    hide(result);
-    btn.disabled = false;
-    btn.innerHTML = `${svgIcon('i-sparkles', 'icon-sm')} 开始AI分析`;
+function renderLongDistance(data, isDemo) {
+    $('#longdistance-health').innerHTML = `
+    <p class="eyebrow">${isDemo ? 'DEMO' : 'LIVE'} HEALTH</p>
+    <h3>异地关系健康指数 ${data.health_index ?? '--'}</h3>
+    <p>沟通及时性 ${data.communication_timeliness ?? '--'} · 表达频率 ${data.expression_frequency ?? '--'} · 深聊率 ${data.deep_conversation_rate ?? '--'}</p>`;
+
+    const list = $('#longdistance-activities');
+    const activities = data.activities || [];
+    if (!activities.length) {
+        list.innerHTML = '<div class="empty-state">还没有创建异地互动活动。</div>';
+        return;
+    }
+
+    list.innerHTML = activities.map((item) => `
+    <article class="stack-item">
+      <div>${svgIcon(item.status === 'completed' ? 'i-check' : 'i-spark')}</div>
+      <div>
+        <strong>${escapeHtml(item.title || ACTIVITY_LABELS[item.type] || '活动')}</strong>
+        <div class="stack-item__meta">${item.status === 'completed' ? '已完成' : '待完成'} · ${formatDate(item.created_at)}</div>
+      </div>
+      ${item.status === 'completed' || isDemo ? '' : `<button class="text-button" type="button" onclick="completeLongDistanceActivity('${item.id}')">完成</button>`}
+    </article>`).join('');
 }
 
-// ── 关系快速体检 (纯前端问卷) ──
-const healthTestQuestions = [
-    { q: '你觉得和TA之间的沟通质量如何？', dim: '沟通质量', options: ['非常好', '较好', '一般', '较差', '很差'] },
-    { q: '你是否经常感受到TA的关心和支持？', dim: '情感支持', options: ['总是', '经常', '有时', '偶尔', '从不'] },
-    { q: '你们之间的信任程度如何？', dim: '信任程度', options: ['完全信任', '比较信任', '一般', '有些怀疑', '缺乏信任'] },
-    { q: '你对你们的亲密程度满意吗？', dim: '亲密程度', options: ['非常满意', '比较满意', '一般', '不太满意', '很不满意'] },
-    { q: '你们处理冲突的方式是否健康？', dim: '冲突处理', options: ['非常健康', '比较健康', '一般', '不太健康', '很不健康'] },
-    { q: '你是否觉得在关系中被尊重？', dim: '相互尊重', options: ['完全被尊重', '大部分时候', '一般', '偶尔不被尊重', '经常不被尊重'] },
-    { q: '你们是否有共同的生活目标？', dim: '共同愿景', options: ['非常一致', '比较一致', '部分一致', '不太一致', '完全不一致'] },
-    { q: '你在关系中是否保持了个人空间？', dim: '个人空间', options: ['非常好', '比较好', '一般', '不太够', '完全没有'] },
-    { q: '你们在一起时是否经常感到快乐？', dim: '幸福感', options: ['总是', '经常', '有时', '偶尔', '从不'] },
-    { q: '总体来说，你对这段关系的满意度如何？', dim: '总体满意', options: ['非常满意', '比较满意', '一般', '不太满意', '很不满意'] },
-];
+async function createLongDistanceActivity(type) {
+    if (!isLiveMode()) {
+        showToast('演示态下不写入活动');
+        return;
+    }
+    try {
+        await api.createLongDistanceActivity(state.currentPair.id, type, ACTIVITY_LABELS[type]);
+        showToast('活动已创建');
+        await loadLongDistancePage();
+    } catch (error) {
+        showToast(error.message || '创建失败');
+    }
+}
 
-let htState = { current: 0, answers: [] };
+async function completeLongDistanceActivity(activityId) {
+    try {
+        await api.completeLongDistanceActivity(activityId);
+        showToast('活动已标记完成');
+        await loadLongDistancePage();
+    } catch (error) {
+        showToast(error.message || '操作失败');
+    }
+}
+
+async function loadAttachmentPage() {
+    if (!isLiveMode()) {
+        renderAttachment(DEMO.attachment, true);
+        return;
+    }
+
+    try {
+        const data = await api.getAttachmentAnalysis(state.currentPair.id);
+        renderAttachment(data, false);
+    } catch (error) {
+        renderAttachment({ attachment_a: { type: 'unknown', label: '未分析' }, attachment_b: { type: 'unknown', label: '未分析' }, analyzed_at: null }, false);
+    }
+}
+
+function renderAttachment(data, isDemo) {
+    $('#attachment-summary').innerHTML = `
+    <p class="eyebrow">${isDemo ? 'DEMO' : 'PAIR DATA'}</p>
+    <h3>依恋风格不是标签，而是理解互动方式的入口</h3>
+    <p>${data.analyzed_at ? `上次分析时间：${escapeHtml(data.analyzed_at)}` : '当前还没有完成真实分析，可以直接点击按钮触发。'}</p>`;
+
+    $('#attachment-result').innerHTML = [
+        renderAttachmentCard('A 方', data.attachment_a),
+        renderAttachmentCard('B 方', data.attachment_b),
+    ].join('');
+}
+
+function renderAttachmentCard(title, entry = {}) {
+    const label = entry.label || ATTACHMENT_LABELS[entry.type] || '未分析';
+    return `
+    <article class="compare-card">
+      <h5>${title}</h5>
+      <div class="pill">${escapeHtml(label)}</div>
+      <p class="muted-copy">${attachmentDescription(entry.type)}</p>
+    </article>`;
+}
+
+function attachmentDescription(type) {
+    return {
+        secure: '倾向稳定回应和明确表达，是关系中的安全锚点。',
+        anxious: '更需要确定性和及时反馈，容易放大回应延迟。',
+        avoidant: '更重视独立空间，面对压力时可能选择后撤。',
+        fearful: '既渴望亲近也担心受伤，需要更细腻的安全感建设。',
+    }[type] || '当前还没有足够数据形成稳定画像。';
+}
+
+async function runAttachmentAnalysis() {
+    if (!isLiveMode()) {
+        showToast('演示态下不触发真实分析');
+        return;
+    }
+    const button = $('#attachment-run-btn');
+    button.disabled = true;
+    button.textContent = '分析中...';
+    try {
+        await api.triggerAttachmentAnalysis(state.currentPair.id);
+        showToast('依恋分析已触发');
+        await loadAttachmentPage();
+    } catch (error) {
+        showToast(error.message || '分析失败');
+    } finally {
+        button.disabled = false;
+        button.textContent = '开始分析';
+    }
+}
 
 function initHealthTest() {
-    htState = { current: 0, answers: [] };
-    show(document.getElementById('ht-question-area'));
-    hide(document.getElementById('ht-result'));
+    healthTestState = { current: 0, answers: [] };
+    $('#ht-result').classList.add('hidden');
+    $('#ht-question-area').classList.remove('hidden');
     renderHealthQuestion();
 }
 
 function renderHealthQuestion() {
-    const q = healthTestQuestions[htState.current];
-    const total = healthTestQuestions.length;
-
-    document.getElementById('ht-question-num').textContent = `问题 ${htState.current + 1}/${total}`;
-    document.getElementById('ht-question-text').textContent = q.q;
-    document.getElementById('ht-progress-bar').style.width = `${(htState.current / total) * 100}%`;
-    document.getElementById('ht-progress-text').textContent = `${htState.current}/${total}`;
-
-    document.getElementById('ht-options').innerHTML = q.options.map((opt, i) => `
-        <button class="option-card" onclick="answerHealthQuestion(${i})">
-            <span class="option-card__label">${opt}</span>
-            <svg class="icon icon-sm text-muted"><use href="#i-chevron-right"/></svg>
-        </button>
-    `).join('');
+    const item = HEALTH_TEST_QUESTIONS[healthTestState.current];
+    $('#ht-question-num').textContent = `问题 ${healthTestState.current + 1}/${HEALTH_TEST_QUESTIONS.length}`;
+    $('#ht-progress-text').textContent = `${healthTestState.current}/${HEALTH_TEST_QUESTIONS.length}`;
+    $('#ht-progress-bar').style.width = `${(healthTestState.current / HEALTH_TEST_QUESTIONS.length) * 100}%`;
+    $('#ht-question-text').textContent = item.q;
+    $('#ht-options').innerHTML = item.options.map((option, index) => `<button type="button" onclick="answerHealthQuestion(${index})">${escapeHtml(option)}</button>`).join('');
 }
 
-function answerHealthQuestion(optIndex) {
-    const score = [100, 75, 50, 25, 0][optIndex];
-    htState.answers.push({ dim: healthTestQuestions[htState.current].dim, score });
-    htState.current++;
+function answerHealthQuestion(optionIndex) {
+    const item = HEALTH_TEST_QUESTIONS[healthTestState.current];
+    const scores = [100, 75, 50, 25, 0];
+    healthTestState.answers.push({ dim: item.dim, score: scores[optionIndex] });
+    healthTestState.current += 1;
 
-    if (htState.current < healthTestQuestions.length) {
-        renderHealthQuestion();
-    } else {
+    if (healthTestState.current >= HEALTH_TEST_QUESTIONS.length) {
         showHealthTestResult();
+        return;
     }
+
+    renderHealthQuestion();
 }
 
 function showHealthTestResult() {
-    hide(document.getElementById('ht-question-area'));
-    show(document.getElementById('ht-result'));
+    $('#ht-question-area').classList.add('hidden');
+    $('#ht-result').classList.remove('hidden');
+    $('#ht-progress-bar').style.width = '100%';
+    $('#ht-progress-text').textContent = `${HEALTH_TEST_QUESTIONS.length}/${HEALTH_TEST_QUESTIONS.length}`;
+    const total = Math.round(healthTestState.answers.reduce((sum, item) => sum + item.score, 0) / healthTestState.answers.length);
+    $('#ht-gauge').style.setProperty('--score', total);
+    $('#ht-score').textContent = total;
 
-    const total = Math.round(htState.answers.reduce((s, a) => s + a.score, 0) / htState.answers.length);
-    document.getElementById('ht-gauge').style.setProperty('--score', total);
-    document.getElementById('ht-score').textContent = total;
-    document.getElementById('ht-progress-bar').style.width = '100%';
-    document.getElementById('ht-progress-text').textContent = `${healthTestQuestions.length}/${healthTestQuestions.length}`;
+    const level = total >= 80 ? ['关系非常健康', '你们已经具备很好的互动基础，重点是保持稳定节奏。']
+        : total >= 60 ? ['关系总体不错', '主要提升空间在表达细节和修复速度。']
+            : total >= 40 ? ['关系需要关注', '建议你们把“说清楚需求”和“及时回应”作为短期目标。']
+                : ['关系需要干预', '当前已经出现较多低分维度，建议尽快建立支持性对话机制。'];
 
-    const levels = [
-        { min: 80, label: '关系非常健康', desc: '你们的关系状态很棒！继续保持良好的互动模式。', cls: 'text-brand' },
-        { min: 60, label: '关系比较健康', desc: '整体不错，但有些方面可以进一步提升。', cls: 'text-accent' },
-        { min: 40, label: '关系需要关注', desc: '存在一些需要改善的地方，建议多沟通和互相理解。', cls: 'text-warning' },
-        { min: 0, label: '关系需要干预', desc: '建议认真对待当前问题，可考虑寻求专业帮助。', cls: 'text-danger' },
-    ];
-    const level = levels.find(l => total >= l.min);
-    document.getElementById('ht-level').className = `text-lg font-semibold mb-2 ${level.cls}`;
-    document.getElementById('ht-level').textContent = level.label;
-    document.getElementById('ht-desc').textContent = level.desc;
+    $('#ht-level').textContent = level[0];
+    $('#ht-desc').textContent = level[1];
+    $('#ht-dimensions').innerHTML = healthTestState.answers.map((entry) => `
+    <article class="stack-item">
+      <div>${svgIcon('i-chart')}</div>
+      <div>
+        <strong>${escapeHtml(entry.dim)}</strong>
+        <div class="stack-item__meta">评分 ${entry.score}</div>
+      </div>
+    </article>`).join('');
 
-    // 维度详情
-    const dimEl = document.getElementById('ht-dimensions');
-    dimEl.innerHTML = htState.answers.map(a => `
-        <div class="card">
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-semibold">${a.dim}</span>
-                <span class="text-sm font-bold ${a.score >= 75 ? 'text-brand' : a.score >= 50 ? 'text-accent' : 'text-danger'}">${a.score}</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-bar__fill" style="width:${a.score}%"></div>
-            </div>
-        </div>
-    `).join('');
-
-    // 建议
-    const weak = htState.answers.filter(a => a.score < 50).map(a => a.dim);
-    const sugEl = document.getElementById('ht-suggestion-list');
-    const suggestions = {
-        '沟通质量': '尝试每天花15分钟做"无手机深度对话"，倾听对方的感受而非急于给建议。',
-        '情感支持': '在对方需要时给予陪伴，一个拥抱胜过千言万语。学会说"我在"比"你应该"更有力量。',
-        '信任程度': '信任需要时间建立。保持透明沟通，遵守承诺，避免隐瞒。必要时可以坦诚讨论边界。',
-        '亲密程度': '安排定期的"二人时间"，尝试新的共同体验。身体接触和眼神交流都能增加亲密感。',
-        '冲突处理': '学习"暂停"技巧——争吵激烈时先冷静20分钟再沟通。关注问题本身而非攻击对方。',
-        '相互尊重': '尊重对方的想法和选择，即使不同意。避免在公共场合批评对方，保持基本的礼貌和感恩。',
-        '共同愿景': '找时间一起讨论未来规划，将个人目标和共同目标对齐。定期检视并调整方向。',
-        '个人空间': '健康的关系需要独立的个人空间。支持对方的兴趣爱好，保持各自的社交圈。',
-        '幸福感': '有意识地制造快乐时刻——小惊喜、一起做饭、散步。记录"感恩日记"关注积极面。',
-        '总体满意': '关系满意度低时，先检查自身需求是否清楚表达。考虑做一次深度对话，或寻求专业咨询。',
-    };
-    if (weak.length > 0) {
-        sugEl.innerHTML = weak.map(d => `<div class="report-suggestion my-1">${svgIcon('i-lightbulb', 'icon-sm')} <strong>${d}：</strong>${suggestions[d] || '建议与伴侣深入沟通这个话题。'}</div>`).join('');
-    } else {
-        sugEl.innerHTML = '<div class="report-suggestion my-1">你们的关系各维度都很不错！保持现有的良好互动模式，继续相互关爱。</div>';
-    }
+    const weakPoints = healthTestState.answers.filter((entry) => entry.score < 50);
+    $('#ht-suggestion-list').innerHTML = weakPoints.length
+        ? weakPoints.map((entry) => `<div class="stack-item"><div>${svgIcon('i-spark')}</div><div><strong>${escapeHtml(entry.dim)}</strong><div class="stack-item__meta">建议围绕这个维度安排一次具体对话和一个行动。</div></div></div>`).join('')
+        : '<div class="empty-state">当前各维度没有明显短板，可以继续保持记录与复盘。</div>';
 }
 
 function resetHealthTest() {
     initHealthTest();
 }
 
-// ── 关系社区 ──
-async function loadCommunityTips() {
-    try {
-        const data = await api.getCommunityTips(state.currentPair?.type);
-        const tips = data.tips || data || [];
-        const list = document.getElementById('community-tips-list');
-        if (tips.length > 0) {
-            list.innerHTML = tips.map(t => `
-                <div class="card">
-                    <div class="text-sm leading-relaxed">${t.content || t.tip || t}</div>
-                    ${t.author ? `<div class="text-xs text-muted mt-2">— ${t.author}</div>` : ''}
-                    ${t.category ? `<span class="tag tag--muted mt-2">${t.category}</span>` : ''}
-                </div>
-            `).join('');
-        } else {
-            list.innerHTML = '<div class="text-sm text-muted text-center p-3">暂无内容</div>';
-        }
-    } catch (err) {
-        console.error('加载社区内容失败', err);
+async function loadCommunityPage() {
+    if (!isLiveMode()) {
+        renderCommunity(DEMO.tips, DEMO.notifications, true);
+        return;
     }
+
+    const [tips, notifications] = await Promise.allSettled([
+        api.getCommunityTips(state.currentPair.type),
+        api.getNotifications(),
+    ]);
+    renderCommunity(unwrapResult(tips, DEMO.tips), unwrapResult(notifications, DEMO.notifications), false);
+}
+
+function renderCommunity(tipsPayload, notificationsPayload, isDemo) {
+    const tips = tipsPayload.tips || tipsPayload || [];
+    const notifications = Array.isArray(notificationsPayload) ? notificationsPayload : notificationsPayload || [];
+    $('#community-highlight').innerHTML = `
+    <p class="eyebrow">${isDemo ? 'DEMO' : 'LIVE CONTENT'}</p>
+    <h3>${escapeHtml(tips[0]?.title || '社群技巧')}</h3>
+    <p>${escapeHtml(tips[0]?.content || '这里会显示关系经营建议与运营型内容。')}</p>`;
+    $('#community-tips-list').innerHTML = tips.length
+        ? tips.map((tip) => `<article class="stack-item"><div>${svgIcon('i-star')}</div><div><strong>${escapeHtml(tip.title || '建议')}</strong><div class="stack-item__meta">${escapeHtml(tip.content || '')}</div></div></article>`).join('')
+        : '<div class="empty-state">暂无技巧内容。</div>';
+    $('#community-notification-list').innerHTML = notifications.length
+        ? notifications.map((item) => `<article class="stack-item"><div>${svgIcon('i-bell')}</div><div><strong>${escapeHtml(item.content)}</strong><div class="stack-item__meta">${formatDate(item.created_at)}</div></div></article>`).join('')
+        : '<div class="empty-state">暂无通知内容。</div>';
 }
 
 async function generateCommunityTip() {
-    if (!state.currentPair) { showToast('请先完成配对'); return; }
-    const btn = document.getElementById('community-generate-btn');
-    btn.disabled = true;
-    btn.innerHTML = `${svgIcon('i-refresh', 'icon-sm spin')} 生成中...`;
-
+    if (!isLiveMode()) {
+        showToast('演示态下不生成真实建议');
+        return;
+    }
     try {
-        const data = await api.generateTip(state.currentPair?.type);
-        const el = document.getElementById('community-generated');
-        show(el);
-        el.innerHTML = `
-            <div class="card card--accent">
-                <div class="text-sm leading-relaxed">${data.tip || data.content || '暂无建议'}</div>
-            </div>
-        `;
-    } catch (err) {
-        showToast(err.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `${svgIcon('i-sparkles', 'icon-sm')} 生成专属建议`;
+        await api.generateTip(state.currentPair.type);
+        showToast('已生成一条新建议');
+        await loadCommunityPage();
+    } catch (error) {
+        showToast(error.message || '生成失败');
     }
 }
 
-// ── 关系挑战赛 ──
-async function loadChallenges() {
-    if (!state.currentPair) return;
-    try {
-        const data = await api.getDailyTasks(state.currentPair.id);
-        const tasks = data.tasks || data || [];
-        const completed = tasks.filter(t => t.completed || t.status === 'completed');
-        const total = tasks.length;
-
-        // 进度
-        const pct = total > 0 ? Math.round((completed.length / total) * 100) : 0;
-        document.getElementById('challenge-progress-bar').style.width = `${pct}%`;
-        document.getElementById('challenge-progress-text').textContent = `已完成 ${completed.length}/${total} 个任务`;
-
-        // 统计
-        document.getElementById('stat-total').textContent = total;
-        document.getElementById('stat-completed').textContent = completed.length;
-
-        // 任务列表
-        const taskEl = document.getElementById('challenge-tasks');
-        if (tasks.length > 0) {
-            taskEl.innerHTML = tasks.map(t => {
-                const done = t.completed || t.status === 'completed';
-                return `
-                    <div class="option-card ${done ? 'option-card--completed' : ''} mb-1">
-                        <div class="option-card__icon">
-                            ${done ? svgIcon('i-check-circle', 'icon-sm') : svgIcon('i-target', 'icon-sm')}
-                        </div>
-                        <div class="flex-1">
-                            <div class="text-sm ${done ? 'text-muted' : 'font-semibold'}">${t.title || t.task || '任务'}</div>
-                            ${t.description ? `<div class="text-xs text-muted">${t.description}</div>` : ''}
-                        </div>
-                        ${!done && t.id ? `<button class="btn btn-sm btn-primary" onclick="completeChallenge('${t.id}')">完成</button>` : ''}
-                        ${done ? `<span class="text-xs text-brand">已完成</span>` : ''}
-                    </div>
-                `;
-            }).join('');
-        } else {
-            taskEl.innerHTML = '<div class="text-sm text-muted text-center p-3">暂无任务</div>';
-        }
-
-        // 连续天数从 streak 接口获取
-        try {
-            const streak = await api.getCheckinStreak(state.currentPair.id);
-            document.getElementById('stat-streak').textContent = streak.streak || 0;
-        } catch (e) { /* 忽略 */ }
-
-    } catch (err) {
-        console.error('加载挑战赛失败', err);
+async function loadChallengesPage() {
+    if (!isLiveMode()) {
+        renderChallenges(DEMO.tasks, DEMO.streak, true);
+        return;
     }
+
+    const [tasks, streak] = await Promise.allSettled([
+        api.getDailyTasks(state.currentPair.id),
+        api.getCheckinStreak(state.currentPair.id),
+    ]);
+    renderChallenges(unwrapResult(tasks, DEMO.tasks), unwrapResult(streak, DEMO.streak), false);
 }
 
-async function completeChallenge(taskId) {
+function renderChallenges(tasksPayload, streakPayload, isDemo) {
+    const tasks = tasksPayload.tasks || [];
+    const completed = tasks.filter((item) => item.status === 'completed').length;
+    const percent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+    $('#challenge-overview').innerHTML = `
+    <p class="eyebrow">${isDemo ? 'DEMO' : 'LIVE TASKS'}</p>
+    <h3>今日完成率 ${percent}%</h3>
+    <p>连续打卡 ${streakPayload.streak || 0} 天 · 今日已完成 ${completed}/${tasks.length} 项任务。</p>
+    <div class="progress-track"><span class="progress-track__fill" style="width:${percent}%"></span></div>`;
+    $('#challenge-task-list').innerHTML = tasks.length
+        ? tasks.map((task) => renderTaskItem(task)).join('')
+        : '<div class="empty-state">当前还没有挑战任务。</div>';
+}
+
+async function completeTask(taskId) {
+    if (!isLiveMode()) {
+        showToast('演示态下不写入任务状态');
+        return;
+    }
     try {
         await api.completeTask(taskId);
-        showToast('任务已完成！');
-        loadChallenges();
-    } catch (err) { showToast(err.message); }
-}
-
-// ── 情感课程 (mock) ──
-function showCourseDetail(courseId) {
-    const courses = {
-        communication: {
-            title: '高效沟通技巧',
-            lessons: 8,
-            desc: '学会非暴力沟通，掌握倾听和表达的艺术。课程涵盖：积极倾听技巧、"我"语句表达法、情绪觉察与表达、边界设定与协商、冲突中的沟通策略等。',
-            price: '¥99',
-            outline: ['认识沟通模式', '倾听的艺术', '"我"语句练习', '非暴力沟通四步法', '情绪表达技巧', '设定健康边界', '冲突中的沟通', '实战演练与总结']
-        },
-        conflict: {
-            title: '冲突管理大师',
-            lessons: 6,
-            desc: '将冲突转化为亲密的契机。基于戈特曼研究方法，学会识别"末日四骑士"并运用修复对话技巧。',
-            price: '¥99',
-            outline: ['认识冲突的本质', '识别"末日四骑士"', '情绪调节技巧', '修复对话方法', '创建安全对话空间', '长期冲突管理策略']
-        },
-        intimacy: {
-            title: '亲密关系升级',
-            lessons: 10,
-            desc: '从相爱到深爱的完整指南。涵盖情感联结、身体亲密、精神共鸣三个维度的深度提升。',
-            price: '¥99',
-            outline: ['亲密关系的五个阶段', '情感联结的秘密', '爱的五种语言', '创造仪式感', '共同成长的路径', '重燃激情的方法', '精神亲密的培养', '日常亲密小习惯', '长期关系的保鲜', '打造专属亲密蓝图']
-        },
-        attachment: {
-            title: '依恋理论与实践',
-            lessons: 5,
-            desc: '深入了解四种依恋风格如何影响你的亲密关系，学会与不同依恋风格的伴侣和谐相处。',
-            price: '¥99',
-            outline: ['依恋理论基础', '四种依恋风格详解', '识别自己的依恋模式', '与不同风格相处策略', '走向安全型依恋']
-        },
-        intro: {
-            title: '关系健康入门指南',
-            lessons: 3,
-            desc: '免费入门课程，带你了解关系健康的基础知识和「亲健」的使用方法。',
-            price: '免费',
-            outline: ['什么是关系健康', '每日打卡的意义', '如何阅读AI报告']
+        showToast('任务已完成');
+        if (state.currentPage === 'home') {
+            await loadHomePage();
+        } else {
+            await loadChallengesPage();
         }
-    };
-
-    const c = courses[courseId];
-    if (!c) return;
-
-    openModal(`
-        <div class="modal-title text-center">${c.title}</div>
-        <div class="text-sm text-secondary leading-relaxed mb-4">${c.desc}</div>
-        <div class="card mb-3">
-            <div class="text-sm font-semibold mb-2">${svgIcon('i-clipboard', 'icon-sm')} 课程大纲（${c.lessons}节）</div>
-            ${c.outline.map((l, i) => `<div class="text-sm text-secondary py-1">${i + 1}. ${l}</div>`).join('')}
-        </div>
-        <div class="text-center mb-3">
-            <span class="text-2xl font-bold">${c.price}</span>
-        </div>
-        <button class="btn ${c.price === '免费' ? 'btn-primary' : 'btn-outline'} btn-block" onclick="showToast('课程功能开发中，敬请期待');closeModal()">
-            ${c.price === '免费' ? '立即学习' : '购买课程'}
-        </button>
-        <button class="btn btn-secondary btn-block mt-2" onclick="closeModal()">返回</button>
-    `);
-}
-
-// ── 专家咨询 (mock) ──
-function showExpertDetail(expertId) {
-    const experts = {
-        zhang: {
-            name: '张心怡', title: '国家二级心理咨询师',
-            exp: '10年', price: '¥150/50分钟',
-            specialties: ['婚恋关系', '情感修复', '亲密关系提升'],
-            bio: '毕业于北京师范大学心理学系，拥有10年婚恋咨询经验。擅长运用情绪聚焦疗法(EFT)和戈特曼方法帮助伴侣重建情感联结。已帮助500+对伴侣改善关系质量。',
-            rating: 4.9, reviews: 328
-        },
-        li: {
-            name: '李明辉', title: '家庭治疗师',
-            exp: '8年', price: '¥120/50分钟',
-            specialties: ['沟通障碍', '亲子关系', '家庭系统治疗'],
-            bio: '中国心理学会会员，系统式家庭治疗师。专注家庭关系动力学研究，擅长帮助家庭成员理解彼此的互动模式，建立更健康的沟通方式。',
-            rating: 4.8, reviews: 256
-        },
-        wang: {
-            name: '王婷婷', title: '情感教练',
-            exp: '6年', price: '¥80/50分钟',
-            specialties: ['恋爱指导', '自我成长', '分手修复'],
-            bio: '认证情感教练，心理学硕士。以温暖、务实的风格陪伴来访者探索内心，特别擅长帮助年轻人建立健康的恋爱观和沟通习惯。',
-            rating: 4.7, reviews: 189
-        }
-    };
-
-    const e = experts[expertId];
-    if (!e) return;
-
-    openModal(`
-        <div class="text-center mb-4">
-            <div class="avatar avatar--lg mx-auto mb-2">${e.name[0]}</div>
-            <div class="text-lg font-semibold">${e.name}</div>
-            <div class="text-sm text-muted">${e.title} · ${e.exp}经验</div>
-            <div class="flex justify-center gap-2 mt-2">
-                ${e.specialties.map(s => `<span class="tag tag--muted">${s}</span>`).join('')}
-            </div>
-        </div>
-        <div class="card mb-3">
-            <div class="text-sm text-secondary leading-relaxed">${e.bio}</div>
-        </div>
-        <div class="flex justify-between mb-4">
-            <div class="text-center flex-1">
-                <div class="text-lg font-bold text-warning">${e.rating}</div>
-                <div class="text-xs text-muted">评分</div>
-            </div>
-            <div class="text-center flex-1">
-                <div class="text-lg font-bold">${e.reviews}</div>
-                <div class="text-xs text-muted">评价</div>
-            </div>
-            <div class="text-center flex-1">
-                <div class="text-lg font-bold text-brand">${e.price.split('/')[0]}</div>
-                <div class="text-xs text-muted">/50分钟</div>
-            </div>
-        </div>
-        <button class="btn btn-primary btn-block" onclick="showToast('预约功能开发中，敬请期待');closeModal()">
-            ${svgIcon('i-calendar', 'icon-sm')} 预约咨询
-        </button>
-        <button class="btn btn-secondary btn-block mt-2" onclick="closeModal()">返回</button>
-    `);
-}
-
-// ── 页面加载路由钩子 ──
-function onPageEnter(pageId) {
-    switch (pageId) {
-        case 'longdistance': loadLongDistance(); break;
-        case 'attachment-test':
-            // 如果已有分析结果则加载，否则显示介绍
-            if (state.currentPair) {
-                api.getAttachmentAnalysis(state.currentPair.id)
-                    .then(data => { if (data && data.attachment_style) renderAttachmentResult(data); })
-                    .catch(() => { /* 无历史结果，显示介绍 */ });
-            }
-            break;
-        case 'health-test': initHealthTest(); break;
-        case 'community': loadCommunityTips(); break;
-        case 'challenges': loadChallenges(); break;
+    } catch (error) {
+        showToast(error.message || '操作失败');
     }
 }
 
-// ── 初始化 ──
-document.addEventListener('DOMContentLoaded', () => {
-    initAuth();
-    initPair();
-    initCheckin();
+async function handleWaterTree() {
+    if (!isLiveMode()) {
+        showToast('演示态下不写入成长值');
+        return;
+    }
+    try {
+        await api.waterTree(state.currentPair.id);
+        showToast('关系树已浇水');
+        await loadHomePage();
+    } catch (error) {
+        showToast(error.message || '操作失败');
+    }
+}
 
-    document.querySelectorAll('.tab-item').forEach(tab => {
-        tab.addEventListener('click', () => {
-            const page = tab.dataset.page;
-            if (page === 'checkin' && state.todayStatus?.my_done) {
-                showToast('今天已经打过卡了');
-                return;
+function openCrisisDetail() {
+    const current = state.homeSnapshot?.crisis || DEMO.crisis;
+    const intervention = current.intervention || {};
+    openModal(`
+    <h3>${crisisLabel(current.crisis_level || 'none')}</h3>
+    <p>${escapeHtml(intervention.title || intervention.description || '当前没有额外说明。')}</p>
+    ${(intervention.action_items || []).length ? `<div class="stack-list">${intervention.action_items.map((item) => `<div class="stack-item"><div>${svgIcon('i-check')}</div><div>${escapeHtml(item)}</div></div>`).join('')}</div>` : ''}
+    <div class="hero-actions">
+      <button class="button button--secondary" type="button" onclick="openCrisisResources()">查看专业资源</button>
+      <button class="button button--ghost" type="button" onclick="closeModal()">关闭</button>
+    </div>`);
+}
+
+async function openCrisisResources() {
+    const resources = isLiveMode()
+        ? await api.getCrisisResources().catch(() => ({ hotlines: [], tips: [] }))
+        : { hotlines: [{ name: '全国心理援助热线', number: '400-161-9995', hours: '24 小时' }], tips: ['先把沟通目标收窄到“让彼此听懂”，而不是立刻解决所有问题。'] };
+    openModal(`
+    <h3>专业帮助资源</h3>
+    <div class="stack-list">
+      ${(resources.hotlines || []).map((item) => `<div class="stack-item"><div>${svgIcon('i-phone')}</div><div><strong>${escapeHtml(item.name)}</strong><div class="stack-item__meta">${escapeHtml(item.number)} · ${escapeHtml(item.hours || '')}</div></div></div>`).join('')}
+      ${(resources.tips || []).map((item) => `<div class="stack-item"><div>${svgIcon('i-spark')}</div><div>${escapeHtml(item)}</div></div>`).join('')}
+    </div>
+    <div class="hero-actions"><button class="button button--ghost" type="button" onclick="closeModal()">关闭</button></div>`);
+}
+
+function handleSwitchPair(pairId) {
+    setCurrentPair(pairId);
+    bootstrapSession();
+}
+
+function handleLogout() {
+    api.clearToken();
+    localStorage.removeItem('qj_current_pair');
+    state.me = null;
+    state.pairs = [];
+    state.currentPair = null;
+    state.profileFeedback = null;
+    syncTabBar();
+    showToast('已退出登录');
+    showPage('auth');
+}
+
+function bindOptionEvents() {
+    document.addEventListener('click', (event) => {
+        const moodButton = event.target.closest('[data-mood]');
+        if (moodButton) {
+            const mood = moodButton.dataset.mood;
+            if (state.selectedMoods.includes(mood)) {
+                state.selectedMoods = state.selectedMoods.filter((item) => item !== mood);
+            } else {
+                state.selectedMoods.push(mood);
             }
-            showPage(page);
-        });
+            renderMoods();
+            return;
+        }
+
+        const optionButton = event.target.closest('[data-option-name]');
+        if (optionButton) {
+            const { optionName, optionValue } = optionButton.dataset;
+            $$(`[data-option-name="${optionName}"]`).forEach((button) => {
+                button.classList.remove('select-card--active');
+                delete button.dataset.selectedName;
+                delete button.dataset.selectedValue;
+            });
+            optionButton.classList.add('select-card--active');
+            optionButton.dataset.selectedName = optionName;
+            optionButton.dataset.selectedValue = optionValue;
+            return;
+        }
+
+        const pairTypeButton = event.target.closest('[data-pair-type]');
+        if (pairTypeButton) {
+            state.selectedPairType = pairTypeButton.dataset.pairType;
+            $$('[data-pair-type]').forEach((button) => button.classList.remove('select-card--active'));
+            pairTypeButton.classList.add('select-card--active');
+            return;
+        }
+
+        const reportButton = event.target.closest('[data-report-type]');
+        if (reportButton) {
+            state.selectedReportType = reportButton.dataset.reportType;
+            $$('[data-report-type]').forEach((button) => button.classList.remove('segmented__item--active'));
+            reportButton.classList.add('segmented__item--active');
+            loadReportPage();
+            return;
+        }
+
+        const jumpButton = event.target.closest('[data-jump-page]');
+        if (jumpButton) {
+            showPage(jumpButton.dataset.jumpPage);
+            return;
+        }
+
+        const reviewButton = event.target.closest('[data-milestone-review]');
+        if (reviewButton) {
+            openMilestoneReview(reviewButton.dataset.milestoneReview);
+            return;
+        }
+
+        const activityButton = event.target.closest('[data-ld-type]');
+        if (activityButton) {
+            createLongDistanceActivity(activityButton.dataset.ldType);
+            return;
+        }
     });
+}
 
-    document.getElementById('home-checkin-btn')?.addEventListener('click', () => showPage('checkin'));
-    document.getElementById('home-report-btn')?.addEventListener('click', triggerReport);
-    // Phase 4 事件绑定
-    document.getElementById('notification-btn')?.addEventListener('click', renderNotificationPanel);
-    document.getElementById('read-all-btn')?.addEventListener('click', async () => {
-        await api.markNotificationsRead(); showToast('已全部标记为已读'); loadNotifications();
-    });
-    document.getElementById('tips-refresh-btn')?.addEventListener('click', loadTips);
-
-    // Phase 2 事件绑定
-    document.getElementById('ld-suggest-btn')?.addEventListener('click', suggestLdActivity);
-    document.getElementById('attachment-start-btn')?.addEventListener('click', startAttachmentTest);
-    document.getElementById('community-refresh-btn')?.addEventListener('click', loadCommunityTips);
-    document.getElementById('community-generate-btn')?.addEventListener('click', generateCommunityTip);
-
-    document.getElementById('add-milestone-btn')?.addEventListener('click', async () => {
-        const result = await openInputModal('添加里程碑', [
-            { key: 'title', label: '里程碑名称', type: 'text', placeholder: '如：在一起100天' },
-            { key: 'date', label: '日期', type: 'date', defaultValue: new Date().toISOString().split('T')[0] }
-        ]);
-        if (!result || !result.title) return;
-        const dateStr = result.date || new Date().toISOString().split('T')[0];
+function bindStaticEvents() {
+    $('#auth-mode-login').addEventListener('click', () => switchAuthMode('login'));
+    $('#auth-mode-register').addEventListener('click', () => switchAuthMode('register'));
+    $('#auth-method-email').addEventListener('click', () => switchAuthMethod('email'));
+    $('#auth-method-phone').addEventListener('click', () => switchAuthMethod('phone'));
+    $('#auth-send-code').addEventListener('click', handleSendPhoneCode);
+    $('#auth-form').addEventListener('submit', handleAuthSubmit);
+    $('#pair-create-btn').addEventListener('click', handleCreatePair);
+    $('#pair-join-btn').addEventListener('click', handleJoinPair);
+    $('#waiting-copy-btn').addEventListener('click', async () => {
+        const code = $('#waiting-invite-code').textContent;
         try {
-            await api.createMilestone(state.currentPair.id, { title: result.title, date: dateStr, type: 'custom' });
-            showToast('里程碑已添加');
-            loadMilestones();
-        } catch (err) { showToast(err.message); }
+            await navigator.clipboard.writeText(code);
+            showToast('邀请码已复制');
+        } catch (error) {
+            showToast('复制失败，请手动复制');
+        }
     });
+    $('#waiting-refresh-btn').addEventListener('click', refreshPairStatus);
+    $('#home-pair-select').addEventListener('change', (event) => {
+        setCurrentPair(event.target.value);
+        loadHomePage();
+    });
+    $('#checkin-form').addEventListener('submit', handleCheckinSubmit);
+    $('#image-upload-trigger').addEventListener('click', () => $('#image-upload-input').click());
+    $('#voice-upload-trigger').addEventListener('click', () => $('#voice-upload-input').click());
+    $('#image-upload-input').addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        if (file) handleUpload('image', file);
+    });
+    $('#voice-upload-input').addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        if (file) handleUpload('voice', file);
+    });
+    $('#report-generate-btn').addEventListener('click', generateReport);
+    $('#logout-btn').addEventListener('click', handleLogout);
+    $('#milestone-form').addEventListener('submit', handleMilestoneSubmit);
+    $('#attachment-run-btn').addEventListener('click', runAttachmentAnalysis);
+    $('#community-refresh-btn').addEventListener('click', loadCommunityPage);
+    $('#community-generate-btn').addEventListener('click', generateCommunityTip);
+    $('#notification-toggle').addEventListener('click', () => $('#notification-drawer').classList.toggle('hidden'));
+    $('#notification-read-all').addEventListener('click', async () => {
+        if (!isLiveMode()) {
+            showToast('演示态下不写入通知状态');
+            return;
+        }
+        await api.markNotificationsRead();
+        showToast('通知已全部标记为已读');
+        await loadHomePage();
+    });
+    $('#modal-overlay').addEventListener('click', (event) => {
+        if (event.target.id === 'modal-overlay') closeModal();
+    });
+    $('#modal-close').addEventListener('click', closeModal);
+    $('#longdistance-refresh').addEventListener('click', loadLongDistancePage);
 
-    if (api.isLoggedIn()) {
-        checkPairAndRoute();
-    } else {
-        showPage('auth');
+    $$('.tab-item').forEach((button) => {
+        button.addEventListener('click', () => showPage(button.dataset.page));
+    });
+}
+
+function exposeGlobals() {
+    window.showPage = showPage;
+    window.closeModal = closeModal;
+    window.initHealthTest = initHealthTest;
+    window.answerHealthQuestion = answerHealthQuestion;
+    window.resetHealthTest = resetHealthTest;
+    window.completeTask = completeTask;
+    window.handleSwitchPair = handleSwitchPair;
+    window.handleWaterTree = handleWaterTree;
+    window.openCrisisDetail = openCrisisDetail;
+    window.openCrisisResources = openCrisisResources;
+    window.requestUnbind = requestUnbind;
+    window.confirmUnbind = confirmUnbind;
+    window.cancelUnbind = cancelUnbind;
+    window.openMilestoneReview = openMilestoneReview;
+    window.completeLongDistanceActivity = completeLongDistanceActivity;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    switchAuthMode('login');
+    switchAuthMethod('email');
+    updateSendCodeButton();
+    bindOptionEvents();
+    bindStaticEvents();
+    exposeGlobals();
+    renderCheckinPage();
+    syncTopbar();
+    syncNotifications();
+    await bootstrapSession();
+    if (!api.isLoggedIn()) {
+        await showPage('auth');
     }
 });
