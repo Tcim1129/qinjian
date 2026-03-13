@@ -48,11 +48,11 @@ if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY=$(openssl rand -hex 32)
     DB_PASSWORD=$(openssl rand -hex 16)
 
-    # 询问硅基流动 API Key
-    read -p "🔑 请输入硅基流动 API Key (sk-...): " SILICONFLOW_API_KEY
-    if [ -z "$SILICONFLOW_API_KEY" ]; then
-        echo "⚠️  未输入 API Key，AI 功能将不可用"
-        SILICONFLOW_API_KEY="sk-placeholder"
+    # 询问通用 OpenAI 兼容网关配置
+    read -p "🔑 请输入 OpenAI 兼容网关 API Key (可填 SiliconFlow/OpenAI/其他): " AI_API_KEY
+    read -p "🌐 请输入 OpenAI 兼容网关 Base URL (默认 https://api.siliconflow.cn/v1): " AI_BASE_URL
+    if [ -z "$AI_BASE_URL" ]; then
+        AI_BASE_URL="https://api.siliconflow.cn/v1"
     fi
 
     # 写入 .env 文件
@@ -62,7 +62,10 @@ if [ ! -f "$ENV_FILE" ]; then
 
 SECRET_KEY=${SECRET_KEY}
 DB_PASSWORD=${DB_PASSWORD}
-SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+AI_API_KEY=${AI_API_KEY}
+AI_BASE_URL=${AI_BASE_URL}
+SILICONFLOW_API_KEY=
+FRONTEND_ORIGIN=http://localhost
 
 # AI 模型（可按需修改）
 AI_MULTIMODAL_MODEL=moonshot/kimi-k2.5

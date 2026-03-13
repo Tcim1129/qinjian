@@ -100,6 +100,15 @@ async def complete_task(
     db: AsyncSession = Depends(get_db),
 ):
     """标记任务完成"""
+    if task_id.startswith("demo-"):
+        return {"message": "任务已完成 ✅", "task": {"id": task_id, "status": "completed"}}
+
+    import uuid
+    try:
+        valid_uuid = uuid.UUID(task_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的任务ID格式")
+
     task = await db.get(RelationshipTask, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")

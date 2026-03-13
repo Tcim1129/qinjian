@@ -33,6 +33,58 @@
 }
 
 /* 进度区域 */
+/* 奶油风格进度展示 */
+.water-progress-card-creamy {
+  padding: 40rpx 32rpx;
+}
+
+.progress-section-creamy {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.progress-header-creamy {
+  margin-bottom: 8rpx;
+}
+
+.progress-label-creamy {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #444;
+}
+
+.progress-count-badge-creamy {
+  font-size: 22rpx;
+  background: #f0f0f0;
+  color: #666;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.progress-bar-creamy {
+  height: 16rpx;
+  background: #f0f0f0;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.progress-fill-creamy {
+  height: 100%;
+  background: linear-gradient(to right, #5d4037, #d4a373);
+  border-radius: 8rpx;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.progress-hint-creamy {
+  font-size: 22rpx;
+  color: #78909c;
+}
+
+.highlight-creamy {
+  color: #d4a373;
+  font-weight: 800;
+}
 .progress-section {
   padding: 16rpx 0;
 }
@@ -79,6 +131,29 @@
 }
 
 /* 统计行 */
+/* 奶油风格统计磁贴 */
+.stats-row-creamy {
+  padding: 32rpx 20rpx;
+}
+
+.stat-item-creamy {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-value-creamy {
+  font-size: 44rpx;
+  font-weight: 900;
+  color: #2d2a32;
+  line-height: 1;
+}
+
+.stat-label-creamy {
+  font-size: 22rpx;
+  color: #888;
+  margin-top: 12rpx;
+  font-weight: 600;
+}
 .stats-row {
   padding: 16rpx 0;
 }
@@ -123,6 +198,54 @@
 }
 
 /* 等级列表 */
+/* 奶油风格成长轨迹列表 */
+.level-list-creamy {
+  padding: 40rpx 32rpx;
+}
+
+.level-items-creamy {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 32rpx;
+}
+
+.level-node-creamy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  opacity: 0.3;
+  filter: grayscale(1);
+  transition: all 0.3s;
+}
+
+.level-node-creamy.active {
+  opacity: 1;
+  filter: grayscale(0);
+}
+
+.level-node-icon-creamy {
+  font-size: 48rpx;
+  width: 80rpx;
+  height: 80rpx;
+  background: #f8f9fd;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.level-node-creamy.active .level-node-icon-creamy {
+  background: #ffffff;
+  box-shadow: 0 8rpx 16rpx rgba(93, 64, 55, 0.1);
+  border: 2rpx solid #5d4037;
+}
+
+.level-node-name-creamy {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #666;
+}
 .level-title {
   font-size: 28rpx;
   font-weight: 600;

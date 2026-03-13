@@ -1,66 +1,133 @@
 /* 报告页特有样式 */
 
-/* Tab 切换 */
-.report-tabs {
-  background: var(--color-white);
-  border-radius: var(--radius-round);
-  padding: 4rpx;
-  box-shadow: var(--shadow-sm);
+/* 奶油风格 Tab 选择器 */
+.report-tabs-creamy {
+  background: #f0f0f0;
+  border-radius: 40rpx;
+  padding: 8rpx;
+  margin-bottom: 32rpx;
 }
 
-.report-tab {
+.report-tab-creamy {
   flex: 1;
   text-align: center;
+  font-size: 26rpx;
   padding: 16rpx 0;
-  font-size: 28rpx;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-round);
+  border-radius: 32rpx;
+  color: #888;
   transition: all 0.2s;
 }
 
-.report-tab-active {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  color: #ffffff;
-  font-weight: 600;
+.report-tab-creamy.active {
+  background: #ffffff;
+  color: #5d4037;
+  font-weight: 800;
+  box-shadow: 0 4rpx 12rpx rgba(93, 64, 55, 0.08);
 }
 
-/* 报告摘要 */
-.report-summary {
-  font-size: 28rpx;
-  color: var(--color-text);
-  line-height: 1.8;
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+/* 奶油风格报告内容 */
+.report-content-creamy {
+  padding: 48rpx 32rpx;
 }
 
-.report-health {
+.report-header-creamy {
   display: flex;
+  justify-content: space-between;
   align-items: baseline;
-  gap: 12rpx;
-  margin-top: 16rpx;
+  margin-bottom: 40rpx;
 }
 
-.health-score {
-  font-size: 56rpx;
-  font-weight: 700;
-  color: var(--color-primary);
-  line-height: 1;
+.report-date-creamy {
+  font-size: 20rpx;
+  color: #999;
 }
 
-.report-tip {
+.report-health-creamy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 48rpx;
+}
+
+.health-ring-creamy {
+  width: 140rpx;
+  height: 140rpx;
+  border: 12rpx solid #5d4037;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  margin-bottom: 16rpx;
+}
+
+.health-score-creamy {
+  font-size: 48rpx;
+  font-weight: 900;
+  color: #5d4037;
+}
+
+.health-unit-creamy {
+  font-size: 22rpx;
+  color: #5d4037;
+  margin-top: 10rpx;
+}
+
+.health-desc-creamy {
+  font-size: 24rpx;
+  color: #888;
+}
+
+/* AI 洞察大卡片 */
+.insight-card-creamy {
+  background: #fff9f0;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  border-left: 8rpx solid #8d6e63;
+}
+
+.insight-tag-creamy {
+  font-size: 20rpx;
+  color: #5d4037;
+  font-weight: 800;
+  margin-bottom: 12rpx;
+}
+
+.insight-text-creamy {
   font-size: 28rpx;
-  color: var(--color-text-secondary);
-  line-height: 1.7;
-  background: rgba(224, 107, 90, 0.08);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  line-height: 1.6;
+  color: #333;
 }
 
-.report-note {
+.sub-title-creamy {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #2d2a32;
+}
+
+.report-list-item-creamy {
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 20rpx 24rpx;
   font-size: 26rpx;
-  color: var(--color-text-secondary);
-  line-height: 1.7;
+  border: 1rpx solid #f0f0f0;
+  margin-bottom: 12rpx;
+}
+
+.report-list-item-creamy.concern {
+  border-left: 6rpx solid #ff8e9b;
+}
+
+.suggestion-box-creamy {
+  background: #fff9e6;
+  border-radius: 24rpx;
+  padding: 32rpx;
+}
+
+.suggestion-text-creamy {
+  font-size: 26rpx;
+  color: #e67e22;
+  line-height: 1.6;
 }
 
 /* 评分条 */
@@ -85,15 +152,32 @@
   padding-left: var(--spacing-sm);
 }
 
-/* 趋势占位 */
-.trend-placeholder {
-  height: 300rpx;
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
+/* 趋势卡片 (奶油风格) */
+.trend-card-creamy {
+  padding: 40rpx 32rpx;
 }
 
-.trend-icon {
-  font-size: 64rpx;
+.trend-mock-placeholder {
+  height: 240rpx;
+  background: #f8f9fd;
+  border-radius: 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+}
+
+.trend-mock-icon {
+  font-size: 80rpx;
+}
+
+.trend-mock-data {
+  display: flex;
+  gap: 32rpx;
+  font-size: 24rpx;
+  color: #999;
+  font-weight: 600;
 }
 
 /* 历史列表 */

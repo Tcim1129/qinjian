@@ -1,3 +1,5 @@
+const config = require('./config.js')
+
 /**
  * 亲健小程序 - 全局入口
  * 青年亲密关系健康管理专家
@@ -9,8 +11,8 @@ App({
     pairInfo: null,
     token: null,
     isLoggedIn: false,
-    // TODO: 部署前必须修改为实际后端服务器地址，并在微信后台配置合法域名
-    baseUrl: 'http://143.198.110.145:8080'
+    baseUrl: config.baseUrl,
+    appName: config.appName || '亲健'
   },
 
   onLaunch() {
@@ -36,6 +38,18 @@ App({
     }
   },
 
+  async syncPairState() {
+    const api = require('./utils/api.js')
+    try {
+      const summary = await api.get('/pairs/summary')
+      this.setPairInfo(summary.active_pair || null)
+      return summary
+    } catch (e) {
+      this.setPairInfo(null)
+      return null
+    }
+  },
+
   /**
    * 检查 token 是否有效
    */
@@ -44,6 +58,7 @@ App({
     api.get('/auth/me').then(res => {
       this.globalData.userInfo = res
       wx.setStorageSync('userInfo', res)
+      return this.syncPairState()
     }).catch(() => {
       // token 失效，清除登录态
       this.logout()

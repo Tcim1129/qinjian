@@ -394,3 +394,61 @@ class CrisisAlert(Base):
     # 关系
     pair: Mapped["Pair"] = relationship()
     report: Mapped["Report"] = relationship()
+
+
+# ── AI Agent 聊天会话存储 (Phase 5：陪伴打卡升级) ──
+
+
+class AgentChatSession(Base):
+    __tablename__ = "agent_chat_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True, index=True
+    )
+    # 此会话的状态（例如：active, archived）
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    # 今日会话是否已成功触发打卡生成提取
+    has_extracted_checkin: Mapped[bool] = mapped_column(default=False)
+    # 本次会话相关日期（归档用）
+    session_date: Mapped[date] = mapped_column(Date, default=date.today)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    # 关系
+    user: Mapped["User"] = relationship()
+    pair: Mapped["Pair"] = relationship()
+    messages: Mapped[list["AgentChatMessage"]] = relationship(
+        back_populates="session",
+        order_by="asc(AgentChatMessage.created_at)"
+    )
+
+
+class AgentChatMessage(Base):
+    __tablename__ = "agent_chat_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agent_chat_sessions.id"), index=True)
+    # 角色 (user, assistant, system, tool)
+    role: Mapped[str] = mapped_column(String(20))
+    # 消息正文
+    content: Mapped[str] = mapped_column(Text)
+    # 若为 tool_calls/function_call，将字典存入 payload
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    # 关系
+    session: Mapped["AgentChatSession"] = relationship(back_populates="messages")

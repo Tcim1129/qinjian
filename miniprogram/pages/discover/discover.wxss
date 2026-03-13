@@ -1,36 +1,338 @@
-/* 发现页特有样式 */
+/* 发现页 (参考图 2 风格) */
+.discover-container {
+  padding: 0 32rpx 40rpx;
+  background-color: #fff9f0;
+  min-height: 100vh;
+}
 
-.feature-grid {
+.discover-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx 0 20rpx;
 }
 
-.feature-card {
-  width: calc(50% - var(--spacing-md) / 2);
-  box-sizing: border-box;
-  text-align: center;
-  padding: var(--spacing-lg) var(--spacing-md);
-  transition: transform 0.15s;
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
 }
 
-.feature-card:active {
-  transform: scale(0.96);
+.brand-name {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #5d4037;
 }
 
-.feature-icon {
-  font-size: 56rpx;
-  margin-bottom: var(--spacing-sm);
-}
-
-.feature-title {
+.brand-sub {
   font-size: 28rpx;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: var(--spacing-xs);
+  color: #8f8ba8;
 }
 
-.feature-desc {
+.header-right {
+  display: flex;
+  gap: 32rpx;
+}
+
+.icon-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 40rpx;
+}
+
+.icon-btn text {
+  font-size: 20rpx;
+  color: #666;
+  margin-top: 4rpx;
+}
+
+/* 搜索栏 */
+.search-bar-wrap {
+  margin-bottom: 32rpx;
+}
+
+.search-input-box {
+  background: #f5f0e6;
+  height: 80rpx;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  padding: 0 32rpx;
+  border: 1rpx solid #efebe9;
+}
+
+.search-icon {
+  font-size: 32rpx;
+  margin-right: 16rpx;
+}
+
+.search-placeholder {
+  color: #b2b2b2;
+  font-size: 26rpx;
+}
+
+/* 主展示区域 (非对称布局) */
+.main-service-grid {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 32rpx;
+}
+
+.service-card-large {
+  flex: 1.4;
+  background: #eef2ff;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 320rpx;
+  position: relative;
+  overflow: hidden;
+}
+
+.service-title {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #333;
+}
+
+.service-stats {
+  font-size: 24rpx;
+  color: #5c67f5;
+  margin-top: 8rpx;
+}
+
+.service-stats .count {
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.service-desc {
   font-size: 22rpx;
-  color: var(--color-text-muted);
+  color: #888;
+  margin-top: 16rpx;
+}
+
+.consult-link {
+  font-size: 24rpx;
+  color: #5c67f5;
+  font-weight: 600;
+  margin-top: 32rpx;
+}
+
+.service-img-wrap {
+  position: absolute;
+  right: -10rpx;
+  bottom: 20rpx;
+}
+
+.service-emoji-large {
+  font-size: 120rpx;
+  opacity: 0.8;
+}
+
+.service-side-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.service-card-small {
+  flex: 1;
+  border-radius: 32rpx;
+  padding: 24rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.service-card-small.top { background: #fdf5ff; }
+.service-card-small.bottom { background: #f0f7ff; }
+
+.small-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #333;
+  display: block;
+}
+
+.small-desc {
+  font-size: 20rpx;
+  color: #999;
+}
+
+.small-emoji {
+  font-size: 56rpx;
+}
+
+/* 快速导航 */
+.quick-nav-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  margin-bottom: 32rpx;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.nav-icon-bg {
+  width: 96rpx;
+  height: 96rpx;
+  background: #ffffff;
+  border-radius: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.03);
+}
+
+.nav-name {
+  font-size: 24rpx;
+  color: #666;
+}
+
+/* 礼品横幅 */
+.promo-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(to right, #fff5f5, #fffcf5) !important;
+  margin-top: 20rpx;
+}
+
+.promo-tag {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #ff5e5e;
+}
+
+.promo-title {
+  font-size: 24rpx;
+  color: #888;
+  margin-top: 8rpx;
+}
+
+.promo-items {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 24rpx;
+}
+
+.promo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.item-icon {
+  width: 80rpx;
+  height: 80rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+}
+
+.promo-item text {
+  font-size: 20rpx;
+  color: #666;
+}
+
+.promo-img {
+  font-size: 80rpx;
+}
+
+/* 福利榜 */
+.benefit-section {
+  margin-top: 48rpx;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #333;
+}
+
+.section-more {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.benefit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 24rpx !important;
+  margin-bottom: 0 !important;
+}
+
+.benefit-img {
+  width: 100rpx;
+  height: 100rpx;
+  background: #f5f6fa;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56rpx;
+}
+
+.benefit-info {
+  flex: 1;
+}
+
+.benefit-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.benefit-tag {
+  display: inline-block;
+  font-size: 20rpx;
+  color: #ff8e9b;
+  background: #fff0f3;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  margin: 8rpx 0;
+}
+
+.benefit-price {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #ff5e5e;
+}
+
+.benefit-btn {
+  background: #ff5e5e;
+  color: #ffffff;
+  padding: 12rpx 32rpx;
+  border-radius: 40rpx;
+  font-size: 24rpx;
+  font-weight: 600;
 }

@@ -1,18 +1,39 @@
 /* 首页特有样式 */
 
-.home-header {
+.home-header-creamy {
   margin: calc(-1 * var(--spacing-lg));
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-xl) var(--spacing-lg);
-  padding-top: calc(var(--spacing-xl) + 20rpx);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  margin-bottom: 48rpx;
+  padding: 80rpx 40rpx 120rpx;
+  background: linear-gradient(135deg, #5d4037, #8d6e63);
+  border-radius: 0 0 80rpx 80rpx;
+  position: relative;
 }
 
 .home-greeting {
-  font-size: 40rpx;
-  font-weight: 700;
+  font-size: 44rpx;
+  font-weight: 800;
   color: #ffffff;
+  letter-spacing: 2rpx;
 }
+
+.home-pair-status-creamy {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 12rpx;
+}
+
+.home-mood-capsule {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 12rpx 28rpx;
+  border-radius: 40rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+}
+
+.mood-emoji-sm { font-size: 32rpx; }
+.mood-label-sm { font-size: 20rpx; color: #ffffff; font-weight: 600; }
 
 .home-pair-status {
   font-size: 24rpx;
@@ -49,33 +70,70 @@
   font-size: 40rpx;
 }
 
-/* 打卡天数 */
-.streak-card {
+/* 打卡天数 (奶油风格大卡片) */
+.streak-card-creamy {
+  margin-top: -60rpx;
+  position: relative;
+  z-index: 10;
   text-align: center;
-  padding: var(--spacing-xl) var(--spacing-lg);
+  padding: 60rpx 40rpx;
 }
 
-.streak-number {
-  font-size: 80rpx;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+.streak-number-creamy {
+  font-size: 112rpx;
+  font-weight: 900;
+  background: linear-gradient(135deg, #5d4037, #d4a373);
   -webkit-background-clip: text;
   color: transparent;
-  line-height: 1.2;
+  line-height: 1;
+  letter-spacing: -2rpx;
+}
+
+.streak-label-creamy {
+  font-size: 24rpx;
+  color: #8f8ba8;
+  margin-top: 16rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+
+/* 标题样式 */
+.section-title-creamy {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #2d2a32;
 }
 
 /* 快捷操作卡片 */
-.action-card {
+.action-card-creamy {
   text-align: center;
-  padding: var(--spacing-lg) var(--spacing-sm);
-  min-width: 0;
+  padding: 40rpx 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
 }
 
-.action-card:active {
-  transform: scale(0.97);
+.action-icon-creamy {
+  font-size: 64rpx;
 }
 
-.action-icon {
-  font-size: 56rpx;
-  margin-bottom: var(--spacing-sm);
+.action-text-creamy {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.action-status-creamy {
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.action-status-creamy.done { background: #E8F5E9; color: #2E7D32; font-weight: 700; }
+.action-status-creamy.pending { background: #FFF3E0; color: #E67E22; font-weight: 700; }
+
+.action-sub-creamy {
+  font-size: 20rpx;
+  color: #999;
 }

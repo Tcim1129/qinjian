@@ -3,6 +3,8 @@
 
 set -e
 
+PUBLIC_HOST="${PUBLIC_HOST:-$(hostname -I 2>/dev/null | awk '{print $1}') }"
+
 echo "🚀 亲健项目自动部署"
 echo "===================="
 echo ""
@@ -38,7 +40,7 @@ echo "✅ 部署完成！"
 echo "===================="
 echo ""
 echo "访问地址:"
-echo "  Web: http://143.198.110.145:8080"
-echo "  API: http://143.198.110.145:8080/api/health"
+echo "  Web: http://${PUBLIC_HOST}:8080"
+echo "  API: http://${PUBLIC_HOST}:8080/api/health"
 echo ""
 echo "查看日志: cd /opt/qinjian && docker-compose logs -f"

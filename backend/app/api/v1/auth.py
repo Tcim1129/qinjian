@@ -17,6 +17,8 @@ from app.schemas import (
     RegisterRequest,
     LoginRequest,
     UserResponse,
+    UserUpdateRequest,
+    PasswordChangeRequest,
     WechatLoginRequest,
     PhoneSendCodeRequest,
     PhoneLoginRequest,
@@ -27,6 +29,7 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 logger = logging.getLogger(__name__)
 
 _phone_code_cache: dict[str, dict] = {}
+_login_attempts: dict[str, dict] = {}
 
 
 def _normalize_phone(phone: str) -> str:
@@ -37,7 +40,7 @@ def _normalize_phone(phone: str) -> str:
 
 
 def _generate_phone_code() -> str:
-    upper_bound = 10 ** settings.PHONE_CODE_LENGTH
+    upper_bound = 10**settings.PHONE_CODE_LENGTH
     return str(secrets.randbelow(upper_bound)).zfill(settings.PHONE_CODE_LENGTH)
 
 
@@ -68,13 +71,29 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=dict)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """用户登录"""
+    now = datetime.now(timezone.utc)
+    attempt = _login_attempts.setdefault(req.email, {"count": 0, "locked_until": None})
+    if attempt["locked_until"] and now < attempt["locked_until"]:
+        remaining = int((attempt["locked_until"] - now).total_seconds() / 60)
+        raise HTTPException(
+            status_code=429,
+            detail=f"密码错误次数过多，为了保护账号安全已被锁定，请 {max(1, remaining)} 分钟后再试",
+        )
+    if attempt["locked_until"] and now >= attempt["locked_until"]:
+        attempt["count"] = 0
+        attempt["locked_until"] = None
+
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="该邮箱尚未注册，请先注册")
     if not verify_password(req.password, user.password_hash):
+        attempt["count"] += 1
+        if attempt["count"] >= 5:
+            attempt["locked_until"] = now + timedelta(minutes=15)
         raise HTTPException(status_code=401, detail="密码错误，请重新输入")
 
+    _login_attempts.pop(req.email, None)
     token = create_access_token(str(user.id))
     return {
         "access_token": token,
@@ -156,9 +175,22 @@ async def send_phone_code(req: PhoneSendCodeRequest):
     phone = _normalize_phone(req.phone)
     now = datetime.now(timezone.utc)
     existing = _phone_code_cache.get(phone)
-    if existing and existing["requested_at"] + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS) > now:
-        remaining = int((existing["requested_at"] + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS) - now).total_seconds())
-        raise HTTPException(status_code=429, detail=f"发送过于频繁，请 {max(1, remaining)} 秒后再试")
+    if (
+        existing
+        and existing["requested_at"]
+        + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS)
+        > now
+    ):
+        remaining = int(
+            (
+                existing["requested_at"]
+                + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS)
+                - now
+            ).total_seconds()
+        )
+        raise HTTPException(
+            status_code=429, detail=f"发送过于频繁，请 {max(1, remaining)} 秒后再试"
+        )
 
     code = _generate_phone_code()
     _phone_code_cache[phone] = {
@@ -226,3 +258,46 @@ async def phone_login(req: PhoneLoginRequest, db: AsyncSession = Depends(get_db)
 async def get_me(user: User = Depends(get_current_user)):
     """获取当前登录用户信息"""
     return user
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_me(
+    req: UserUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新当前用户资料"""
+    if req.nickname is not None:
+        nickname = req.nickname.strip()
+        if len(nickname) < 1:
+            raise HTTPException(status_code=400, detail="昵称不能为空")
+        if len(nickname) > 50:
+            raise HTTPException(status_code=400, detail="昵称长度不能超过50个字符")
+        user.nickname = nickname
+
+    if req.avatar_url is not None:
+        user.avatar_url = req.avatar_url.strip() or None
+
+    await db.flush()
+    return user
+
+
+@router.post("/change-password", response_model=dict)
+async def change_password(
+    req: PasswordChangeRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改当前用户密码"""
+    if not verify_password(req.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="当前密码错误")
+
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="新密码至少需要6位")
+
+    if req.new_password == req.current_password:
+        raise HTTPException(status_code=400, detail="新密码不能与当前密码相同")
+
+    user.password_hash = hash_password(req.new_password)
+    await db.flush()
+    return {"message": "密码修改成功"}

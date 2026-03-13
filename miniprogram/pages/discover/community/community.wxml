@@ -1,6 +1,6 @@
 <!--关系社区页-->
 <view class="container">
-  <view class="tab-bar">
+  <view class="page-tabs">
     <view class="tab-item {{currentTab === 'tips' ? 'active' : ''}}" data-tab="tips" bindtap="switchTab">小贴士</view>
     <view class="tab-item {{currentTab === 'notifications' ? 'active' : ''}}" data-tab="notifications" bindtap="switchTab">通知</view>
   </view>

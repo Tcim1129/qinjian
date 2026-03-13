@@ -1144,6 +1144,18 @@ select {
     color: white;
 }
 
+.stack-item--user {
+    background: rgba(215, 104, 72, 0.08);
+}
+
+#checkin-agent-panel .stack-list {
+    margin-bottom: 18px;
+}
+
+#checkin-agent-panel .field {
+    margin-top: 18px;
+}
+
 .modal-overlay {
     position: fixed;
     inset: 0;

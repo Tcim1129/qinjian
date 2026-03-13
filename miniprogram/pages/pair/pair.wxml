@@ -6,46 +6,58 @@
   </view>
 
   <block wx:else>
-    <!-- 未配对状态 -->
-    <view wx:if="{{!isPaired}}" class="not-paired">
-      <view class="pair-header">
-        <view class="pair-icon">💕</view>
-        <view class="pair-title">开始你们的亲健之旅</view>
-        <view class="pair-subtitle">与伴侣配对后，即可共同记录关系点滴</view>
+    <!-- 未配对状态 (参考图 1 风格) -->
+    <view wx:if="{{!isPaired}}" class="not-paired-creamy animate-fade-in">
+      <view class="creamy-header">
+        <view class="creamy-title">还差一步：绑定另一半</view>
       </view>
 
-      <!-- 创建配对 -->
-      <view class="card mt-lg">
-        <view class="card-title">创建配对</view>
-        <view class="card-desc">生成专属配对码，分享给伴侣</view>
-        <button 
-          class="btn btn-primary btn-block mt-md" 
-          bindtap="createPair"
-          disabled="{{creating}}"
-        >
-          {{creating ? '生成中...' : '创建配对'}}
-        </button>
-      </view>
-
-      <!-- 加入配对 -->
-      <view class="card mt-md">
-        <view class="card-title">加入配对</view>
-        <view class="card-desc">输入伴侣分享的配对码</view>
-        <view class="input-wrap mt-sm">
+      <!-- 我的邀请码区域 -->
+      <view class="invite-section card-creamy">
+        <view class="invite-info">
+          <text class="invite-label">我的真爱码：</text>
+          <text class="invite-value">{{pairInfo.invite_code || '------'}}</text>
+          <view class="copy-tag" bindtap="copyInviteCode">复制</view>
+        </view>
+        
+        <view class="bind-input-group">
           <input 
-            type="text" 
-            placeholder="请输入配对码" 
+            class="bind-input" 
+            placeholder="输入对方提供的真爱码" 
+            placeholder-style="color: #B2BEC3;"
             value="{{inviteCode}}"
             bindinput="onInviteCodeInput"
           />
+          <view class="bind-btn {{inviteCode.length === 6 ? 'active' : ''}}" bindtap="joinPair">绑定</view>
         </view>
-        <button 
-          class="btn btn-secondary btn-block mt-md" 
-          bindtap="joinPair"
-          disabled="{{joining}}"
-        >
-          {{joining ? '加入中...' : '加入配对'}}
-        </button>
+
+        <view class="invite-btn-wrap">
+          <button open-type="share" class="invite-link-btn">
+            <text class="icon-phone">📱</text> 邀请对方下载
+          </button>
+        </view>
+      </view>
+
+      <view class="feature-tip">绑定另一半即可体验以下情侣专属私密功能</view>
+
+      <!-- 功能磁贴网格 (20个) -->
+      <view class="feature-grid-creamy">
+        <view class="feature-item-creamy" wx:for="{{featureIcons}}" wx:key="name">
+          <view class="feature-icon-wrapper" style="background: {{item.bg}}">
+            <text class="feature-emoji">{{item.icon}}</text>
+          </view>
+          <text class="feature-name-creamy">{{item.name}}</text>
+        </view>
+      </view>
+
+      <!-- 底部滚动通知 -->
+      <view class="notice-bar-creamy">
+        <text class="notice-icon">📢</text>
+        <swiper class="notice-swiper" vertical autoplay circular interval="3000">
+          <swiper-item wx:for="{{notices}}" wx:key="*this">
+            <text class="notice-text">{{item}}</text>
+          </swiper-item>
+        </swiper>
       </view>
     </view>
 

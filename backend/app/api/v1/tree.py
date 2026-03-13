@@ -58,6 +58,25 @@ async def get_tree_status(
     db: AsyncSession = Depends(get_db),
 ):
     """获取关系树当前状态"""
+    if pair_id in ("solo", "demo-pair"):
+        return {
+            "growth_points": 368,
+            "level": "tree",
+            "level_name": "小树",
+            "level_emoji": "🌳",
+            "next_level_at": 700,
+            "progress_percent": 52,
+            "milestones": [],
+            "last_watered": None,
+            "can_water": True,
+        }
+
+    import uuid
+    try:
+        uuid.UUID(pair_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的配对ID格式")
+
     await validate_pair_access(pair_id, user, db, require_active=True)
 
     tree = await _get_or_create_tree(pair_id, db)
@@ -93,6 +112,22 @@ async def water_tree(
     db: AsyncSession = Depends(get_db),
 ):
     """手动浇水（每日限一次，+5 成长值）"""
+    if pair_id in ("solo", "demo-pair"):
+        return {
+            "growth_points": 373,
+            "level": "tree",
+            "level_name": "小树",
+            "level_emoji": "🌳",
+            "points_added": 5,
+            "level_up": False,
+        }
+
+    import uuid
+    try:
+        uuid.UUID(pair_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的配对ID格式")
+
     await validate_pair_access(pair_id, user, db, require_active=True)
 
     tree = await _get_or_create_tree(pair_id, db)

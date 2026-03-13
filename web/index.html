@@ -368,7 +368,11 @@
                     <div class="page-head">
                         <p class="eyebrow">CHECK-IN</p>
                         <h3>把今天留下一点痕迹</h3>
-                        <p>先记录感受，再让系统生成结构化洞察。网页端保留核心打卡流程，不做多余装饰。</p>
+                        <p>网页端同时支持表单打卡和 AI 陪伴模式，方便你按当天状态切换。</p>
+                    </div>
+                    <div class="segmented segmented--report">
+                        <button id="checkin-mode-form" class="segmented__item segmented__item--active" type="button">表单打卡</button>
+                        <button id="checkin-mode-voice" class="segmented__item" type="button">AI陪伴打卡</button>
                     </div>
                     <form id="checkin-form" class="layout-grid layout-grid--checkin">
                         <div class="panel panel--soft">
@@ -427,6 +431,24 @@
                                 type="submit">提交今日打卡</button>
                         </div>
                     </form>
+                    <div id="checkin-agent-panel" class="panel hidden">
+                        <div class="panel__header">
+                            <div>
+                                <p class="panel__eyebrow">VOICE COMPANION</p>
+                                <h4>像豆包一样聊着完成今天的记录</h4>
+                            </div>
+                        </div>
+                        <p class="muted-copy">你可以直接输入，也可以先上传一段语音。AI 会尝试在对话里提炼今天的打卡信息。</p>
+                        <div id="agent-chat-list" class="stack-list"></div>
+                        <label class="field">
+                            <span>发给 AI 的一句话</span>
+                            <textarea id="agent-chat-input" class="input input--textarea" placeholder="例如：今天其实有点累，但晚饭时我们把误会说开了。"></textarea>
+                        </label>
+                        <div class="hero-actions">
+                            <button id="agent-send-btn" class="button button--primary" type="button">发送给 AI</button>
+                            <button id="agent-replay-btn" class="button button--ghost" type="button">朗读上一条回复</button>
+                        </div>
+                    </div>
                 </section>
 
                 <section id="page-discover" class="page">
@@ -844,6 +866,10 @@
         </div>
     </div>
 
+    <script>
+      window.QJ_CONFIG = window.QJ_CONFIG || {};
+    </script>
+    <script src="js/config.local.js"></script>
     <script src="js/api.js"></script>
     <script src="js/app.js"></script>
 </body>

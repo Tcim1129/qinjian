@@ -187,10 +187,17 @@ function upload(url, filePath, formData) {
   })
 }
 
+function getBaseApiUrl() {
+  const globalData = getGlobalData()
+  const baseUrl = globalData.baseUrl || ''
+  return `${baseUrl}${API_PREFIX}`
+}
+
 module.exports = {
   get,
   post,
   put,
   del,
-  upload
+  upload,
+  getBaseApiUrl
 }

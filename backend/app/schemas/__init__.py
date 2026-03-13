@@ -57,6 +57,16 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserUpdateRequest(BaseModel):
+    nickname: str | None = None
+    avatar_url: str | None = None
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 # ── 配对 ──
 
 
@@ -86,6 +96,13 @@ class PairResponse(BaseModel):
     custom_partner_nickname: str | None = None  # 我给伴侣设置的备注名
 
     model_config = {"from_attributes": True}
+
+
+class PairSummaryResponse(BaseModel):
+    is_paired: bool
+    active_pair: PairResponse | None = None
+    active_count: int = 0
+    pending_count: int = 0
 
 
 class UpdatePartnerNicknameRequest(BaseModel):
@@ -251,3 +268,27 @@ class CrisisEscalateRequest(BaseModel):
     """升级至专业帮助"""
 
     reason: str | None = None
+
+
+# ── 智能陪伴 (Agent) ──
+
+
+class AgentSessionResponse(BaseModel):
+    session_id: uuid.UUID
+    has_extracted_checkin: bool
+
+
+class AgentMessageResponse(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    payload: dict | None = None
+
+
+class AgentChatRequest(BaseModel):
+    content: str
+
+
+class AgentChatResponse(BaseModel):
+    reply: str
+    action: str

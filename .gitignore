@@ -77,6 +77,9 @@ project.config.json
 project.private.config.json
 miniprogram/project.config.json
 miniprogram/project.private.config.json
+miniprogram/config.js
+web/js/config.local.js
+qinjian-app/qingjian app/utils/config.local.js
 
 # === 依赖目录 ===
 node_modules/

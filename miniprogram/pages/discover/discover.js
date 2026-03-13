@@ -62,11 +62,31 @@ Page({
         desc: '解锁全部功能',
         path: '/pages/discover/membership/membership'
       }
+    ],
+    // 快速导航 (参考图 2)
+    quickNavs: [
+      { name: '测评', icon: '📝' },
+      { name: '读书会', icon: '📔' },
+      { name: '文章', icon: '📄' },
+      { name: '问答', icon: '❓' },
+      { name: '冥想', icon: '🧘' }
+    ],
+    // 限时福利 (参考图 2)
+    benefits: [
+      { id: 1, title: '心理咨询半价', tag: '每人仅限1次', price: '199', img: '🏡' },
+      { id: 2, title: '倾诉首单优惠', tag: '1v1即时情绪疏解', price: '59', img: '🦊' },
+      { id: 3, title: '21天关系修复营', tag: '限时 3 折', price: '299', img: '🏕️' }
     ]
   },
 
   onLoad() {
     // 发现页无需特殊初始化
+  },
+
+  onShow() {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({ selected: 2 })
+    }
   },
 
   /**

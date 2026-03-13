@@ -4,6 +4,7 @@
  */
 const api = require('../../utils/api.js')
 const auth = require('../../utils/auth.js')
+const { syncUserAndPair, normalizePair } = require('../../utils/user-sync.js')
 
 Page({
   data: {
@@ -41,6 +42,9 @@ Page({
    */
   onShow() {
     if (!auth.checkLogin()) return
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({ selected: 0 })
+    }
     this.setGreeting()
     this.loadHomeData()
   },
@@ -94,22 +98,17 @@ Page({
     const app = getApp()
     let pairInfo = app.globalData.pairInfo
     try {
-      const pairs = await api.get('/pairs/me')
-      const list = Array.isArray(pairs) ? pairs : [pairs]
-      const currentId = pairInfo && (pairInfo.id || pairInfo.pair_id)
-      const currentMatch = currentId
-        ? list.find(p => (p.id || p.pair_id) === currentId)
-        : null
-      pairInfo = currentMatch || list.find(p => p.status === 'active') || list[0] || null
-      app.setPairInfo(pairInfo)
+      const synced = await syncUserAndPair()
+      pairInfo = synced.pairInfo
     } catch (e) {
       console.warn('首页拉取配对信息失败', e)
     }
     const pairId = pairInfo ? (pairInfo.id || pairInfo.pair_id) : null
 
-    const displayName = pairInfo && (pairInfo.partner_nickname || pairInfo.partner_name || pairInfo.partnerNickname)
+    const normalizedPair = normalizePair(pairInfo)
+    const displayName = normalizedPair && (normalizedPair.partner_nickname || normalizedPair.partner_name || normalizedPair.partnerNickname)
     this.setData({
-      pairInfo,
+      pairInfo: normalizedPair,
       pairDisplayName: displayName || '伴侣'
     })
 

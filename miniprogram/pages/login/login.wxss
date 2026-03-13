@@ -2,7 +2,7 @@
 
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-light) 40%, var(--color-bg) 40%);
+  background: linear-gradient(180deg, #5d4037 0%, #8d6e63 40%, #fff9f0 40%);
   padding: 0 var(--spacing-lg);
   box-sizing: border-box;
 }
@@ -26,25 +26,30 @@
   margin-top: var(--spacing-sm);
 }
 
-/* Tab */
-.login-tabs {
-  justify-content: center;
-  margin-bottom: var(--spacing-lg);
-  gap: var(--spacing-xl);
+/* 奶油风格 Tab 切换 */
+.login-tabs-creamy {
+  margin: 0 40rpx 40rpx;
+  background: #f0f0f0;
+  border-radius: 40rpx;
+  padding: 8rpx;
+  display: flex;
 }
 
-.login-tab {
-  font-size: 32rpx;
-  color: var(--color-text-muted);
-  padding-bottom: var(--spacing-sm);
-  border-bottom: 4rpx solid transparent;
+.login-tab-creamy {
+  flex: 1;
+  text-align: center;
+  font-size: 28rpx;
+  padding: 20rpx 0;
+  border-radius: 32rpx;
+  color: #888;
   transition: all 0.2s;
+  font-weight: 600;
 }
 
-.login-tab-active {
-  color: var(--color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--color-primary);
+.login-tab-creamy.active {
+  background: #ffffff;
+  color: #5d4037;
+  box-shadow: 0 4rpx 12rpx rgba(93, 64, 55, 0.08);
 }
 
 /* 表单 */

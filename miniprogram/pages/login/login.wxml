@@ -10,15 +10,15 @@
     <view class="login-slogan">让爱有据可循</view>
   </view>
 
-  <!-- Tab 切换 -->
-  <view class="login-tabs flex-row">
+  <!-- Tab 切换 (奶油风格) -->
+  <view class="login-tabs-creamy flex-row">
     <view
-      class="login-tab {{currentTab === 'login' ? 'login-tab-active' : ''}}"
+      class="login-tab-creamy {{currentTab === 'login' ? 'active' : ''}}"
       bindtap="switchTab"
       data-tab="login"
     >登录</view>
     <view
-      class="login-tab {{currentTab === 'register' ? 'login-tab-active' : ''}}"
+      class="login-tab-creamy {{currentTab === 'register' ? 'active' : ''}}"
       bindtap="switchTab"
       data-tab="register"
     >注册</view>
@@ -26,7 +26,7 @@
 
   <!-- 登录表单 -->
   <view class="login-form" wx:if="{{currentTab === 'login'}}">
-    <view class="card">
+    <view class="card-creamy">
       <!-- 已保存账号 -->
       <view wx:if="{{savedAccounts.length > 0 && !showAllLoginModes}}" class="saved-accounts">
         <view class="card-title mb-md">选择账号快速登录</view>
@@ -130,7 +130,7 @@
 
   <!-- 注册表单 -->
   <view class="login-form" wx:if="{{currentTab === 'register'}}">
-    <view class="card">
+    <view class="card-creamy">
       <view class="login-mode-tabs flex-row">
         <view class="login-mode {{regMode === 'email' ? 'active' : ''}}" data-mode="email" bindtap="switchRegMode">邮箱注册</view>
         <view class="login-mode {{regMode === 'phone' ? 'active' : ''}}" data-mode="phone" bindtap="switchRegMode">手机注册</view>

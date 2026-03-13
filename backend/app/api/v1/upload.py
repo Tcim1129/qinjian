@@ -14,11 +14,46 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 ALLOWED_VOICE_TYPES = {"audio/mpeg", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/aac"}
 
 
+async def _verify_magic_bytes(file: UploadFile, allowed_types: set) -> bool:
+    try:
+        chunk = await file.read(2048)
+        await file.seek(0)
+    except Exception:
+        return False
+    if not chunk:
+        return False
+
+    if "image/jpeg" in allowed_types and chunk.startswith(b'\xff\xd8\xff'):
+        return True
+    if "image/png" in allowed_types and chunk.startswith(b'\x89PNG\r\n\x1a\n'):
+        return True
+    if "image/gif" in allowed_types and (chunk.startswith(b'GIF87a') or chunk.startswith(b'GIF89a')):
+        return True
+    if "image/webp" in allowed_types and chunk.startswith(b'RIFF') and chunk[8:12] == b'WEBP':
+        return True
+
+    if "audio/mpeg" in allowed_types and (chunk.startswith(b'ID3') or chunk.startswith(b'\xff\xfb') or chunk.startswith(b'\xff\xf3') or chunk.startswith(b'\xff\xf2')):
+        return True
+    if "audio/wav" in allowed_types and chunk.startswith(b'RIFF') and chunk[8:12] == b'WAVE':
+        return True
+    if "audio/ogg" in allowed_types and chunk.startswith(b'OggS'):
+        return True
+    if "audio/webm" in allowed_types and chunk.startswith(b'\x1aE\xdf\xa3'):
+        return True
+    if "audio/mp4" in allowed_types and b'ftyp' in chunk[4:12]:
+        return True
+    if "audio/aac" in allowed_types and (chunk.startswith(b'\xff\xf1') or chunk.startswith(b'\xff\xf9')):
+        return True
+    return False
+
+
 @router.post("/image")
 async def upload_image(file: UploadFile = File(...), user: User = Depends(get_current_user)):
     """上传图片，返回相对URL"""
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail=f"不支持的图片格式：{file.content_type}")
+    if not await _verify_magic_bytes(file, ALLOWED_IMAGE_TYPES):
+        raise HTTPException(status_code=400, detail="图片格式检验失败，可能是不合法的文件实体")
     return await _save_file(file, "images")
 
 
@@ -27,6 +62,8 @@ async def upload_voice(file: UploadFile = File(...), user: User = Depends(get_cu
     """上传语音，返回相对URL"""
     if file.content_type not in ALLOWED_VOICE_TYPES:
         raise HTTPException(status_code=400, detail=f"不支持的音频格式：{file.content_type}")
+    if not await _verify_magic_bytes(file, ALLOWED_VOICE_TYPES):
+        raise HTTPException(status_code=400, detail="音频格式检验失败，可能是不合法的文件实体")
     return await _save_file(file, "voices")
 
 

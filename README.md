@@ -1,11 +1,11 @@
 # 亲健 · 青年亲密关系健康管理平台
 
-## 部署到 DigitalOcean（3分钟）
+## 部署到服务器（快速上线）
 
 ### 前置条件
-- DigitalOcean Droplet（2C/4GB，学生有$200额度）
-- 域名已在 Cloudflare 托管
-- 硅基流动 API Key（[siliconflow.cn](https://siliconflow.cn) 注册获取）
+- 一台 Linux 服务器（2C/4GB 起步）
+- 一个 OpenAI 兼容模型接口 Key（可用 SiliconFlow / OpenAI / 其他兼容网关）
+- 可选：域名（后续再补 HTTPS）
 
 ### 步骤一：推送代码到 GitHub
 
@@ -29,27 +29,29 @@ SSH 登录你的 DO 服务器，然后执行：
 git clone https://github.com/你的用户名/qinjian.git
 cd qinjian
 
-# 一键部署（自动安装Docker、配置环境变量、启动服务）
+# 一键部署（自动安装 Docker、配置环境变量、启动服务）
 sudo bash deploy.sh
 ```
 
-脚本会提示你输入 **硅基流动 API Key**，粘贴后回车即可。
+脚本会提示你输入：
+- `AI_API_KEY`
+- `AI_BASE_URL`（默认 `https://api.siliconflow.cn/v1`）
 
-### 步骤三：配置 Cloudflare
+如果你暂时没有域名，也可以先直接用服务器 IP 跑通。
 
-1. 进入 Cloudflare Dashboard → 你的域名
-2. **DNS** → 添加记录：
-   - 类型：`A`
-   - 名称：`@`（或子域名如 `qinjian`）
-   - IPv4：你的 DO 服务器 IP
-   - 代理：**开启**（橙色云朵 ☁️）
-3. **SSL/TLS** → 加密模式选 **Flexible**
-4. 等待几分钟 DNS 生效
+### 步骤三：可选配置域名与 HTTPS
+
+推荐正式上线后再配置：
+1. 域名解析到你的服务器 IP
+2. Nginx 反向代理
+3. Let's Encrypt 证书
+4. `FRONTEND_ORIGIN` 改成正式域名
 
 ### 完成！🎉
 
-- 访问 `https://你的域名` 即可进入亲健 Web 关系健康工作台
-- API 文档在 `https://你的域名/api/health`
+- 临时访问：`http://你的服务器IP:8080`
+- 健康检查：`http://你的服务器IP:8080/api/health`
+- 正式域名上线后再切 HTTPS
 
 ---
 
@@ -86,8 +88,8 @@ cd web
 |---|---|------|
 | 前端 | HTML / CSS / JS（移动端优先 Web 工作台） |
 | 后端 | Python FastAPI + PostgreSQL |
-| AI | 硅基流动 API（DeepSeek-V3 + Kimi K2.5 多模态） |
-| 部署 | Docker Compose + Nginx + Cloudflare |
+| AI | OpenAI 兼容模型网关（默认兼容 SiliconFlow） |
+| 部署 | Docker Compose + Nginx |
 
 ## 界面截图
 

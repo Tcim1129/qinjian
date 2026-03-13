@@ -5,6 +5,7 @@
  * 注册：邮箱 + 密码 + 确认密码 + 昵称
  */
 const api = require('../../utils/api.js')
+const { syncUserAndPair } = require('../../utils/user-sync.js')
 
 Page({
   data: {
@@ -276,16 +277,7 @@ Page({
         this.saveAccount(loginEmail.trim(), loginPassword, res.user?.nickname)
       }
 
-      try {
-        const pairs = await api.get('/pairs/me')
-        const list = Array.isArray(pairs) ? pairs : [pairs]
-        const activePair = list.find(p => p.status === 'active') || list[0] || null
-        if (activePair) {
-          app.setPairInfo(activePair)
-        }
-      } catch (e2) {
-        console.warn('获取配对信息失败', e2)
-      }
+      await syncUserAndPair()
 
       wx.showToast({ title: '登录成功', icon: 'success' })
 
@@ -361,6 +353,7 @@ Page({
         })
         const app = getApp()
         app.setLoginState(res.access_token || res.token, res.user || res)
+        await syncUserAndPair()
         wx.showToast({ title: '注册成功', icon: 'success' })
         setTimeout(() => {
           wx.switchTab({ url: '/pages/home/home' })
@@ -425,16 +418,7 @@ Page({
 
       const app = getApp()
       app.setLoginState(res.access_token || res.token, res.user || res)
-      try {
-        const pairs = await api.get('/pairs/me')
-        const list = Array.isArray(pairs) ? pairs : [pairs]
-        const activePair = list.find(p => p.status === 'active') || list[0] || null
-        if (activePair) {
-          app.setPairInfo(activePair)
-        }
-      } catch (e2) {
-        console.warn('获取配对信息失败', e2)
-      }
+      await syncUserAndPair()
 
       wx.showToast({ title: '登录成功', icon: 'success' })
       setTimeout(() => {

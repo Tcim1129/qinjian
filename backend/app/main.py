@@ -21,11 +21,17 @@ from app.api.v1 import (
     longdistance,
     milestones,
     community,
+    agent,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not settings.DEBUG and settings.SECRET_KEY == "change-me-in-production":
+        raise RuntimeError(
+            "CRITICAL SECURITY ERROR: 检测到非 DEBUG 环境下使用了默认弱密钥！"
+            "生产环境必须通过 SECRET_KEY 环境变量修改密钥以保证 JWT 安全。"
+        )
     # Alembic 负责迁移；create_all 仅在表完全不存在时兜底
     # 注意：create_all 不会修改已有表结构，所以不会和 Alembic 冲突
     async with engine.begin() as conn:
@@ -40,10 +46,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
 # CORS - 允许 Web 前端跨域 (收紧为仅允许明确的前端源)
-frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin],
+    allow_origins=[settings.FRONTEND_ORIGIN],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -64,6 +69,7 @@ app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(longdistance.router, prefix="/api/v1")
 app.include_router(milestones.router, prefix="/api/v1")
 app.include_router(community.router, prefix="/api/v1")
+app.include_router(agent.router, prefix="/api/v1")
 
 
 @app.get("/api/health")

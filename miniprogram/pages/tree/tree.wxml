@@ -11,30 +11,30 @@
       <view class="tree-desc">{{treeStatus.level >= 1 && treeStatus.level <= 5 ? ['播下爱的种子', '爱开始萌芽', '茁壮成长中', '枝繁叶茂', '爱情盛放'][treeStatus.level - 1] : '播下爱的种子'}}</view>
     </view>
 
-    <view class="card">
-      <view class="progress-section">
-        <view class="progress-header flex-between">
-          <text class="progress-label">浇水进度</text>
-          <text class="progress-count">{{treeStatus.water_count || 0}} 次</text>
+    <view class="card-creamy water-progress-card-creamy animate-slide-up">
+      <view class="progress-section-creamy">
+        <view class="progress-header-creamy flex-between">
+          <text class="progress-label-creamy">浇水进度</text>
+          <view class="progress-count-badge-creamy">{{treeStatus.water_count || 0}} 次</view>
         </view>
-        <view class="progress-bar">
-          <view class="progress-fill" style="width: {{(treeStatus.water_count % 10) * 10}}%;"></view>
+        <view class="progress-bar-creamy">
+          <view class="progress-fill-creamy" style="width: {{(treeStatus.water_count % 10) * 10}}%;"></view>
         </view>
-        <view class="progress-hint">
-          距离下一级还需 <text class="highlight">{{10 - (treeStatus.water_count % 10)}}</text> 次浇水
+        <view class="progress-hint-creamy">
+          距离下一级还需 <text class="highlight-creamy">{{10 - (treeStatus.water_count % 10)}}</text> 次浇水
         </view>
       </view>
     </view>
 
-    <view class="card mt-md">
-      <view class="stats-row flex-between">
-        <view class="stat-item">
-          <view class="stat-value">{{treeStatus.total_water || 0}}</view>
-          <view class="stat-label">累计浇水</view>
+    <view class="card-creamy mt-md">
+      <view class="stats-row-creamy flex-between">
+        <view class="stat-item-creamy">
+          <view class="stat-value-creamy">{{treeStatus.total_water || 0}}</view>
+          <view class="stat-label-creamy">累计浇水</view>
         </view>
-        <view class="stat-item">
-          <view class="stat-value">{{treeStatus.level || 1}}</view>
-          <view class="stat-label">当前等级</view>
+        <view class="stat-item-creamy">
+          <view class="stat-value-creamy">{{treeStatus.level || 1}}</view>
+          <view class="stat-label-creamy">当前等级</view>
         </view>
       </view>
     </view>
@@ -47,28 +47,28 @@
       <view class="water-tip">每日打卡可自动浇水一次</view>
     </view>
 
-    <view class="level-list card mt-lg">
-      <view class="level-title">成长阶段</view>
-      <view class="level-items">
-        <view class="level-item {{treeStatus.level >= 1 ? 'active' : ''}}">
-          <text class="level-icon">🌱</text>
-          <text class="level-name">种子</text>
+    <view class="card-creamy mt-lg level-list-creamy">
+      <view class="section-title-creamy mb-md">成长轨迹</view>
+      <view class="level-items-creamy">
+        <view class="level-node-creamy {{treeStatus.level >= 1 ? 'active' : ''}}">
+          <view class="level-node-icon-creamy">🌱</view>
+          <text class="level-node-name-creamy">种子</text>
         </view>
-        <view class="level-item {{treeStatus.level >= 2 ? 'active' : ''}}">
-          <text class="level-icon">🌿</text>
-          <text class="level-name">嫩芽</text>
+        <view class="level-node-creamy {{treeStatus.level >= 2 ? 'active' : ''}}">
+          <view class="level-node-icon-creamy">🌿</view>
+          <text class="level-node-name-creamy">嫩芽</text>
         </view>
-        <view class="level-item {{treeStatus.level >= 3 ? 'active' : ''}}">
-          <text class="level-icon">🌲</text>
-          <text class="level-name">树苗</text>
+        <view class="level-node-creamy {{treeStatus.level >= 3 ? 'active' : ''}}">
+          <view class="level-node-icon-creamy">🌲</view>
+          <text class="level-node-name-creamy">树苗</text>
         </view>
-        <view class="level-item {{treeStatus.level >= 4 ? 'active' : ''}}">
-          <text class="level-icon">🌳</text>
-          <text class="level-name">小树</text>
+        <view class="level-node-creamy {{treeStatus.level >= 4 ? 'active' : ''}}">
+          <view class="level-node-icon-creamy">🌳</view>
+          <text class="level-node-name-creamy">小树</text>
         </view>
-        <view class="level-item {{treeStatus.level >= 5 ? 'active' : ''}}">
-          <text class="level-icon">🌸</text>
-          <text class="level-name">花开</text>
+        <view class="level-node-creamy {{treeStatus.level >= 5 ? 'active' : ''}}">
+          <view class="level-node-icon-creamy">🌸</view>
+          <text class="level-node-name-creamy">成熟</text>
         </view>
       </view>
     </view>

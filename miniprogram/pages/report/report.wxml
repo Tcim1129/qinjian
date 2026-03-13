@@ -4,11 +4,12 @@
 <view class="container container-safe">
 
   <!-- Tab 选择器 -->
-  <view class="report-tabs flex-row">
+  <!-- Tab 选择器 (奶油风格) -->
+  <view class="report-tabs-creamy flex-row">
     <view
       wx:for="{{tabs}}"
       wx:key="key"
-      class="report-tab {{currentTab === item.key ? 'report-tab-active' : ''}}"
+      class="report-tab-creamy {{currentTab === item.key ? 'active' : ''}}"
       bindtap="switchTab"
       data-tab="{{item.key}}"
     >
@@ -28,54 +29,57 @@
   </view>
 
   <!-- 报告内容展示区 -->
-  <view class="card card-elevated mt-lg" wx:if="{{reportView}}">
-    <view class="text-subtitle mb-sm">{{reportView.title || '报告详情'}}</view>
-    <view class="divider"></view>
-
-    <view class="report-health" wx:if="{{reportView.healthScore !== null && reportView.healthScore !== undefined}}">
-      <view class="health-score">{{reportView.healthScore}}</view>
-      <view class="text-caption">健康分</view>
+  <!-- 报告内容展示区 (奶油风大卡片) -->
+  <view class="card-creamy mt-lg report-content-creamy animate-fade-in" wx:if="{{reportView}}">
+    <view class="report-header-creamy">
+      <view class="section-title-creamy">{{reportView.title || '报告详情'}}</view>
+      <view class="report-date-creamy">{{reportView.created_at}}</view>
     </view>
 
-    <view class="mt-sm" wx:if="{{reportView.insight}}">
-      <view class="text-caption">核心洞察</view>
-      <view class="report-summary mt-sm">{{reportView.insight}}</view>
+    <view class="report-health-creamy" wx:if="{{reportView.healthScore !== null && reportView.healthScore !== undefined}}">
+      <view class="health-ring-creamy">
+        <view class="health-score-creamy">{{reportView.healthScore}}</view>
+        <view class="health-unit-creamy">分</view>
+      </view>
+      <view class="health-desc-creamy">综合关系健康评价</view>
     </view>
 
-    <view class="mt-md" wx:if="{{reportView.suggestion}}">
-      <view class="text-caption">今日建议</view>
-      <view class="report-tip mt-sm">{{reportView.suggestion}}</view>
+    <view class="insight-card-creamy mt-md" wx:if="{{reportView.insight}}">
+      <view class="insight-tag-creamy">AI 核心洞察</view>
+      <view class="insight-text-creamy">{{reportView.insight}}</view>
     </view>
 
-    <view class="mt-md" wx:if="{{reportView.highlights.length}}">
-      <view class="text-caption mb-sm">亮点</view>
-      <view class="report-suggestion" wx:for="{{reportView.highlights}}" wx:key="*this">
-        <text class="text-body">• {{item}}</text>
+    <view class="mt-lg" wx:if="{{reportView.highlights.length}}">
+      <view class="sub-title-creamy mb-sm">✨ 关系亮点</view>
+      <view class="report-list-item-creamy" wx:for="{{reportView.highlights}}" wx:key="*this">
+        {{item}}
       </view>
     </view>
 
-    <view class="mt-md" wx:if="{{reportView.concerns.length}}">
-      <view class="text-caption mb-sm">待关注</view>
-      <view class="report-suggestion" wx:for="{{reportView.concerns}}" wx:key="*this">
-        <text class="text-body">• {{item}}</text>
+    <view class="mt-lg" wx:if="{{reportView.concerns.length}}">
+      <view class="sub-title-creamy mb-sm">⚠️ 需要关注</view>
+      <view class="report-list-item-creamy concern" wx:for="{{reportView.concerns}}" wx:key="*this">
+        {{item}}
       </view>
     </view>
 
-    <view class="mt-md" wx:if="{{reportView.encouragement}}">
-      <view class="text-caption">温柔提醒</view>
-      <view class="report-note mt-sm">{{reportView.encouragement}}</view>
+    <view class="suggestion-box-creamy mt-lg" wx:if="{{reportView.suggestion}}">
+      <view class="sub-title-creamy mb-sm">💡 专属建议</view>
+      <view class="suggestion-text-creamy">{{reportView.suggestion}}</view>
     </view>
   </view>
 
   <!-- 趋势图表占位区 -->
-  <view class="card mt-lg" wx:if="{{trendData}}">
-    <view class="text-subtitle mb-sm">趋势变化</view>
-    <view class="divider"></view>
-    <view class="trend-placeholder flex-center">
-      <view class="text-center">
-        <text class="trend-icon">📈</text>
-        <view class="text-caption mt-sm">趋势图表区域</view>
-        <view class="text-small">心情均值: {{trendData.avg_mood || '--'}} · 互动均值: {{trendData.avg_interaction || '--'}}</view>
+  <!-- 趋势图表区 (奶油风背景) -->
+  <view class="card-creamy mt-lg trend-card-creamy" wx:if="{{trendData}}">
+    <view class="section-title-creamy mb-md">情感趋势</view>
+    <view class="trend-canvas-creamy">
+      <view class="trend-mock-placeholder">
+        <text class="trend-mock-icon">📈</text>
+        <view class="trend-mock-data">
+          <text>心情：{{trendData.avg_mood || '--'}}</text>
+          <text>互动：{{trendData.avg_interaction || '--'}}</text>
+        </view>
       </view>
     </view>
   </view>

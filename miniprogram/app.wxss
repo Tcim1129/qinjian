@@ -12,21 +12,31 @@
 
 /* ===== CSS 变量 ===== */
 page {
-  --color-primary: #6C5CE7;
-  --color-primary-light: #A29BFE;
-  --color-primary-bg: rgba(108, 92, 231, 0.08);
-  --color-secondary: #00CEC9;
-  --color-accent: #FD79A8;
-  --color-warm: #FDCB6E;
-  --color-bg: #F5F6FA;
+  /* 蜂蜜摩卡与日落金 (Honey Mocha & Sunset Gold) - 高级暖色调方案 */
+  --color-primary: #5D4037;
+  --color-primary-light: #8D6E63;
+  --color-primary-bg: rgba(93, 64, 55, 0.05);
+  --color-secondary: #795548;
+  --color-accent: #D4A373;
+  --color-warm: #E9C46A;
+  --color-bg: #FFF9F0;
   --color-white: #FFFFFF;
-  --color-text: #2D3436;
-  --color-text-secondary: #636E72;
-  --color-text-muted: #B2BEC3;
-  --color-border: #E8ECF1;
-  --color-danger: #FF6B6B;
-  --color-success: #00B894;
-  --color-warning: #FFEAA7;
+  --color-text: #3E2723;
+  --color-text-secondary: #6D4C41;
+  --color-text-muted: #A1887F;
+  --color-border: #EFEBE9;
+  --color-danger: #BF360C;
+  --color-success: #2E7D32;
+  --color-warning: #FF8F00;
+
+  /* 暖色调扩展变量 */
+  --color-cream-bg: #FFF9F0;
+  --color-cream-card: #FFFFFF;
+  --color-cream-text: #5D4037;
+  --color-cream-sub: #A1887F;
+  --color-cream-accent: #D4A373;
+  --color-cream-border: #F5EFEB;
+  --shadow-cream: 0 12rpx 32rpx rgba(93, 64, 55, 0.06);
 
   --radius-sm: 8rpx;
   --radius-md: 16rpx;
@@ -69,6 +79,20 @@ page {
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-md);
   box-shadow: var(--shadow-sm);
+}
+
+.card-creamy {
+  background: var(--color-cream-card);
+  border-radius: 48rpx;
+  padding: 48rpx;
+  box-shadow: var(--shadow-cream);
+  border: 1rpx solid var(--color-cream-border);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.card-creamy:active {
+  transform: translateY(2rpx);
+  box-shadow: 0 4rpx 12rpx rgba(44, 62, 80, 0.02);
 }
 
 .card-elevated {

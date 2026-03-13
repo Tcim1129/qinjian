@@ -1,5 +1,6 @@
 """打卡系统接口（Phase 3 增强：支持非对称打卡 + 个人情感日记）"""
 
+import logging
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, func
@@ -13,6 +14,7 @@ from app.ai import analyze_sentiment
 from app.ai.reporter import generate_daily_report, generate_solo_report
 
 router = APIRouter(prefix="/checkins", tags=["打卡"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=CheckinResponse)
@@ -326,8 +328,8 @@ async def _run_sentiment_analysis(checkin_id: str, content: str):
                 .values(sentiment_score=result.get("score", 5.0))
             )
             await db.commit()
-    except Exception as e:
-        print(f"情感分析失败: {e}")
+    except Exception:
+        logger.exception("后台 AI 情感分析任务失败")
 
 
 async def _auto_generate_daily(
@@ -374,8 +376,8 @@ async def _auto_generate_daily(
                 await process_crisis_from_report(db, report, pair)
 
             await db.commit()
-    except Exception as e:
-        print(f"自动生成日报失败: {e}")
+    except Exception:
+        logger.exception("后台自动生成日报任务失败")
 
 
 async def _auto_generate_solo(
@@ -425,5 +427,5 @@ async def _auto_generate_solo(
             report.status = ReportStatus.COMPLETED
             await db.commit()
             # Solo 报告不触发 crisis 预警（单方数据不足以判断）
-    except Exception as e:
-        print(f"自动生成个人日记失败: {e}")
+    except Exception:
+        logger.exception("后台自动生成个人日记任务失败")

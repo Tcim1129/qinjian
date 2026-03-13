@@ -23,12 +23,19 @@
     "navigationBarBackgroundColor": "#ffffff",
     "navigationBarTitleText": "亲健",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#F5F6FA",
+    "backgroundColor": "#FFF9F0",
     "backgroundTextStyle": "dark"
   },
+  "plugins": {
+    "WechatSI": {
+      "version": "0.3.5",
+      "provider": "wx069ba97219f66d99"
+    }
+  },
   "tabBar": {
-    "color": "#999999",
-    "selectedColor": "#E06B5A",
+    "custom": true,
+    "color": "#BCAAA4",
+    "selectedColor": "#8D6E63",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [

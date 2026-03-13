@@ -16,9 +16,17 @@ class Settings(BaseSettings):
     PHONE_CODE_DEBUG_RETURN: bool = False
 
     # 数据库
-    DATABASE_URL: str = "postgresql+asyncpg://qinjian:qinjian@localhost:5432/qinjian"
+    DATABASE_URL: str = "postgresql+psycopg://qinjian:qinjian@localhost:5432/qinjian"
 
-    # AI - 硅基流动
+    # 前端来源
+    FRONTEND_ORIGIN: str = "http://localhost:3000"
+
+    # AI - 通用 OpenAI 兼容网关
+    AI_API_KEY: str = ""
+    AI_BASE_URL: str = ""
+    AI_TIMEOUT_SECONDS: int = 60
+
+    # AI - 硅基流动（兼容旧配置）
     SILICONFLOW_API_KEY: str = ""
     SILICONFLOW_BASE_URL: str = "https://api.siliconflow.cn/v1"
     # 多模态模型（图片+文本分析）

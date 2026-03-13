@@ -1,4 +1,8 @@
 const API_ROOT = (() => {
+    if (window.QJ_CONFIG?.apiRoot) {
+        return window.QJ_CONFIG.apiRoot.replace(/\/$/, '');
+    }
+
     if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
         return 'http://localhost:8000/api/v1';
     }
@@ -114,6 +118,17 @@ class ApiClient {
         return this.request('GET', '/auth/me');
     }
 
+    async updateMe(payload) {
+        return this.request('PUT', '/auth/me', payload);
+    }
+
+    async changePassword(currentPassword, newPassword) {
+        return this.request('POST', '/auth/change-password', {
+            current_password: currentPassword,
+            new_password: newPassword,
+        });
+    }
+
     async createPair(type) {
         return this.request('POST', '/pairs/create', { type });
     }
@@ -125,6 +140,10 @@ class ApiClient {
     async getMyPairs() {
         const payload = await this.request('GET', '/pairs/me');
         return Array.isArray(payload) ? payload : [];
+    }
+
+    async getPairSummary() {
+        return this.request('GET', '/pairs/summary');
     }
 
     async requestUnbind(pairId) {
@@ -148,27 +167,22 @@ class ApiClient {
     }
 
     async submitCheckin(pairId, payload) {
-        if (pairId === 'solo') return this.request('POST', '/checkins/?mode=solo', payload);
         return this.request('POST', '/checkins/', { pair_id: pairId, ...payload });
     }
 
     async getTodayStatus(pairId) {
-        if (pairId === 'solo') return this.request('GET', '/checkins/today?mode=solo');
         return this.request('GET', `/checkins/today?pair_id=${pairId}`);
     }
 
     async getCheckinHistory(pairId, limit = 14) {
-        if (pairId === 'solo') return this.request('GET', `/checkins/history?mode=solo&limit=${limit}`);
         return this.request('GET', `/checkins/history?pair_id=${pairId}&limit=${limit}`);
     }
 
     async getCheckinStreak(pairId) {
-        if (pairId === 'solo') return this.request('GET', '/checkins/streak?mode=solo');
         return this.request('GET', `/checkins/streak?pair_id=${pairId}`);
     }
 
     async generateDailyReport(pairId) {
-        if (pairId === 'solo') return this.request('POST', '/reports/generate-daily?mode=solo');
         return this.request('POST', `/reports/generate-daily?pair_id=${pairId}`);
     }
 
@@ -181,32 +195,38 @@ class ApiClient {
     }
 
     async getLatestReport(pairId, reportType = 'daily') {
-        if (pairId === 'solo') return this.request('GET', `/reports/latest?mode=solo&report_type=${reportType}`);
         return this.request('GET', `/reports/latest?pair_id=${pairId}&report_type=${reportType}`);
     }
 
+    async waitForReport(pairId, reportType = 'daily', retries = 10, delayMs = 1500) {
+        for (let attempt = 0; attempt < retries; attempt += 1) {
+            const payload = await this.getLatestReport(pairId, reportType);
+            if (!payload || payload.status === 'pending') {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+                continue;
+            }
+            return payload;
+        }
+        return this.getLatestReport(pairId, reportType);
+    }
+
     async getReportHistory(pairId, reportType = 'daily', limit = 7) {
-        if (pairId === 'solo') return this.request('GET', `/reports/history?mode=solo&report_type=${reportType}&limit=${limit}`);
         return this.request('GET', `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}`);
     }
 
     async getHealthTrend(pairId, days = 14) {
-        if (pairId === 'solo') return this.request('GET', `/reports/trend?mode=solo&days=${days}`);
         return this.request('GET', `/reports/trend?pair_id=${pairId}&days=${days}`);
     }
 
     async getTreeStatus(pairId) {
-        if (pairId === 'solo') return { level: 1, exp: 0, next_level_exp: 100, days_to_die: 3, last_watered_at: null };
         return this.request('GET', `/tree/status?pair_id=${pairId}`);
     }
 
     async waterTree(pairId) {
-        if (pairId === 'solo') throw new Error('单身模式不支持关系树浇水');
         return this.request('POST', `/tree/water?pair_id=${pairId}`);
     }
 
     async getCrisisStatus(pairId) {
-        if (pairId === 'solo') return { crisis_level: 'none' };
         return this.request('GET', `/crisis/status/${pairId}`);
     }
 
@@ -235,7 +255,6 @@ class ApiClient {
     }
 
     async getDailyTasks(pairId) {
-        if (pairId === 'solo') return { tasks: [] };
         return this.request('GET', `/tasks/daily/${pairId}`);
     }
 
@@ -244,12 +263,10 @@ class ApiClient {
     }
 
     async getAttachmentAnalysis(pairId) {
-        if (pairId === 'solo') throw new Error('依恋分析仅支持双人关系');
         return this.request('GET', `/tasks/attachment/${pairId}`);
     }
 
     async triggerAttachmentAnalysis(pairId) {
-        if (pairId === 'solo') throw new Error('依恋分析仅支持双人关系');
         return this.request('POST', `/tasks/attachment/${pairId}/analyze`);
     }
 
@@ -307,6 +324,19 @@ class ApiClient {
 
     async markNotificationsRead() {
         return this.request('POST', '/community/notifications/read-all');
+    }
+
+    async createAgentSession(pairId = null) {
+        const query = pairId ? `?pair_id=${pairId}` : '';
+        return this.request('POST', `/agent/sessions${query}`);
+    }
+
+    async getAgentMessages(sessionId) {
+        return this.request('GET', `/agent/sessions/${sessionId}/messages`);
+    }
+
+    async chatWithAgent(sessionId, content) {
+        return this.request('POST', `/agent/sessions/${sessionId}/chat`, { content });
     }
 }
 

@@ -5,7 +5,7 @@
 - Docker & Docker Compose
 - 服务器：2核4GB内存（最低配置）
 - 域名（可选，用于HTTPS）
-- SiliconFlow API Key
+- 一个 OpenAI 兼容接口的 API Key（可用 SiliconFlow / OpenAI / 其他兼容网关）
 
 ## 🔧 环境准备
 
@@ -27,12 +27,14 @@ nano backend/.env
 ```
 
 **必需配置**:
-- `SILICONFLOW_API_KEY`: 你的硅基流动 API Key（从 https://siliconflow.cn 获取）
+- `AI_API_KEY`: 你的模型网关 API Key
+- `AI_BASE_URL`: 模型网关地址；默认可用 `https://api.siliconflow.cn/v1`
 - `SECRET_KEY`: 随机密钥（生产环境必须修改）
+- `FRONTEND_ORIGIN`: 你的正式前端域名，例如 `https://app.example.com`
 
 ### 3. 修改端口（可选）
 
-编辑 `docker-compose.yml`，将 `8080` 改为你想要的端口：
+编辑 `docker compose.yml`，将 `8080` 改为你想要的端口：
 ```yaml
 ports:
   - "80:80"  # 或 "8080:80"
@@ -44,13 +46,13 @@ ports:
 
 ```bash
 # 启动所有服务
-docker-compose up -d
+docker compose up -d
 
 # 查看日志
-docker-compose logs -f
+docker compose logs -f
 
 # 停止服务
-docker-compose down
+docker compose down
 ```
 
 访问 http://localhost:8080
@@ -62,13 +64,13 @@ docker-compose down
 cd qinjian
 
 # 2. 后台启动
-docker-compose up -d
+docker compose up -d
 
 # 3. 检查状态
-docker-compose ps
+docker compose ps
 
 # 4. 查看日志
-docker-compose logs -f backend
+docker compose logs -f backend
 ```
 
 ### 方式三：使用 Nginx 反向代理（推荐生产环境）
@@ -130,7 +132,7 @@ sudo certbot renew --dry-run
 
 ```bash
 # 进入后端容器
-docker-compose exec backend bash
+docker compose exec backend bash
 
 # 进入项目目录
 cd /app
@@ -150,7 +152,7 @@ alembic upgrade head
 # 查看端口占用
 sudo lsof -i :8080
 
-# 修改 docker-compose.yml 中的端口映射
+# 修改 docker compose.yml 中的端口映射
 ```
 
 ### 2. 内存不足
@@ -159,24 +161,24 @@ sudo lsof -i :8080
 # 查看容器内存使用
 docker stats
 
-# 调整 docker-compose.yml 中的 memory 限制
+# 调整 docker compose.yml 中的 memory 限制
 ```
 
 ### 3. 数据库连接失败
 
 ```bash
 # 检查数据库容器
-docker-compose logs db
+docker compose logs db
 
 # 重启服务
-docker-compose restart
+docker compose restart
 ```
 
 ### 4. AI 接口报错
 
-- 检查 `SILICONFLOW_API_KEY` 是否正确
-- 检查 API Key 是否有余额
-- 查看后端日志: `docker-compose logs backend`
+- 检查 `AI_API_KEY` / `AI_BASE_URL` 是否正确
+- 检查对应模型服务是否可用、账户是否有额度
+- 查看后端日志: `docker compose logs backend`
 
 ## 📝 更新代码
 
@@ -185,15 +187,15 @@ docker-compose restart
 git pull origin main
 
 # 重启服务
-docker-compose down
-docker-compose up -d --build
+docker compose down
+docker compose up -d --build
 ```
 
 ## 🗄️ 备份数据
 
 ```bash
 # 备份数据库
-docker-compose exec db pg_dump -U qinjian qinjian > backup.sql
+docker compose exec db pg_dump -U qinjian qinjian > backup.sql
 
 # 备份上传文件
 tar -czvf uploads_backup.tar.gz uploads/
@@ -203,36 +205,37 @@ tar -czvf uploads_backup.tar.gz uploads/
 
 ```bash
 # 查看实时日志
-docker-compose logs -f
+docker compose logs -f
 
 # 查看资源使用
 docker stats
 
 # 查看容器状态
-docker-compose ps
+docker compose ps
 ```
 
 ## 🆘 故障排查
 
 ```bash
 # 重启所有服务
-docker-compose restart
+docker compose restart
 
 # 完全重置（会丢失数据！）
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 
 # 查看后端详细日志
-docker-compose logs --tail=100 backend
+docker compose logs --tail=100 backend
 ```
 
 ## 🎯 验证部署
 
 1. 访问首页应该能看到登录界面
 2. 注册新账号
-3. 创建配对，测试邀请码
+3. 创建配对，测试邀请码（或以单人模式进入）
 4. 测试打卡功能
 5. 查看 AI 生成的报告
+6. 测试发现页子模块（异地模式、关系体检、会员方案等）
 
 ## 📞 联系支持
 

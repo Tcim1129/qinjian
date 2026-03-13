@@ -1,18 +1,17 @@
-/**
- * 打卡页 - 每日关系健康记录
- * 4步表单流程：心情 → 互动 → 深度对话 → 任务完成
- * 支持文本备注、情绪标签、图片/语音上传
- */
 const api = require('../../utils/api.js')
 const auth = require('../../utils/auth.js')
+let plugin = null
+try {
+  plugin = requirePlugin('WechatSI')
+} catch (error) {
+  plugin = null
+}
 
 Page({
   data: {
-    // 表单步骤 (1-4)
+    mode: 'form',
     currentStep: 1,
     totalSteps: 4,
-
-    // 步骤1：心情评分 (1-4)
     moodScore: 0,
     moodOptions: [
       { score: 1, emoji: '😟', label: '低落' },
@@ -20,59 +19,74 @@ Page({
       { score: 3, emoji: '🙂', label: '不错' },
       { score: 4, emoji: '😊', label: '很好' }
     ],
-
-    // 步骤2：互动次数 & 主动性
-    interactionCount: 0,
-    initiativeScore: 0,
-
-    // 步骤3：深度对话
-    deepConversation: false,
-
-    // 步骤4：任务完成
+    interactionCount: 1,
+    initiativeScore: 'equal',
+    deepConversation: null,
     taskCompleted: false,
-
-    // 附加信息
     freeText: '',
     selectedTags: [],
     emotionTags: ['感恩', '甜蜜', '思念', '担忧', '争吵', '冷战', '惊喜', '日常', '成长', '包容'],
     imageList: [],
     voicePath: '',
-
-    // 是否已打卡
     hasCheckedIn: false,
     todayCheckin: null,
-
-    // 录音状态
+    submitting: false,
+    sessionId: '',
+    chatInput: '',
+    chatMessages: [],
     isRecording: false,
-
-    // 提交状态
-    submitting: false
+    lastReply: '',
+    voiceSupported: !!plugin,
+    recognizingVoice: false,
+    playingReply: false,
   },
 
   onLoad() {
-    // 页面加载时检查登录
+    this.initVoiceTools()
   },
 
   onShow() {
     if (!auth.checkLogin()) return
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({ selected: 1 })
+    }
+    const mode = wx.getStorageSync('qj_checkin_mode') || 'form'
+    this.setData({ mode })
     this.checkTodayCheckin()
+    if (mode === 'voice') {
+      this.ensureAgentSession()
+    }
   },
 
-  /**
-   * 检查今日是否已打卡
-   */
+  onHide() {
+    this.stopVoicePlayback()
+    this.stopRecognitionIfNeeded()
+  },
+
+  onUnload() {
+    this.stopVoicePlayback()
+    this.stopRecognitionIfNeeded()
+  },
+
+  switchMode(e) {
+    const mode = e.currentTarget.dataset.mode
+    this.setData({ mode })
+    wx.setStorageSync('qj_checkin_mode', mode)
+    if (mode === 'voice') {
+      this.ensureAgentSession()
+    }
+  },
+
   async checkTodayCheckin() {
     const pairId = auth.getPairId()
     try {
       const res = pairId
         ? await api.get(`/checkins/today?pair_id=${pairId}`)
         : await api.get('/checkins/today?mode=solo')
-      if (res) {
-        this.setData({
-          hasCheckedIn: !!res.my_done,
-          todayCheckin: res.my_checkin || res
-        })
-      }
+      this.setData({
+        hasCheckedIn: !!res.my_done,
+        todayCheckin: res.my_checkin || res
+      })
     } catch (e) {
       if (e.code === 404) {
         this.setData({ hasCheckedIn: false, todayCheckin: null })
@@ -80,70 +94,47 @@ Page({
     }
   },
 
-  /**
-   * 选择心情评分
-   */
   selectMood(e) {
-    const score = e.currentTarget.dataset.score
-    this.setData({ moodScore: score })
+    this.setData({ moodScore: e.currentTarget.dataset.score })
   },
 
-  /**
-   * 互动次数输入
-   */
   onInteractionInput(e) {
-    const val = parseInt(e.detail.value) || 0
-    this.setData({ interactionCount: val })
+    const delta = e.currentTarget && e.currentTarget.dataset ? Number(e.currentTarget.dataset.delta) : NaN
+    if (Number.isFinite(delta)) {
+      this.setData({ interactionCount: Math.max(0, (this.data.interactionCount || 0) + delta) })
+      return
+    }
+    this.setData({ interactionCount: Math.max(0, parseInt(e.detail.value, 10) || 0) })
   },
 
-  /**
-   * 主动性滑动选择
-   */
-  onInitiativeChange(e) {
-    this.setData({ initiativeScore: e.detail.value })
+  selectInitiative(e) {
+    this.setData({ initiativeScore: e.currentTarget.dataset.value })
   },
 
-  /**
-   * 切换深度对话
-   */
   toggleDeepConversation(e) {
-    const val = e.currentTarget.dataset.val === 'true'
-    this.setData({ deepConversation: val })
+    this.setData({ deepConversation: e.currentTarget.dataset.val === 'true' })
   },
 
-  /**
-   * 切换任务完成
-   */
-  toggleTaskCompleted(e) {
-    const val = e.currentTarget.dataset.val === 'true'
-    this.setData({ taskCompleted: val })
+  toggleTaskCompleted() {
+    this.setData({ taskCompleted: !this.data.taskCompleted })
   },
 
-  /**
-   * 自由文本输入
-   */
   onFreeTextInput(e) {
     this.setData({ freeText: e.detail.value })
   },
 
-  /**
-   * 切换情绪标签选中状态
-   */
   toggleTag(e) {
     const tag = e.currentTarget.dataset.tag
-    const tags = this.data.selectedTags.slice()
-    const idx = tags.indexOf(tag)
+    const selectedTags = [...this.data.selectedTags]
+    const idx = selectedTags.indexOf(tag)
     if (idx >= 0) {
-      tags.splice(idx, 1)
+      selectedTags.splice(idx, 1)
     } else {
-      tags.push(tag)
+      selectedTags.push(tag)
     }
-    this.setData({ selectedTags: tags })
+    this.setData({ selectedTags })
   },
 
-  /**
-   * 选择图片上传
-   */
   chooseImage() {
     wx.chooseMedia({
       count: 3,
@@ -159,65 +150,50 @@ Page({
     })
   },
 
-  /**
-   * 删除已选图片
-   */
   removeImage(e) {
     const idx = e.currentTarget.dataset.idx
-    const list = this.data.imageList.slice()
-    list.splice(idx, 1)
-    this.setData({ imageList: list })
+    const imageList = [...this.data.imageList]
+    imageList.splice(idx, 1)
+    this.setData({ imageList })
   },
 
-  /**
-   * 录制/选择语音
-   */
   chooseVoice() {
     if (this.data.isRecording) {
-      // 手动停止录音
-      const recorderManager = wx.getRecorderManager()
-      recorderManager.stop()
+      if (this.recorderManager) this.recorderManager.stop()
       return
     }
 
-    const recorderManager = wx.getRecorderManager()
-    recorderManager.onStop((res) => {
-      this.setData({ voicePath: res.tempFilePath, isRecording: false })
-      if (this._recordTimer) {
-        clearTimeout(this._recordTimer)
-        this._recordTimer = null
-      }
-    })
-    recorderManager.onError(() => {
-      this.setData({ isRecording: false })
-      wx.showToast({ title: '录音失败', icon: 'none' })
-    })
-
+    if (!this.recorderManager) {
+      this.recorderManager = wx.getRecorderManager()
+      this.recorderManager.onStop((res) => {
+        this.setData({ voicePath: res.tempFilePath, isRecording: false })
+        if (this._recordTimer) {
+          clearTimeout(this._recordTimer)
+          this._recordTimer = null
+        }
+      })
+      this.recorderManager.onError(() => {
+        this.setData({ isRecording: false })
+        wx.showToast({ title: '录音失败', icon: 'none' })
+      })
+    }
     this.setData({ isRecording: true })
-    recorderManager.start({
-      duration: 60000,
-      format: 'mp3'
-    })
-    // 5秒后自动停止
-    this._recordTimer = setTimeout(() => {
-      recorderManager.stop()
-    }, 5000)
-    wx.showToast({ title: '录音中（5秒后自动停止）', icon: 'none', duration: 5000 })
+    this.recorderManager.start({ duration: 60000, format: 'mp3' })
+    this._recordTimer = setTimeout(() => this.recorderManager.stop(), 5000)
+    wx.showToast({ title: '录音中（5秒后自动停止）', icon: 'none', duration: 3000 })
   },
 
-  /**
-   * 清除语音
-   */
   clearVoice() {
     this.setData({ voicePath: '' })
   },
 
-  /**
-   * 下一步
-   */
   nextStep() {
     if (this.data.currentStep === 1 && this.data.moodScore === 0) {
       wx.showToast({ title: '请选择今日心情', icon: 'none' })
+      return
+    }
+    if (this.data.currentStep === 3 && this.data.deepConversation === null) {
+      wx.showToast({ title: '请选择是否有深度交流', icon: 'none' })
       return
     }
     if (this.data.currentStep < this.data.totalSteps) {
@@ -225,18 +201,12 @@ Page({
     }
   },
 
-  /**
-   * 上一步
-   */
   prevStep() {
     if (this.data.currentStep > 1) {
       this.setData({ currentStep: this.data.currentStep - 1 })
     }
   },
 
-  /**
-   * 提交打卡
-   */
   async submitCheckin() {
     if (this.data.submitting) return
     if (this.data.moodScore === 0) {
@@ -245,36 +215,228 @@ Page({
     }
 
     const pairId = auth.getPairId()
-
     this.setData({ submitting: true })
 
     try {
-      const initiative = this.data.initiativeScore === 1 ? 'me' : 'partner'
-
-      const checkinData = {
-        pair_id: pairId || null,
-        content: this.data.freeText || '今日打卡',
-        mood_tags: this.data.selectedTags.length > 0 ? this.data.selectedTags : null,
-        mood_score: this.data.moodScore,
-        interaction_freq: this.data.interactionCount,
-        interaction_initiative: initiative,
-        deep_conversation: this.data.deepConversation,
-        task_completed: this.data.taskCompleted
+      let imageUrl = null
+      let voiceUrl = null
+      if (this.data.imageList[0]) {
+        const imageRes = await api.upload('/upload/image', this.data.imageList[0])
+        imageUrl = imageRes.url
+      }
+      if (this.data.voicePath) {
+        const voiceRes = await api.upload('/upload/voice', this.data.voicePath)
+        voiceUrl = voiceRes.url
       }
 
-      const res = pairId
-        ? await api.post('/checkins/', checkinData)
-        : await api.post('/checkins/?mode=solo', checkinData)
+      const payload = {
+        pair_id: pairId || null,
+        content: this.data.freeText || '今天完成了一次关系打卡。',
+        mood_tags: this.data.selectedTags.length ? this.data.selectedTags : null,
+        image_url: imageUrl,
+        voice_url: voiceUrl,
+        mood_score: this.data.moodScore,
+        interaction_freq: this.data.interactionCount,
+        interaction_initiative: this.data.initiativeScore,
+        deep_conversation: this.data.deepConversation,
+        task_completed: this.data.taskCompleted,
+      }
 
-      wx.showToast({ title: '打卡成功！', icon: 'success' })
-      this.setData({
-        hasCheckedIn: true,
-        todayCheckin: res
-      })
+      await (pairId
+        ? api.post('/checkins/', payload)
+        : api.post('/checkins/?mode=solo', payload))
+
+      wx.showToast({ title: '打卡成功', icon: 'success' })
+      this.resetForm()
+      this.checkTodayCheckin()
     } catch (e) {
       wx.showToast({ title: e.message || '提交失败', icon: 'none' })
     } finally {
       this.setData({ submitting: false })
     }
+  },
+
+  resetForm() {
+    this.setData({
+      currentStep: 1,
+      moodScore: 0,
+      interactionCount: 1,
+      initiativeScore: 'equal',
+      deepConversation: null,
+      taskCompleted: false,
+      freeText: '',
+      selectedTags: [],
+      imageList: [],
+      voicePath: '',
+    })
+  },
+
+  async ensureAgentSession() {
+    if (this.data.sessionId) return
+    try {
+      const pairId = auth.getPairId() || null
+      const query = pairId ? `?pair_id=${pairId}` : ''
+      const session = await api.post(`/agent/sessions${query}`)
+      const messages = await api.get(`/agent/sessions/${session.session_id}/messages`)
+      this.setData({
+        sessionId: session.session_id,
+        chatMessages: messages || []
+      })
+    } catch (e) {
+      wx.showToast({ title: e.message || 'AI 会话启动失败', icon: 'none' })
+    }
+  },
+
+  initVoiceTools() {
+    if (this.innerAudioContext) {
+      return
+    }
+    this.innerAudioContext = wx.createInnerAudioContext()
+    this.innerAudioContext.onEnded(() => {
+      this.setData({ playingReply: false })
+    })
+    this.innerAudioContext.onError(() => {
+      this.setData({ playingReply: false })
+      wx.showToast({ title: '语音播放失败', icon: 'none' })
+    })
+  },
+
+  ensureRecognitionManager() {
+    if (!plugin) return null
+    if (this.recognitionManager) return this.recognitionManager
+
+    const manager = plugin.getRecordRecognitionManager()
+    manager.onStart = () => {
+      this.setData({ recognizingVoice: true, isRecording: true })
+      wx.showToast({ title: '正在识别语音', icon: 'none' })
+    }
+    manager.onRecognize = (res) => {
+      if (res && res.result) {
+        this.setData({ chatInput: res.result })
+      }
+    }
+    manager.onStop = async (res) => {
+      this.setData({ recognizingVoice: false, isRecording: false })
+      const result = (res && res.result ? res.result : '').trim()
+      if (!result) {
+        return
+      }
+      this.setData({ chatInput: result })
+      await this.sendChat()
+    }
+    manager.onError = () => {
+      this.setData({ recognizingVoice: false, isRecording: false })
+      wx.showToast({ title: '语音识别失败', icon: 'none' })
+    }
+    this.recognitionManager = manager
+    return manager
+  },
+
+  stopRecognitionIfNeeded() {
+    if (this.data.recognizingVoice && this.recognitionManager && typeof this.recognitionManager.stop === 'function') {
+      this.recognitionManager.stop()
+    }
+    this.setData({ recognizingVoice: false, isRecording: false })
+  },
+
+  stopVoicePlayback() {
+    if (this.innerAudioContext) {
+      this.innerAudioContext.stop()
+    }
+    this.setData({ playingReply: false })
+  },
+
+  onChatInput(e) {
+    this.setData({ chatInput: e.detail.value })
+  },
+
+  async sendChat() {
+    const content = (this.data.chatInput || '').trim()
+    if (!content) return
+    if (!this.data.sessionId) {
+      await this.ensureAgentSession()
+    }
+
+    const chatMessages = this.data.chatMessages.concat([{ localId: `u-${Date.now()}`, role: 'user', content }])
+    this.setData({ chatMessages, chatInput: '' })
+
+    try {
+      const res = await api.post(`/agent/sessions/${this.data.sessionId}/chat`, { content })
+      const nextMessages = this.data.chatMessages.concat([{ localId: `a-${Date.now()}`, role: 'assistant', content: res.reply }])
+      this.setData({ chatMessages: nextMessages, lastReply: res.reply })
+      if (res.action === 'checkin_extracted') {
+        wx.showToast({ title: '已自动生成打卡', icon: 'success' })
+        this.checkTodayCheckin()
+      }
+    } catch (e) {
+      wx.showToast({ title: e.message || '发送失败', icon: 'none' })
+    }
+  },
+
+  toggleVoiceChatRecord() {
+    if (this.data.isRecording) {
+      this.setData({ isRecording: false })
+      this.stopRecognitionIfNeeded()
+      return
+    }
+    const manager = this.ensureRecognitionManager()
+    if (!manager) {
+      wx.showToast({ title: '当前环境未启用语音识别插件', icon: 'none' })
+      return
+    }
+    this.setData({ isRecording: true })
+    manager.start({
+      lang: 'zh_CN',
+      duration: 60000,
+    })
+  },
+
+  async startVoiceRecognize() {
+    const manager = this.ensureRecognitionManager()
+    if (!manager) {
+      wx.showToast({ title: '当前环境未启用语音识别插件', icon: 'none' })
+      return
+    }
+    if (this.data.recognizingVoice) {
+      this.stopRecognitionIfNeeded()
+      return
+    }
+
+    manager.start({
+      lang: 'zh_CN',
+      duration: 60000,
+    })
+  },
+
+  playLastReply() {
+    if (!this.data.lastReply) {
+      wx.showToast({ title: '还没有可播放的回复', icon: 'none' })
+      return
+    }
+    if (!plugin || typeof plugin.textToSpeech !== 'function') {
+      wx.showToast({ title: '当前环境暂不支持语音播报', icon: 'none' })
+      return
+    }
+    this.initVoiceTools()
+    this.stopVoicePlayback()
+    this.setData({ playingReply: true })
+    plugin.textToSpeech({
+      lang: 'zh_CN',
+      tts: this.data.lastReply,
+      success: (res) => {
+        const filePath = res.filename || res.filePath
+        if (!filePath) {
+          this.setData({ playingReply: false })
+          wx.showToast({ title: '语音生成失败', icon: 'none' })
+          return
+        }
+        this.innerAudioContext.src = filePath
+        this.innerAudioContext.play()
+      },
+      fail: () => {
+        this.setData({ playingReply: false })
+        wx.showToast({ title: '语音生成失败', icon: 'none' })
+      }
+    })
   }
 })

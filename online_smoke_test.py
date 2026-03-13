@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -8,10 +9,16 @@ from typing import Any
 from urllib import error, parse, request
 
 
-BASE_URL = "http://143.198.110.145:8080/api/v1"
+BASE_URL = os.getenv("QJ_BASE_URL", "http://127.0.0.1:8080/api/v1")
 
 
-def http_json(method: str, path: str, token: str | None = None, payload: dict[str, Any] | None = None, query: dict[str, Any] | None = None) -> Any:
+def http_json(
+    method: str,
+    path: str,
+    token: str | None = None,
+    payload: dict[str, Any] | None = None,
+    query: dict[str, Any] | None = None,
+) -> Any:
     url = f"{BASE_URL}{path}"
     if query:
         url = f"{url}?{parse.urlencode(query)}"
@@ -33,7 +40,9 @@ def http_json(method: str, path: str, token: str | None = None, payload: dict[st
         raise RuntimeError(f"{method} {url} -> HTTP {exc.code}: {detail}") from exc
 
 
-def poll_daily_report(token: str, pair_id: str, timeout_seconds: int = 120) -> dict[str, Any]:
+def poll_daily_report(
+    token: str, pair_id: str, timeout_seconds: int = 120
+) -> dict[str, Any]:
     deadline = time.time() + timeout_seconds
     latest = None
     while time.time() < deadline:
@@ -59,26 +68,42 @@ def main() -> int:
     register_a = http_json(
         "POST",
         "/auth/register",
-        payload={"email": email_a, "nickname": f"测试A{suffix[-4:]}", "password": password},
+        payload={
+            "email": email_a,
+            "nickname": f"测试A{suffix[-4:]}",
+            "password": password,
+        },
     )
 
     print("[2/8] 注册用户 B")
     register_b = http_json(
         "POST",
         "/auth/register",
-        payload={"email": email_b, "nickname": f"测试B{suffix[-4:]}", "password": password},
+        payload={
+            "email": email_b,
+            "nickname": f"测试B{suffix[-4:]}",
+            "password": password,
+        },
     )
 
     print("[3/8] 验证登录链路")
-    login_a = http_json("POST", "/auth/login", payload={"email": email_a, "password": password})
-    login_b = http_json("POST", "/auth/login", payload={"email": email_b, "password": password})
+    login_a = http_json(
+        "POST", "/auth/login", payload={"email": email_a, "password": password}
+    )
+    login_b = http_json(
+        "POST", "/auth/login", payload={"email": email_b, "password": password}
+    )
     token_a = login_a["access_token"]
     token_b = login_b["access_token"]
 
     print("[4/8] 创建配对并邀请加入")
-    pair_created = http_json("POST", "/pairs/create", token=token_a, payload={"type": "couple"})
+    pair_created = http_json(
+        "POST", "/pairs/create", token=token_a, payload={"type": "couple"}
+    )
     invite_code = pair_created["invite_code"]
-    pair_joined = http_json("POST", "/pairs/join", token=token_b, payload={"invite_code": invite_code})
+    pair_joined = http_json(
+        "POST", "/pairs/join", token=token_b, payload={"invite_code": invite_code}
+    )
     pair_id = pair_joined["id"]
 
     pairs_a = http_json("GET", "/pairs/me", token=token_a)
@@ -110,12 +135,16 @@ def main() -> int:
     http_json("POST", "/checkins/", token=token_a, payload=checkin_payload_a)
     http_json("POST", "/checkins/", token=token_b, payload=checkin_payload_b)
 
-    today_status = http_json("GET", "/checkins/today", token=token_a, query={"pair_id": pair_id})
+    today_status = http_json(
+        "GET", "/checkins/today", token=token_a, query={"pair_id": pair_id}
+    )
     if not today_status.get("both_done"):
         raise RuntimeError(f"双方打卡后状态异常: {today_status}")
 
     print("[6/8] 触发日报生成")
-    generated = http_json("POST", "/reports/generate-daily", token=token_a, query={"pair_id": pair_id})
+    generated = http_json(
+        "POST", "/reports/generate-daily", token=token_a, query={"pair_id": pair_id}
+    )
     report_id = generated["id"]
 
     print("[7/8] 轮询日报结果")
@@ -124,9 +153,18 @@ def main() -> int:
         raise RuntimeError(f"日报生成失败: {latest_report}")
 
     print("[8/8] 验证报告与趋势查询")
-    history = http_json("GET", "/reports/history", token=token_a, query={"pair_id": pair_id, "report_type": "daily", "limit": 3})
-    trend = http_json("GET", "/reports/trend", token=token_a, query={"pair_id": pair_id, "days": 14})
-    streak = http_json("GET", "/checkins/streak", token=token_a, query={"pair_id": pair_id})
+    history = http_json(
+        "GET",
+        "/reports/history",
+        token=token_a,
+        query={"pair_id": pair_id, "report_type": "daily", "limit": 3},
+    )
+    trend = http_json(
+        "GET", "/reports/trend", token=token_a, query={"pair_id": pair_id, "days": 14}
+    )
+    streak = http_json(
+        "GET", "/checkins/streak", token=token_a, query={"pair_id": pair_id}
+    )
 
     summary = {
         "emails": {"user_a": email_a, "user_b": email_b},

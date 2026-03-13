@@ -5,6 +5,7 @@
  */
 const api = require('../../utils/api.js')
 const auth = require('../../utils/auth.js')
+const { syncUserAndPair, normalizePair } = require('../../utils/user-sync.js')
 
 Page({
   data: {
@@ -25,10 +26,44 @@ Page({
 
     // 自定义昵称
     customNicknameInput: '',
-    showNicknameModal: false
+    showNicknameModal: false,
+
+    // 奶油风 UI 专属数据
+    notices: [
+      "恭喜 242***打卡挑战成功奖励 1520元",
+      "用户 '小木' 刚刚完成了 7 天亲密打卡",
+      "今日已有 1284 对情侣通过 AI 陪伴完成记录"
+    ],
+    featureIcons: [
+      { name: '蜜语聊天', icon: '💬', bg: '#E3F2FD' },
+      { name: '情侣定位', icon: '📍', bg: '#FCE4EC' },
+      { name: '恋爱日记', icon: '📒', bg: '#E8F5E9' },
+      { name: '私密相册', icon: '🖼️', bg: '#FFF3E0' },
+      { name: '一起养娃', icon: '🍼', bg: '#F3E5F5' },
+      { name: '一起睡', icon: '🌙', bg: '#EDE7F6' },
+      { name: '打卡赚钱', icon: '💰', bg: '#FFFDE7' },
+      { name: '答题赚钱', icon: '❓', bg: '#F1F8E9' },
+      { name: '结婚登记', icon: '💍', bg: '#FCE4EC' },
+      { name: '想你', icon: '☁️', bg: '#E1F5FE' },
+      { name: '恋爱课堂', icon: '🎓', bg: '#E8EAF6' },
+      { name: '纪念日提醒', icon: '📅', bg: '#FFEBEE' },
+      { name: '恩爱果园', icon: '🌳', bg: '#E8F5E9' },
+      { name: '姨妈助手', icon: '🩸', bg: '#FCE4EC' },
+      { name: '生你气', icon: '😤', bg: '#FFF3E0' },
+      { name: '恋爱记账本', icon: '📒', bg: '#F9FBE7' },
+      { name: '恋爱清单', icon: '📜', bg: '#E0F2F1' },
+      { name: '许愿', icon: '🎋', bg: '#F3E5F5' },
+      { name: '一起看爽片', icon: '🎬', bg: '#EFEBE9' },
+      { name: '秀恩爱', icon: '💜', bg: '#FCE4EC' }
+    ]
   },
 
   onLoad() {
+    if (!auth.checkLogin()) return
+    this.loadPairStatus()
+  },
+
+  onShow() {
     if (!auth.checkLogin()) return
     this.loadPairStatus()
   },
@@ -40,20 +75,14 @@ Page({
     this.setData({ loading: true })
     try {
       const res = await api.get('/pairs/me')
-      // 后端返回列表，取第一个 active 配对
-      const pairs = Array.isArray(res) ? res : [res]
+      const pairs = (Array.isArray(res) ? res : [res]).map(normalizePair)
       const activePair = pairs.find(p => p.status === 'active') || pairs[0] || null
       const app = getApp()
       if (activePair) {
         const displayName = activePair.partner_nickname || activePair.partner_name || activePair.partnerNickname || '伴侣'
-        if (activePair.partner_nickname) {
-          const nickname = activePair.partner_nickname
-          activePair.partner_name = nickname
-          activePair.partnerNickname = nickname
-        }
         app.setPairInfo(activePair)
         this.setData({
-          isPaired: true,
+          isPaired: activePair.status === 'active',
           pairInfo: activePair,
           partnerDisplay: displayName,
           partnerInitial: displayName ? displayName[0] : '❤',
@@ -134,7 +163,8 @@ Page({
     try {
       const res = await api.post('/pairs/join', { invite_code: code })
       const app = getApp()
-      app.setPairInfo(res)
+      app.setPairInfo(normalizePair(res))
+      await syncUserAndPair()
       wx.showToast({ title: '配对成功！', icon: 'success' })
       this.loadPairStatus()
     } catch (e) {
@@ -242,14 +272,15 @@ Page({
       const res = await api.post(`/pairs/${pairId}/partner-nickname`, {
         custom_nickname: nickname
       })
+      const normalized = normalizePair(res)
       
       // 更新本地数据
       const app = getApp()
-      app.setPairInfo(res)
+      app.setPairInfo(normalized)
       
-      const displayName = nickname || res.partner_nickname || '伴侣'
+      const displayName = nickname || normalized.partner_nickname || '伴侣'
       this.setData({
-        pairInfo: res,
+        pairInfo: normalized,
         partnerDisplay: displayName,
         partnerInitial: displayName ? displayName[0] : '❤',
         showNicknameModal: false

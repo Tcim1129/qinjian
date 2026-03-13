@@ -13,6 +13,7 @@ from app.schemas import (
     PairCreateRequest,
     PairJoinRequest,
     PairResponse,
+    PairSummaryResponse,
     UpdatePartnerNicknameRequest,
 )
 
@@ -109,6 +110,45 @@ async def get_my_pairs(
         partner = await db.get(User, partner_id) if partner_id else None
         responses.append(_build_pair_response(pair, user, partner))
     return responses
+
+
+@router.get("/summary", response_model=PairSummaryResponse)
+async def get_pair_summary(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    """获取当前用户配对摘要，便于前端统一同步绑定状态"""
+    result = await db.execute(
+        select(Pair).where(
+            or_(Pair.user_a_id == user.id, Pair.user_b_id == user.id),
+            Pair.status.in_([PairStatus.PENDING, PairStatus.ACTIVE]),
+        )
+    )
+    pairs = result.scalars().all()
+
+    active_pairs = [pair for pair in pairs if pair.status == PairStatus.ACTIVE]
+    pending_pairs = [pair for pair in pairs if pair.status == PairStatus.PENDING]
+
+    active_pair = (
+        active_pairs[0]
+        if active_pairs
+        else (pending_pairs[0] if pending_pairs else None)
+    )
+    pair_response = None
+    if active_pair:
+        partner_id = (
+            active_pair.user_b_id
+            if active_pair.user_a_id == user.id
+            else active_pair.user_a_id
+        )
+        partner = await db.get(User, partner_id) if partner_id else None
+        pair_response = _build_pair_response(active_pair, user, partner)
+
+    return PairSummaryResponse(
+        is_paired=bool(active_pairs),
+        active_pair=pair_response,
+        active_count=len(active_pairs),
+        pending_count=len(pending_pairs),
+    )
 
 
 # ── 解绑功能（计划书§9.1：双方确认或7天冷静期自动解绑）──
