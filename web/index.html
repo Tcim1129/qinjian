@@ -7,23 +7,50 @@
     <title>亲健 · 关系健康工作台</title>
     <meta name="description" content="亲健，面向青年亲密关系的 AI 健康管理平台。">
     <meta name="theme-color" content="#d76848">
-    <!-- 使用国内镜像或系统字体 -->
-    <link href="https://fonts.loli.net/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet">
-    <!-- 备用：如果镜像失效，使用系统字体 -->
+    <!-- 字体加载优化：内联关键字体样式，避免外部资源阻塞 -->
     <style>
-      @font-face {
-        font-family: 'Manrope';
-        src: local('PingFang SC'), local('Microsoft YaHei'), local('Helvetica Neue');
-      }
-      @font-face {
-        font-family: 'Noto Serif SC';
-        src: local('Songti SC'), local('SimSun');
-      }
+        /* 系统字体备用，确保即使外部字体失败也能正常显示 */
+        @font-face {
+            font-family: 'Manrope';
+            src: local('PingFang SC'), local('Microsoft YaHei'), local('Helvetica Neue'), local('Arial'), local(sans-serif);
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Noto Serif SC';
+            src: local('Songti SC'), local('SimSun'), local('STSong'), local(serif);
+            font-display: swap;
+        }
+        /* 内联关键CSS，确保即使外部CSS加载失败也有基本样式 */
+        :root {
+            --paper: #f7f1eb;
+            --ink: #1f2a2f;
+            --peach: #d76848;
+            --font-sans: 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            --font-display: 'Noto Serif SC', 'Songti SC', serif;
+        }
+        body {
+            font-family: var(--font-sans);
+            background: linear-gradient(180deg, #fcf7f2 0%, #f3ece5 100%);
+            margin: 0;
+            min-height: 100vh;
+        }
     </style>
+    <!-- 异步加载外部字体（不阻塞渲染） -->
+    <link href="https://fonts.loli.net/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.loli.net/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet"></noscript>
     <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
+    <!-- 资源加载错误调试 -->
+    <div id="debug-info" style="position:fixed;top:0;left:0;background:#ff4444;color:white;padding:10px;z-index:9999;font-size:12px;display:none;"></div>
+    <script>
+        window.addEventListener('error', function(e) {
+            var debug = document.getElementById('debug-info');
+            debug.style.display = 'block';
+            debug.innerHTML += '加载失败: ' + (e.target.src || e.target.href) + '<br>';
+        }, true);
+    </script>
     <div hidden>
         <svg xmlns="http://www.w3.org/2000/svg">
             <symbol id="i-home" viewBox="0 0 24 24">
