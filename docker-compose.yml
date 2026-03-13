@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: docker.mirrors.sjtug.sjtu.edu.cn/postgres:16-alpine
     restart: always
     environment:
       POSTGRES_DB: qinjian
@@ -25,7 +25,7 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgresql+asyncpg://qinjian:${DB_PASSWORD:-qinjian_dev_123}@db:5432/qinjian
+      DATABASE_URL: postgresql+psycopg://qinjian:${DB_PASSWORD:-qinjian_dev_123}@db:5432/qinjian
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
       SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1
@@ -39,7 +39,7 @@ services:
           memory: 1G
 
   web:
-    image: nginx:alpine
+    image: docker.mirrors.sjtug.sjtu.edu.cn/nginx:alpine
     restart: always
     ports:
       - "8080:80"
