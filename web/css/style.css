@@ -22,8 +22,8 @@
     --radius-md: 20px;
     --radius-sm: 14px;
     --radius-pill: 999px;
-    --font-sans: 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    --font-display: 'Noto Serif SC', serif;
+    --font-sans: var(--font-sans-fallback, 'PingFang SC', 'Microsoft YaHei', sans-serif);
+    --font-display: var(--font-serif-fallback, 'Songti SC', serif);
 }
 
 * {
@@ -321,7 +321,7 @@ select {
 
 .page {
     display: none;
-    animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fadeUp 0.28s ease;
 }
 
 .page.active {
@@ -452,15 +452,6 @@ select {
     background: rgba(255, 255, 255, 0.82);
     border: 1px solid var(--line);
     box-shadow: var(--shadow-sm);
-    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.hero-card:hover,
-.panel:hover,
-.stat-card:hover,
-.discover-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 40px rgba(37, 34, 29, 0.12);
 }
 
 .panel,
@@ -640,15 +631,7 @@ select {
 .button--primary {
     background: linear-gradient(135deg, var(--peach) 0%, #ec946d 100%);
     color: white;
-    box-shadow: 0 8px 16px rgba(215, 104, 72, 0.25);
-    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.button--primary:hover,
-.button--primary:focus-visible {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 24px rgba(215, 104, 72, 0.35);
-    background: linear-gradient(135deg, #df7658 0%, #f0a381 100%);
+    box-shadow: 0 14px 32px rgba(215, 104, 72, 0.24);
 }
 
 .button--secondary {
@@ -957,19 +940,14 @@ select {
     padding: 18px;
     border-radius: 22px;
     border: 1px solid var(--line);
+
+    .stack-item__hint {
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
     background: rgba(255, 255, 255, 0.78);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-.timeline-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-sm);
-}
-
-.timeline-card .stack-item__hint {
-    font-size: 12px;
-    font-weight: 700;
-    white-space: nowrap;
 }
 
 .timeline-card__head {
@@ -986,12 +964,13 @@ select {
 
 .timeline-card__meta {
     color: var(--ink-soft);
-    line-height: 1.6;
-}
 
-.timeline-card__meta .stack-item__aside {
-    width: 100%;
-    justify-content: flex-end;
+    .stack-item__aside {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    line-height: 1.6;
 }
 
 .timeline-card__meta strong {
