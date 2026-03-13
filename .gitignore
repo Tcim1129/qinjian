@@ -1,13 +1,121 @@
-__pycache__/
-*.pyc
-*.pyo
+# 亲健 - Git 忽略文件
+# 防止敏感信息和临时文件上传到 GitHub
+
+# === 环境变量和配置文件（包含密码/密钥） ===
 .env
-uploads/
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.env
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
-.venv/
+.installed.cfg
+*.egg
 venv/
-node_modules/
-.DS_Store
+ENV/
+env/
+.venv
+
+# === 日志和临时文件 ===
 *.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === IDE 和编辑器 ===
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# === 上传的文件和用户数据 ===
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.pdf
+*.doc
+*.docx
+!screenshots/*.png
+!images/*.png
+!images/*.jpg
+
+# === 数据库 ===
+*.db
+*.sqlite
+*.sqlite3
+pgdata/
+
+# === 小程序私有配置 ===
 project.config.json
 project.private.config.json
+miniprogram/project.config.json
+miniprogram/project.private.config.json
+
+# === 依赖目录 ===
+node_modules/
+
+# === 部署和运维（可能包含敏感信息） ===
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+ credentials/
+
+# === 测试和覆盖率 ===
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# === 打包文件 ===
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# === 其他 ===
+docker-compose.override.yml
+.deploy/
+
+# === 部署脚本（可能包含硬编码密钥） ===
+deploy-server.sh
+deploy.sh
+deploy*.py
+setup-cn-mirrors.sh
+fetch_logs.py
+sync_and_deploy_agent.py
+temp_deploy.py
