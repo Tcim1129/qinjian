@@ -110,9 +110,7 @@ Page({
     const displayName = pairInfo && (pairInfo.partner_nickname || pairInfo.partner_name || pairInfo.partnerNickname)
     this.setData({
       pairInfo,
-      pairDisplayName: displayName || '伴侣',
-      crisisStatus: pairId ? this.data.crisisStatus : null,
-      hasCrisis: pairId ? this.data.hasCrisis : false
+      pairDisplayName: displayName || '伴侣'
     })
 
     const tasks = [
