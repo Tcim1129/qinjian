@@ -23,7 +23,9 @@ const store = createStore({
     },
     SET_PAIR_SUMMARY(state, payload) {
       state.pairSummary = payload || null
-      state.pairInfo = payload?.active_pair || null
+      state.pairInfo = payload?.is_paired && payload?.active_pair?.status === 'active'
+        ? payload.active_pair
+        : null
     },
     SET_CHECKIN_STATUS(state, status) {
       state.hasCheckedIn = status

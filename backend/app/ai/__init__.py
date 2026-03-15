@@ -48,3 +48,12 @@ async def analyze_sentiment(text: str) -> dict:
         return json.loads(result)
     except json.JSONDecodeError:
         return {"sentiment": "neutral", "score": 5, "emotions": []}
+
+
+async def transcribe_audio(file_path: str) -> str:
+    """语音转文字 - 使用 OpenAI Whisper API"""
+    with open(file_path, "rb") as audio_file:
+        response = await client.audio.transcriptions.create(
+            model="whisper-1", file=audio_file, language="zh", response_format="text"
+        )
+    return response

@@ -34,11 +34,14 @@ function checkPaired() {
 
   const pairInfo = app.globalData.pairInfo
 
-  if (!pairInfo || (!pairInfo.id && !pairInfo.pair_id)) {
-    wx.showToast({
-      title: '请先完成配对',
-      icon: 'none',
-      duration: 2000
+   const pairId = pairInfo && (pairInfo.id || pairInfo.pair_id)
+   const isActive = pairInfo && pairInfo.status === 'active'
+
+   if (!pairId || !isActive) {
+     wx.showToast({
+       title: '请先完成配对',
+       icon: 'none',
+       duration: 2000
     })
     return false
   }
@@ -59,6 +62,7 @@ function getPairId() {
 
   const pairInfo = app.globalData.pairInfo
   if (!pairInfo) return null
+  if (pairInfo.status !== 'active') return null
   return pairInfo.id || pairInfo.pair_id || null
 }
 

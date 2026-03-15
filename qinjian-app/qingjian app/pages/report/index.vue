@@ -18,7 +18,7 @@
         </view>
         <view class="hero-copy-block">
           <text class="hero-title">{{ reportView.title || '等待生成' }}</text>
-          <text class="hero-copy">{{ reportView.insight || '完成打卡后，这里会出现更贴近你们关系节奏的核心洞察。' }}</text>
+          <text class="hero-copy">{{ reportView.insight || emptyHint }}</text>
         </view>
       </view>
 
@@ -93,6 +93,7 @@ export default {
         highlights: [],
         concerns: [],
       },
+      emptyHint: '完成打卡后，这里会出现更贴近你当下状态的洞察。',
     }
   },
   onShow() {
@@ -114,8 +115,9 @@ export default {
     },
     normalizeReport(report) {
       const content = report?.content || {}
+      const pairId = this.$store.state.pairInfo?.id || null
       return {
-        title: this.currentTab === 'weekly' ? '周报' : this.currentTab === 'monthly' ? '月报' : '日报',
+        title: !pairId && this.currentTab === 'daily' ? '个人日报' : this.currentTab === 'weekly' ? '周报' : this.currentTab === 'monthly' ? '月报' : '日报',
         healthScore: content.health_score || content.overall_health_score || null,
         insight: content.insight || content.executive_summary || content.self_insight || '',
         suggestion: content.suggestion || content.self_care_tip || '',
@@ -125,16 +127,24 @@ export default {
     },
     async loadReports() {
       const pairId = this.$store.state.pairInfo?.id
-      if (!pairId) return
+      if (!pairId && this.currentTab !== 'daily') {
+        this.reportView = this.normalizeReport(null)
+        this.historyListView = []
+        this.emptyHint = '当前未绑定关系，先完成个人日报或建立关系后再查看周报和月报。'
+        return
+      }
       try {
         const [latest, history] = await Promise.all([
           api.getLatestReport(pairId, this.currentTab).catch(() => null),
           api.getReportHistory(pairId, this.currentTab, 7).catch(() => []),
         ])
         this.reportView = this.normalizeReport(latest)
+        this.emptyHint = pairId
+          ? '完成打卡后，这里会出现更贴近你们关系节奏的核心洞察。'
+          : '完成个人打卡后，这里会出现更贴近你当下状态的洞察。'
         this.historyListView = (history || []).map((item) => ({
           ...item,
-          _label: item.type === 'weekly' ? '周报' : item.type === 'monthly' ? '月报' : '日报'
+          _label: item.type === 'solo' ? '个人日报' : item.type === 'weekly' ? '周报' : item.type === 'monthly' ? '月报' : '日报'
         }))
       } catch (e) {
         console.warn('load reports failed', e)
@@ -145,8 +155,8 @@ export default {
     },
     async generateCurrent() {
       const pairId = this.$store.state.pairInfo?.id
-      if (!pairId) {
-        uni.showToast({ title: '先绑定关系再生成报告', icon: 'none' })
+      if (!pairId && this.currentTab !== 'daily') {
+        uni.showToast({ title: '先绑定关系再生成周报或月报', icon: 'none' })
         return
       }
       try {

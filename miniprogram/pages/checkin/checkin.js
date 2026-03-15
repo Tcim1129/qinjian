@@ -1,11 +1,5 @@
 const api = require('../../utils/api.js')
 const auth = require('../../utils/auth.js')
-let plugin = null
-try {
-  plugin = requirePlugin('WechatSI')
-} catch (error) {
-  plugin = null
-}
 
 Page({
   data: {
@@ -36,13 +30,12 @@ Page({
     chatMessages: [],
     isRecording: false,
     lastReply: '',
-    voiceSupported: !!plugin,
-    recognizingVoice: false,
-    playingReply: false,
+    voiceSupported: true,
+    transcribingVoice: false,
   },
 
   onLoad() {
-    this.initVoiceTools()
+    this.initRecorder()
   },
 
   onShow() {
@@ -59,13 +52,75 @@ Page({
   },
 
   onHide() {
-    this.stopVoicePlayback()
-    this.stopRecognitionIfNeeded()
+    this.stopRecording()
   },
 
   onUnload() {
-    this.stopVoicePlayback()
-    this.stopRecognitionIfNeeded()
+    this.stopRecording()
+  },
+
+  // 初始化录音管理器
+  initRecorder() {
+    this.recorderManager = wx.getRecorderManager()
+    this.recorderManager.onStart(() => {
+      this.setData({ isRecording: true })
+      wx.showToast({ title: '正在录音...', icon: 'none' })
+    })
+    this.recorderManager.onStop((res) => {
+      this.setData({ isRecording: false })
+      // 如果是语音转文字模式，自动上传转录
+      if (this.data.mode === 'voice' && res.tempFilePath) {
+        this.transcribeVoice(res.tempFilePath)
+      } else {
+        // 表单模式，保存语音路径用于打卡
+        this.setData({ voicePath: res.tempFilePath })
+      }
+    })
+    this.recorderManager.onError((err) => {
+      this.setData({ isRecording: false, transcribingVoice: false })
+      wx.showToast({ title: '录音失败：' + err.message, icon: 'none' })
+    })
+  },
+
+  // 开始录音
+  startRecording() {
+    this.recorderManager.start({
+      duration: 60000,
+      sampleRate: 16000,
+      numberOfChannels: 1,
+      encodeBitRate: 48000,
+      format: 'mp3'
+    })
+  },
+
+  // 停止录音
+  stopRecording() {
+    if (this.data.isRecording) {
+      this.recorderManager.stop()
+    }
+  },
+
+  // 切换录音状态（语音模式）
+  toggleVoiceRecord() {
+    if (this.data.isRecording) {
+      this.stopRecording()
+    } else {
+      this.startRecording()
+    }
+  },
+
+  // 上传语音并转录
+  async transcribeVoice(filePath) {
+    this.setData({ transcribingVoice: true })
+    try {
+      const result = await api.uploadAndTranscribe(filePath)
+      this.setData({ chatInput: result.text, transcribingVoice: false })
+      // 自动发送转录结果
+      await this.sendChat()
+    } catch (e) {
+      this.setData({ transcribingVoice: false })
+      wx.showToast({ title: e.message || '语音转文字失败', icon: 'none' })
+    }
   },
 
   switchMode(e) {
@@ -159,28 +214,10 @@ Page({
 
   chooseVoice() {
     if (this.data.isRecording) {
-      if (this.recorderManager) this.recorderManager.stop()
+      this.stopRecording()
       return
     }
-
-    if (!this.recorderManager) {
-      this.recorderManager = wx.getRecorderManager()
-      this.recorderManager.onStop((res) => {
-        this.setData({ voicePath: res.tempFilePath, isRecording: false })
-        if (this._recordTimer) {
-          clearTimeout(this._recordTimer)
-          this._recordTimer = null
-        }
-      })
-      this.recorderManager.onError(() => {
-        this.setData({ isRecording: false })
-        wx.showToast({ title: '录音失败', icon: 'none' })
-      })
-    }
-    this.setData({ isRecording: true })
-    this.recorderManager.start({ duration: 60000, format: 'mp3' })
-    this._recordTimer = setTimeout(() => this.recorderManager.stop(), 5000)
-    wx.showToast({ title: '录音中（5秒后自动停止）', icon: 'none', duration: 3000 })
+    this.startRecording()
   },
 
   clearVoice() {
@@ -287,65 +324,6 @@ Page({
     }
   },
 
-  initVoiceTools() {
-    if (this.innerAudioContext) {
-      return
-    }
-    this.innerAudioContext = wx.createInnerAudioContext()
-    this.innerAudioContext.onEnded(() => {
-      this.setData({ playingReply: false })
-    })
-    this.innerAudioContext.onError(() => {
-      this.setData({ playingReply: false })
-      wx.showToast({ title: '语音播放失败', icon: 'none' })
-    })
-  },
-
-  ensureRecognitionManager() {
-    if (!plugin) return null
-    if (this.recognitionManager) return this.recognitionManager
-
-    const manager = plugin.getRecordRecognitionManager()
-    manager.onStart = () => {
-      this.setData({ recognizingVoice: true, isRecording: true })
-      wx.showToast({ title: '正在识别语音', icon: 'none' })
-    }
-    manager.onRecognize = (res) => {
-      if (res && res.result) {
-        this.setData({ chatInput: res.result })
-      }
-    }
-    manager.onStop = async (res) => {
-      this.setData({ recognizingVoice: false, isRecording: false })
-      const result = (res && res.result ? res.result : '').trim()
-      if (!result) {
-        return
-      }
-      this.setData({ chatInput: result })
-      await this.sendChat()
-    }
-    manager.onError = () => {
-      this.setData({ recognizingVoice: false, isRecording: false })
-      wx.showToast({ title: '语音识别失败', icon: 'none' })
-    }
-    this.recognitionManager = manager
-    return manager
-  },
-
-  stopRecognitionIfNeeded() {
-    if (this.data.recognizingVoice && this.recognitionManager && typeof this.recognitionManager.stop === 'function') {
-      this.recognitionManager.stop()
-    }
-    this.setData({ recognizingVoice: false, isRecording: false })
-  },
-
-  stopVoicePlayback() {
-    if (this.innerAudioContext) {
-      this.innerAudioContext.stop()
-    }
-    this.setData({ playingReply: false })
-  },
-
   onChatInput(e) {
     this.setData({ chatInput: e.detail.value })
   },
@@ -371,72 +349,5 @@ Page({
     } catch (e) {
       wx.showToast({ title: e.message || '发送失败', icon: 'none' })
     }
-  },
-
-  toggleVoiceChatRecord() {
-    if (this.data.isRecording) {
-      this.setData({ isRecording: false })
-      this.stopRecognitionIfNeeded()
-      return
-    }
-    const manager = this.ensureRecognitionManager()
-    if (!manager) {
-      wx.showToast({ title: '当前环境未启用语音识别插件', icon: 'none' })
-      return
-    }
-    this.setData({ isRecording: true })
-    manager.start({
-      lang: 'zh_CN',
-      duration: 60000,
-    })
-  },
-
-  async startVoiceRecognize() {
-    const manager = this.ensureRecognitionManager()
-    if (!manager) {
-      wx.showToast({ title: '当前环境未启用语音识别插件', icon: 'none' })
-      return
-    }
-    if (this.data.recognizingVoice) {
-      this.stopRecognitionIfNeeded()
-      return
-    }
-
-    manager.start({
-      lang: 'zh_CN',
-      duration: 60000,
-    })
-  },
-
-  playLastReply() {
-    if (!this.data.lastReply) {
-      wx.showToast({ title: '还没有可播放的回复', icon: 'none' })
-      return
-    }
-    if (!plugin || typeof plugin.textToSpeech !== 'function') {
-      wx.showToast({ title: '当前环境暂不支持语音播报', icon: 'none' })
-      return
-    }
-    this.initVoiceTools()
-    this.stopVoicePlayback()
-    this.setData({ playingReply: true })
-    plugin.textToSpeech({
-      lang: 'zh_CN',
-      tts: this.data.lastReply,
-      success: (res) => {
-        const filePath = res.filename || res.filePath
-        if (!filePath) {
-          this.setData({ playingReply: false })
-          wx.showToast({ title: '语音生成失败', icon: 'none' })
-          return
-        }
-        this.innerAudioContext.src = filePath
-        this.innerAudioContext.play()
-      },
-      fail: () => {
-        this.setData({ playingReply: false })
-        wx.showToast({ title: '语音生成失败', icon: 'none' })
-      }
-    })
   }
 })

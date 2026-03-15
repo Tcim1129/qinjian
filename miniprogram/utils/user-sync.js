@@ -11,6 +11,12 @@ function normalizePair(pair) {
   }
 }
 
+function getActivePair(summary) {
+  if (!summary || !summary.is_paired || !summary.active_pair) return null
+  if (summary.active_pair.status !== 'active') return null
+  return normalizePair(summary.active_pair)
+}
+
 async function syncUserAndPair() {
   const app = getApp()
   if (!app || !app.globalData || !app.globalData.token) {
@@ -34,7 +40,7 @@ async function syncUserAndPair() {
 
   if (summaryResult.status === 'fulfilled') {
     summary = summaryResult.value
-    pairInfo = normalizePair(summary.active_pair || null)
+    pairInfo = getActivePair(summary)
     app.setPairInfo(pairInfo)
   }
 
@@ -44,4 +50,5 @@ async function syncUserAndPair() {
 module.exports = {
   syncUserAndPair,
   normalizePair,
+  getActivePair,
 }

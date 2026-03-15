@@ -1,10 +1,20 @@
-import config from './config.local.js'
+import defaultConfig from './config.example.js'
+
+let localConfig = {}
+
+try {
+  const localModule = require('./config.local.js')
+  localConfig = localModule.default || localModule
+} catch (error) {
+  localConfig = {}
+}
 
 const TOKEN_KEY = 'qj_app_token'
 
 class ApiClient {
   constructor() {
-    this.baseUrl = (config.apiRoot || '').replace(/\/$/, '')
+    const resolvedConfig = localConfig?.apiRoot ? localConfig : defaultConfig
+    this.baseUrl = (resolvedConfig.apiRoot || '').replace(/\/$/, '')
     this.token = uni.getStorageSync(TOKEN_KEY) || ''
   }
 
@@ -109,10 +119,16 @@ class ApiClient {
   getTodayStatus(pairId = null) { return this.request('GET', pairId ? `/checkins/today?pair_id=${pairId}` : '/checkins/today?mode=solo') }
   getCheckinStreak(pairId = null) { return this.request('GET', pairId ? `/checkins/streak?pair_id=${pairId}` : '/checkins/streak?mode=solo') }
   getTreeStatus(pairId) { return this.request('GET', `/tree/status?pair_id=${pairId}`) }
-  getLatestReport(pairId, reportType = 'daily') { return this.request('GET', `/reports/latest?pair_id=${pairId}&report_type=${reportType}`) }
-  getReportHistory(pairId, reportType = 'daily', limit = 7) { return this.request('GET', `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}`) }
-  getHealthTrend(pairId, days = 14) { return this.request('GET', `/reports/trend?pair_id=${pairId}&days=${days}`) }
-  generateDailyReport(pairId) { return this.request('POST', `/reports/generate-daily?pair_id=${pairId}`) }
+  getLatestReport(pairId = null, reportType = 'daily') {
+    return this.request('GET', pairId ? `/reports/latest?pair_id=${pairId}&report_type=${reportType}` : `/reports/latest?mode=solo&report_type=${reportType}`)
+  }
+  getReportHistory(pairId = null, reportType = 'daily', limit = 7) {
+    return this.request('GET', pairId ? `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}` : `/reports/history?mode=solo&report_type=${reportType}&limit=${limit}`)
+  }
+  getHealthTrend(pairId = null, days = 14) {
+    return this.request('GET', pairId ? `/reports/trend?pair_id=${pairId}&days=${days}` : `/reports/trend?mode=solo&days=${days}`)
+  }
+  generateDailyReport(pairId = null) { return this.request('POST', pairId ? `/reports/generate-daily?pair_id=${pairId}` : '/reports/generate-daily?mode=solo') }
   generateWeeklyReport(pairId) { return this.request('POST', `/reports/generate-weekly?pair_id=${pairId}`) }
   generateMonthlyReport(pairId) { return this.request('POST', `/reports/generate-monthly?pair_id=${pairId}`) }
   createAgentSession(pairId = null) { return this.request('POST', `/agent/sessions${pairId ? `?pair_id=${pairId}` : ''}`) }
