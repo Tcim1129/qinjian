@@ -59,6 +59,7 @@ page {
   color: var(--color-text);
   background-color: var(--color-bg);
   line-height: 1.6;
+  overflow-x: hidden;
 }
 
 /* ===== 通用容器 ===== */
@@ -66,10 +67,49 @@ page {
   padding: var(--spacing-lg);
   min-height: 100vh;
   box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .container-safe {
-  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(224rpx + env(safe-area-inset-bottom));
+}
+
+.brand-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1rpx solid rgba(212, 163, 115, 0.16);
+  box-shadow: 0 14rpx 32rpx rgba(93, 64, 55, 0.08);
+}
+
+.brand-ribbon__logo {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 28rpx;
+  flex-shrink: 0;
+}
+
+.brand-ribbon__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.brand-ribbon__eyebrow {
+  font-size: 20rpx;
+  letter-spacing: 4rpx;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.brand-ribbon__title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: var(--color-text);
 }
 
 /* ===== 卡片 ===== */

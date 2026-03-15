@@ -298,7 +298,10 @@ export default {
 
 <style scoped>
 .checkin-page {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(180deg, #fff9f3 0%, #f5eee7 100%);
 }
 
@@ -352,8 +355,10 @@ export default {
 }
 
 .checkin-scroll {
-  height: calc(100vh - 120rpx);
+  flex: 1;
+  min-height: 0;
   padding: 24rpx 28rpx 0;
+  box-sizing: border-box;
 }
 
 .progress-card,
@@ -599,6 +604,6 @@ export default {
 }
 
 .page-spacer {
-  height: 280rpx;
+  height: 340rpx;
 }
 </style>

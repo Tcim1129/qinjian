@@ -4,21 +4,25 @@
   margin: calc(-1 * var(--spacing-lg));
   margin-bottom: 48rpx;
   padding: 80rpx 40rpx 120rpx;
-  background: linear-gradient(135deg, #5d4037, #8d6e63);
+  background: linear-gradient(135deg, #fff3e8 0%, #fbf2ea 48%, #eef8fa 100%);
   border-radius: 0 0 80rpx 80rpx;
   position: relative;
+}
+
+.home-header-main {
+  margin-top: 30rpx;
 }
 
 .home-greeting {
   font-size: 44rpx;
   font-weight: 800;
-  color: #ffffff;
+  color: #3e2723;
   letter-spacing: 2rpx;
 }
 
 .home-pair-status-creamy {
   font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.85);
+  color: #8d6e63;
   margin-top: 12rpx;
 }
 
@@ -26,14 +30,46 @@
   display: flex;
   align-items: center;
   gap: 12rpx;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.86);
   padding: 12rpx 28rpx;
   border-radius: 40rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  border: 1rpx solid rgba(212, 163, 115, 0.14);
+  box-shadow: 0 12rpx 28rpx rgba(93, 64, 55, 0.08);
 }
 
 .mood-emoji-sm { font-size: 32rpx; }
-.mood-label-sm { font-size: 20rpx; color: #ffffff; font-weight: 600; }
+.mood-label-sm { font-size: 20rpx; color: #5d4037; font-weight: 700; }
+
+.home-hero-card {
+  margin-top: 28rpx;
+  padding: 32rpx;
+  border-radius: 36rpx;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 249, 242, 0.9));
+  border: 1rpx solid rgba(212, 163, 115, 0.14);
+  box-shadow: 0 18rpx 40rpx rgba(93, 64, 55, 0.08);
+}
+
+.home-hero-card__eyebrow {
+  font-size: 20rpx;
+  letter-spacing: 4rpx;
+  color: #a1887f;
+  text-transform: uppercase;
+}
+
+.home-hero-card__title {
+  margin-top: 14rpx;
+  font-size: 36rpx;
+  line-height: 1.3;
+  font-weight: 800;
+  color: #3e2723;
+}
+
+.home-hero-card__copy {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #6d4c41;
+}
 
 .home-pair-status {
   font-size: 24rpx;

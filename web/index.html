@@ -3,17 +3,19 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>亲健 · 关系健康工作台</title>
-    <meta name="description" content="亲健，面向青年亲密关系的 AI 健康管理平台。">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>亲健 · 把关系照顾好</title>
+    <meta name="description" content="亲健，把记录、简报与关系陪伴做成更高级也更亲近的日常体验。">
     <meta name="theme-color" content="#d76848">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f4c6a8'/%3E%3Cstop offset='100%25' stop-color='%23d68463'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='%23fff7f2'/%3E%3Cpath d='M32 50 17.8 35.9a9.6 9.6 0 0 1 13.6-13.6L32 22.9l.6-.6a9.6 9.6 0 1 1 13.6 13.6Z' fill='url(%23g)'/%3E%3C/svg%3E">
     <style>
       :root {
         --font-sans-fallback: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
         --font-serif-fallback: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
       }
     </style>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20260315f">
 </head>
 
 <body>
@@ -161,15 +163,41 @@
     <div class="backdrop-orb backdrop-orb--two"></div>
 
     <div class="site-shell">
+        <aside class="brand-pane">
+            <div class="brand-lockup">
+                <div class="brand-mark brand-mark--logo">
+                    <img src="assets/brand-logo.jpg" alt="亲健 logo">
+                </div>
+                <div>
+                    <p class="eyebrow">QINJIAN</p>
+                    <h1>亲健</h1>
+                    <p class="brand-copy">把每日记录、关系洞察和后续行动收进同一个空间。</p>
+                </div>
+            </div>
+            <div class="brand-stack">
+                <article class="brand-card brand-card--accent">
+                    <p class="brand-card__label">SLOGAN</p>
+                    <p class="brand-card__text">把一句真心话、一次打卡和一份报告，慢慢变成更稳定的陪伴。</p>
+                </article>
+            </div>
+        </aside>
+
         <main class="app-frame">
             <header class="topbar">
-                <div class="topbar-brand">
-                    <svg class="icon icon-lg"><use href="#i-heart"></use></svg>
-                    <h2 id="topbar-title">亲健</h2>
+                <div class="topbar-copy">
+                    <div class="topbar-brandline">
+                        <img class="topbar-brandline__logo" src="assets/brand-logo.jpg" alt="亲健 logo">
+                        <p id="topbar-caption" class="eyebrow">QINJIAN WEB</p>
+                    </div>
+                    <p id="topbar-subtitle" class="topbar-subtitle">把复杂关系，做成更轻一点、更近一点的日常。</p>
+                    <h2 id="topbar-title">关系健康工作台</h2>
                 </div>
                 <div class="topbar-actions">
+                    <button class="pill-button" data-jump-page="checkin" type="button">今日记录</button>
                     <button id="notification-toggle" class="icon-button hidden" type="button" aria-label="通知中心">
-                        <svg class="icon"><use href="#i-bell"></use></svg>
+                        <svg class="icon">
+                            <use href="#i-bell"></use>
+                        </svg>
                         <span id="notification-count" class="icon-badge hidden">0</span>
                     </button>
                 </div>
@@ -190,7 +218,7 @@
                     <div class="page-hero">
                         <div>
                             <p class="eyebrow">AUTH</p>
-                            <h3>进入亲健</h3>
+                            <h3>登录或注册</h3>
                         </div>
                     </div>
 
@@ -199,7 +227,7 @@
                             <div class="auth-panel__header">
                                 <div>
                                     <p class="panel__eyebrow">账号入口</p>
-                                    <h4>登录到你的关系空间</h4>
+                                    <h4>进入工作台</h4>
                                 </div>
                                 <div class="auth-chip-row">
                                     <span class="status-chip status-chip--success">线上 API 已连通</span>
@@ -218,26 +246,26 @@
                             <form id="auth-form" class="form-stack">
                                 <label id="auth-nickname-wrap" class="field hidden">
                                     <span>昵称</span>
-                                    <input id="auth-nickname" class="input" type="text" placeholder="你希望对方怎么称呼你">
+                                    <input id="auth-nickname" class="input" type="text" autocomplete="nickname" placeholder="你希望对方怎么称呼你">
                                 </label>
                                 <label id="auth-email-wrap" class="field">
                                     <span>邮箱</span>
-                                    <input id="auth-email" class="input" type="email" placeholder="name@example.com"
+                                    <input id="auth-email" class="input" type="email" autocomplete="email" placeholder="name@example.com"
                                         required>
                                 </label>
                                 <label id="auth-phone-wrap" class="field hidden">
                                     <span>手机号</span>
-                                    <input id="auth-phone" class="input" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入 11 位手机号">
+                                    <input id="auth-phone" class="input" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="11" placeholder="请输入 11 位手机号">
                                 </label>
                                 <label id="auth-password-wrap" class="field">
                                     <span>密码</span>
-                                    <input id="auth-password" class="input" type="password" placeholder="至少 6 位"
+                                    <input id="auth-password" class="input" type="password" autocomplete="current-password" placeholder="至少 6 位"
                                         minlength="6" required>
                                 </label>
                                 <div id="auth-phone-code-wrap" class="field hidden">
                                     <span>验证码</span>
                                     <div class="auth-inline-row">
-                                        <input id="auth-phone-code" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码">
+                                        <input id="auth-phone-code" class="input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位验证码">
                                         <button id="auth-send-code" class="button button--ghost auth-send-code" type="button">获取验证码</button>
                                     </div>
                                 </div>
@@ -253,8 +281,8 @@
                     <div class="page-hero">
                         <div>
                             <p class="eyebrow">PAIR</p>
-                            <h3>连接一段关系</h3>
-                            <p>创建邀请码，或输入对方的邀请码。</p>
+                            <h3>建立关系，或者先单人体验</h3>
+                            <p>首次登录建议先绑定关系；如果你想先看看产品主链路，也可以先跳过，用单人模式体验打卡和 AI 陪伴。</p>
                         </div>
                         <div class="hero-actions">
                             <button id="pair-skip-btn" class="button button--ghost" type="button">先单人体验</button>
@@ -309,9 +337,9 @@
                 <section id="page-pair-waiting" class="page">
                     <div class="hero-card hero-card--waiting">
                         <p class="eyebrow">WAITING</p>
-                        <h3>等待对方加入</h3>
+                        <h3>关系已创建，等待对方加入</h3>
                         <div id="waiting-invite-code" class="invite-code">000000</div>
-                        <p>把邀请码发给对方即可。</p>
+                        <p>把这个邀请码发给对方，对方输入后会自动进入你们的共享空间。</p>
                         <div class="hero-actions">
                             <button id="waiting-copy-btn" class="button button--secondary" type="button">复制邀请码</button>
                             <button id="waiting-refresh-btn" class="button button--ghost" type="button">刷新状态</button>
@@ -348,8 +376,8 @@
                 <section id="page-checkin" class="page">
                     <div class="page-head">
                         <p class="eyebrow">CHECK-IN</p>
-                        <h3>记录今天</h3>
-                        <p>选择表单，或直接与 AI 对话。</p>
+                        <h3>把今天留下一点痕迹</h3>
+                        <p>你可以直接填写，也可以让 AI 帮你把今天的状态整理成记录。</p>
                     </div>
                     <div class="segmented segmented--report">
                         <button id="checkin-mode-form" class="segmented__item segmented__item--active" type="button">表单打卡</button>
@@ -383,11 +411,11 @@
                             </div>
                             <div class="field">
                                 <span>今天有深度交流吗</span>
-                                <div id="deep-conversation-options" class="option-grid option-grid--compact"></div>
+                                <div id="deep-conversation-options" class="option-grid option-grid--two"></div>
                             </div>
                             <div class="field">
                                 <span>今日任务完成了吗</span>
-                                <div id="task-completed-options" class="option-grid option-grid--compact"></div>
+                                <div id="task-completed-options" class="option-grid option-grid--two"></div>
                             </div>
                         </div>
                         <div class="panel">
@@ -416,10 +444,10 @@
                         <div class="panel__header">
                             <div>
                                 <p class="panel__eyebrow">VOICE COMPANION</p>
-                                <h4>对话式记录</h4>
+                                <h4>像豆包一样聊着完成今天的记录</h4>
                             </div>
                         </div>
-                        <p class="muted-copy">一句话开始，系统会帮你整理成可保存的记录。</p>
+                        <p class="muted-copy">你可以直接输入，也可以先上传一段语音。AI 会在对话里帮助整理今天的记录。</p>
                         <div id="agent-chat-list" class="stack-list"></div>
                         <label class="field">
                             <span>发给 AI 的一句话</span>
@@ -435,88 +463,80 @@
                 <section id="page-discover" class="page">
                     <div class="page-head">
                         <p class="eyebrow">DISCOVER</p>
-                        <h3>探索关系经营所需的一切</h3>
-                        <p>把工具、内容和高阶服务收进同一套安静有序的工作流。</p>
+                        <h3>发现更多内容、服务与商业化入口</h3>
                     </div>
-                    <div class="discover-showcase">
-                        <article class="discover-hero-card" data-jump-page="experts">
-                            <div class="discover-hero-card__icon"><svg class="icon icon-lg"><use href="#i-message"></use></svg></div>
-                            <p class="discover-hero-card__eyebrow">Concierge Care</p>
-                            <h4>高密度支持，从一次倾诉开始</h4>
-                            <p>在需要的时候接入顾问、咨询与结构化支持，而不是把问题留到失控以后。</p>
-                            <span class="discover-hero-card__link">进入顾问服务</span>
+                    <div class="discover-commerce-strip">
+                        <article class="discover-commerce-card discover-commerce-card--feature" data-jump-page="experts">
+                            <p class="discover-commerce-card__eyebrow">咨询服务</p>
+                            <h4>即时倾诉与专家咨询</h4>
+                            <p>保留即时倾诉、专家咨询与情绪支持入口，方便把关系问题接入更专业的帮助。</p>
+                            <span class="discover-commerce-card__link">立即查看</span>
                         </article>
-                        <article class="discover-side-card" data-jump-page="courses">
-                            <div class="discover-side-card__icon"><svg class="icon"><use href="#i-book"></use></svg></div>
-                            <div>
-                                <p class="discover-side-card__eyebrow">Content</p>
-                                <h4>课程与专题</h4>
-                            </div>
-                            <p>从评估走向学习，把高质量内容接进长期陪伴。</p>
+                        <article class="discover-commerce-card" data-jump-page="courses">
+                            <p class="discover-commerce-card__eyebrow">精品内容</p>
+                            <h4>课程、读书会与成长专题</h4>
+                            <p>让用户从测评走到内容消费，再进入更长期的陪伴服务。</p>
                         </article>
-                        <article class="discover-side-card" data-jump-page="membership">
-                            <div class="discover-side-card__icon"><svg class="icon"><use href="#i-star"></use></svg></div>
-                            <div>
-                                <p class="discover-side-card__eyebrow">Membership</p>
-                                <h4>会员体系</h4>
-                            </div>
-                            <p>把报告、课程、活动和专家入口组织成完整订阅体验。</p>
+                        <article class="discover-commerce-card" data-jump-page="membership">
+                            <p class="discover-commerce-card__eyebrow">会员方案</p>
+                            <h4>把高频工具做成可持续订阅</h4>
+                            <p>日报、周报、专家、课程与活动可以进一步收口到会员体系。</p>
                         </article>
                     </div>
-                    <div class="discover-quick-row" aria-label="核心入口">
-                        <button class="discover-quick-chip" data-jump-page="health-test" type="button"><svg class="icon icon-sm"><use href="#i-chart"></use></svg><span>关系体检</span></button>
-                        <button class="discover-quick-chip" data-jump-page="attachment-test" type="button"><svg class="icon icon-sm"><use href="#i-link"></use></svg><span>依恋分析</span></button>
-                        <button class="discover-quick-chip" data-jump-page="community" type="button"><svg class="icon icon-sm"><use href="#i-bell"></use></svg><span>社群技巧</span></button>
-                        <button class="discover-quick-chip" data-jump-page="challenges" type="button"><svg class="icon icon-sm"><use href="#i-target"></use></svg><span>关系挑战</span></button>
-                        <button class="discover-quick-chip" data-jump-page="experts" type="button"><svg class="icon icon-sm"><use href="#i-message"></use></svg><span>专家咨询</span></button>
-                        <button class="discover-quick-chip" data-jump-page="membership" type="button"><svg class="icon icon-sm"><use href="#i-star"></use></svg><span>会员订阅</span></button>
+                    <div class="discover-quick-row">
+                        <button class="discover-quick-chip" data-jump-page="health-test" type="button">关系体检</button>
+                        <button class="discover-quick-chip" data-jump-page="attachment-test" type="button">依恋分析</button>
+                        <button class="discover-quick-chip" data-jump-page="community" type="button">社群技巧</button>
+                        <button class="discover-quick-chip" data-jump-page="challenges" type="button">关系挑战</button>
+                        <button class="discover-quick-chip" data-jump-page="experts" type="button">专家咨询</button>
+                        <button class="discover-quick-chip" data-jump-page="membership" type="button">会员订阅</button>
                     </div>
                     <div class="discover-grid">
                         <button class="discover-card discover-card--wide discover-item" data-jump-page="longdistance"
                             type="button">
-                            <span class="discover-card__badge">Scenario</span>
+                            <span class="discover-card__badge">场景</span>
                             <h4 class="discover-item__title">异地关系模式</h4>
-                            <p>同步节奏、查看健康指数，把距离变成可管理的关系变量。</p>
+                            <p>看健康指数、记录同步活动、把异地互动做成可执行动作。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="milestones" type="button">
-                            <span class="discover-card__badge">Timeline</span>
+                            <span class="discover-card__badge">节点</span>
                             <h4 class="discover-item__title">关系里程碑</h4>
-                            <p>把关键时刻沉淀成时间轴，形成真正有记忆的关系档案。</p>
+                            <p>记录纪念日和关键节点，并生成基于历史报告的成长回顾。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="attachment-test" type="button">
-                            <span class="discover-card__badge">Insight</span>
+                            <span class="discover-card__badge">测试</span>
                             <h4 class="discover-item__title">依恋分析</h4>
-                            <p>用依恋画像解释互动模式，让建议更贴近你们真实的关系结构。</p>
+                            <p>读取双方依恋画像，给任务和建议做个性化基础。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="health-test" type="button">
-                            <span class="discover-card__badge">Assessment</span>
+                            <span class="discover-card__badge">测试</span>
                             <h4 class="discover-item__title">关系体检</h4>
-                            <p>快速完成核心评估，得到状态判断、重点维度和下一步方向。</p>
+                            <p>快速问卷，帮助你及时看到当前状态和各维度评分。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="community" type="button">
-                            <span class="discover-card__badge">Library</span>
+                            <span class="discover-card__badge">内容</span>
                             <h4 class="discover-item__title">社群技巧</h4>
-                            <p>以更轻的方式接收经营建议、提醒和适合此刻阅读的内容。</p>
+                            <p>提取关系经营建议与通知中心，把运营能力放进页面里。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="challenges" type="button">
-                            <span class="discover-card__badge">Action</span>
+                            <span class="discover-card__badge">行动</span>
                             <h4 class="discover-item__title">关系挑战</h4>
-                            <p>把行动建议、任务完成率与连续记录收进一个简洁的执行面板。</p>
+                            <p>把每日任务、完成率和连续打卡收成一个行动面板。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="courses" type="button">
-                            <span class="discover-card__badge">Learning</span>
+                            <span class="discover-card__badge">内容</span>
                             <h4 class="discover-item__title">课程内容</h4>
-                            <p>沉淀成体系内容，让关系经营从偶发补救走向长期修养。</p>
+                            <p>课程、专题和读书会入口，适合承接测评后的深度学习需求。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="experts" type="button">
-                            <span class="discover-card__badge">Expert</span>
+                            <span class="discover-card__badge">服务</span>
                             <h4 class="discover-item__title">专家咨询</h4>
-                            <p>在关键节点接入专业力量，让高价值服务成为自然延展而非突兀跳转。</p>
+                            <p>从即时倾诉到 1v1 咨询，把高客单支持服务自然接进产品。</p>
                         </button>
                         <button class="discover-card discover-item" data-jump-page="membership" type="button">
-                            <span class="discover-card__badge">Premium</span>
+                            <span class="discover-card__badge">会员</span>
                             <h4 class="discover-item__title">会员方案</h4>
-                            <p>用更克制的权益结构，承接高频用户对深度陪伴的长期需求。</p>
+                            <p>把日报、周报、课程、活动和咨询权益整合成长期订阅能力。</p>
                         </button>
                     </div>
                 </section>
@@ -525,7 +545,8 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">REPORT</p>
-                            <h3>报告</h3>
+                            <p class="page-intro">日报适合看今天，周报适合看节奏，月报适合看模式。单人模式下会自动切到个人简报视角。</p>
+                            <h3>关系报告与趋势回顾</h3>
                         </div>
                         <button id="report-generate-btn" class="button button--primary" type="button">生成当前报告</button>
                     </div>
@@ -550,8 +571,8 @@
                 <section id="page-profile" class="page">
                     <div class="page-head">
                         <p class="eyebrow">PROFILE</p>
-                        <h3>我的</h3>
-                        <p>账号、关系与切换入口。</p>
+                        <h3>账户与关系管理中心</h3>
+                        <p>把账号信息、当前关系、全部关系切换、解绑和退出都收进这里。</p>
                     </div>
                     <div id="profile-summary" class="hero-card hero-card--profile"></div>
                     <div class="layout-grid">
@@ -851,6 +872,10 @@
                         </article>
                     </div>
                 </section>
+                <footer class="app-legal">
+                    <p class="app-legal__eyebrow">COPYRIGHT</p>
+                    <p class="app-legal__text">版权所有：心晴合伙人项目组 黄菁蓝、吴秀秀、叶笙尧、钟昊桐、郑梓滢</p>
+                </footer>
             </div>
 
             <nav id="tab-bar" class="tab-bar hidden">
@@ -883,10 +908,10 @@
     <script>
       window.QJ_CONFIG = window.QJ_CONFIG || {};
     </script>
-    <script src="js/config.example.js"></script>
-    <script src="js/config.local.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/config.example.js?v=20260315c"></script>
+    <script src="js/config.local.js?v=20260315c"></script>
+    <script src="js/api.js?v=20260315c"></script>
+    <script src="js/app.js?v=20260315f"></script>
 </body>
 
 </html>

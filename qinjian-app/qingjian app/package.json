@@ -1,6 +1,6 @@
 {
   "name": "qinjian-app",
-  "version": "2.0.0",
+  "version": "2.8.0",
   "description": "亲健 - 青年亲密关系AI健康管理平台",
   "scripts": {
     "dev:app": "uni",

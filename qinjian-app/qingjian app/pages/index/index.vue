@@ -2,7 +2,13 @@
   <view class="home-page">
     <view class="hero-panel">
       <view class="hero-copy">
-        <text class="eyebrow">QINJIAN APP</text>
+        <view class="brand-chip">
+          <image class="brand-chip__logo" src="../../static/brand-logo.jpg" mode="aspectFit"></image>
+          <view class="brand-chip__copy">
+            <text class="brand-chip__eyebrow">QINJIAN APP</text>
+            <text class="brand-chip__name">亲健</text>
+          </view>
+        </view>
         <text class="hero-title">{{ greeting }}</text>
         <text class="hero-subtitle">{{ pairSubtitle }}</text>
       </view>
@@ -234,7 +240,10 @@ export default {
 
 <style scoped>
 .home-page {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(180deg, #fff8f2 0%, #f7efe8 100%);
 }
 
@@ -246,6 +255,42 @@ export default {
   align-items: flex-start;
   justify-content: space-between;
   gap: 20rpx;
+}
+
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 12rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255,255,255,0.14);
+  border: 1rpx solid rgba(255,255,255,0.16);
+  margin-bottom: 20rpx;
+}
+
+.brand-chip__logo {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+}
+
+.brand-chip__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.brand-chip__eyebrow {
+  font-size: 18rpx;
+  letter-spacing: 4rpx;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.72);
+}
+
+.brand-chip__name {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #fff;
 }
 
 .eyebrow {
@@ -291,8 +336,9 @@ export default {
 }
 
 .content-scroll {
+  flex: 1;
+  min-height: 0;
   margin-top: -72rpx;
-  height: calc(100vh - 160rpx);
   padding: 0 28rpx;
   box-sizing: border-box;
 }
@@ -458,6 +504,6 @@ export default {
 }
 
 .page-spacer {
-  height: 180rpx;
+  height: 220rpx;
 }
 </style>

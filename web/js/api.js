@@ -4,7 +4,7 @@ const API_ROOT = (() => {
     }
 
     if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
-        return 'http://143.198.110.145:8080/api/v1';
+        return 'http://127.0.0.1:8000/api/v1';
     }
 
     return '/api/v1';

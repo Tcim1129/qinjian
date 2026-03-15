@@ -20,8 +20,9 @@ const state = {
     homeSnapshot: null,
     phoneCodeCooldown: 0,
     shouldOpenPairOnBootstrap: false,
-    authIntent: 'login',
 };
+
+const FIRST_LOGIN_PAIR_PROMPT_KEY = 'qj_pair_prompt_seen';
 
 const MOOD_TAGS = ['开心', '平静', '感动', '期待', '焦虑', '委屈', '生气', '疲惫'];
 const TYPE_LABELS = { couple: '情侣', spouse: '夫妻', bestfriend: '挚友', parent: '育儿夫妻' };
@@ -138,7 +139,16 @@ function setCurrentPair(pairId) {
     localStorage.setItem('qj_current_pair', pairId);
 }
 
+function shouldPromptPairSetup() {
+    return localStorage.getItem(FIRST_LOGIN_PAIR_PROMPT_KEY) !== '1';
+}
+
+function markPairPromptSeen() {
+    localStorage.setItem(FIRST_LOGIN_PAIR_PROMPT_KEY, '1');
+}
+
 function handleSkipPairSetup() {
+    markPairPromptSeen();
     state.shouldOpenPairOnBootstrap = false;
     showToast('已进入单人体验模式，你之后也可以随时去绑定关系');
     showPage('home');
@@ -292,25 +302,24 @@ async function bootstrapSession() {
 
         syncTabBar();
 
-        if (state.shouldOpenPairOnBootstrap && state.authIntent === 'register' && !activePairs.length && !pendingPairs.length) {
+        if (state.shouldOpenPairOnBootstrap && !activePairs.length && !pendingPairs.length && shouldPromptPairSetup()) {
             state.shouldOpenPairOnBootstrap = false;
             await showPage('pair');
             return true;
         }
 
         if (activePairs.length > 0) {
-            state.shouldOpenPairOnBootstrap = false;
+            markPairPromptSeen();
             await showPage('home');
             return true;
         }
 
         if (pendingPairs.length > 0) {
-            state.shouldOpenPairOnBootstrap = false;
+            markPairPromptSeen();
             await showPage('pair-waiting');
             return true;
         }
 
-        state.shouldOpenPairOnBootstrap = false;
         await showPage('home');
         return true;
     } catch (error) {
@@ -442,7 +451,6 @@ async function handleAuthSubmit(event) {
         submit.textContent = '登录中...';
 
         try {
-            state.authIntent = 'login';
             await api.phoneLogin(phone, phoneCode);
             state.shouldOpenPairOnBootstrap = false;
             showToast('登录成功');
@@ -471,12 +479,10 @@ async function handleAuthSubmit(event) {
 
     try {
         if (state.authMode === 'login') {
-            state.authIntent = 'login';
             await api.login(email, password);
             state.shouldOpenPairOnBootstrap = false;
             showToast('登录成功');
         } else {
-            state.authIntent = 'register';
             await api.register(email, nickname, password);
             state.shouldOpenPairOnBootstrap = true;
             showToast('注册成功');
@@ -568,11 +574,11 @@ function renderNoPairHome() {
     state.homeSnapshot = null;
     safeSetHtml('#home-overview', `
         <p class="eyebrow">READY</p>
-        <h3>先开始今天的记录</h3>
-        <p>单人模式已可使用，关系功能可稍后接入。</p>
+        <h3>先照顾今天的自己，也可以随时建立关系空间</h3>
+        <p>你已经可以先做个人打卡和 AI 陪伴记录；等建立关系后，再把日报、趋势和双方协作接进来。</p>
         <div class="hero-actions">
-          <button class="button button--primary" type="button" onclick="openCheckinMode('form')">开始记录</button>
-          <button class="button button--ghost" type="button" onclick="showPage('pair')">连接关系</button>
+          <button class="button button--primary" type="button" onclick="showPage('pair')">现在去绑定关系</button>
+          <button class="button button--ghost" type="button" onclick="showPage('discover')">先看发现页</button>
         </div>
     `);
     safeSetHtml('#home-metrics', [
@@ -582,17 +588,17 @@ function renderNoPairHome() {
         demoMetric('当前预警', '未开始'),
     ].join(''));
     safeSetHtml('#home-status-panel', `
-        <div class="panel__header"><div><p class="panel__eyebrow">TODAY</p><h4>今日入口</h4></div></div>
-        <div class="empty-state">选择一种方式开始。</div>
+        <div class="panel__header"><div><p class="panel__eyebrow">TODAY</p><h4>先开始今天的记录</h4></div></div>
+        <div class="empty-state">现在就可以先写个人记录，或者直接让 AI 陪你把今天整理出来。</div>
         <div class="hero-actions">
           <button class="button button--primary" type="button" onclick="openCheckinMode('form')">表单打卡</button>
           <button class="button button--ghost" type="button" onclick="openCheckinMode('voice')">AI 陪伴打卡</button>
         </div>`);
-    safeSetHtml('#home-report-panel', '<div class="empty-state">连接关系后解锁双人报告。</div>');
-    safeSetHtml('#home-tree-panel', '<div class="empty-state">成长记录会在连接关系后开启。</div>');
-    safeSetHtml('#home-crisis-panel', '<div class="empty-state">风险提醒将在双人记录后出现。</div>');
-    safeSetHtml('#home-milestones-panel', '<div class="empty-state">连接关系后可开始沉淀关键节点。</div>');
-    safeSetHtml('#home-tasks-panel', '<div class="empty-state">连接关系后生成协作任务。</div>');
+    safeSetHtml('#home-report-panel', '<div class="empty-state">建立关系并完成打卡后，这里会出现报告入口和趋势回顾。</div>');
+    safeSetHtml('#home-tree-panel', '<div class="empty-state">关系树会在你们开始记录之后自动成长。</div>');
+    safeSetHtml('#home-crisis-panel', '<div class="empty-state">关系建立后，这里会根据互动情况提供风险提醒和帮助建议。</div>');
+    safeSetHtml('#home-milestones-panel', '<div class="empty-state">关键节点会在建立关系后开始记录。</div>');
+    safeSetHtml('#home-tasks-panel', '<div class="empty-state">先创建或加入关系，系统才会生成今日任务。</div>');
     state.notifications = [];
     syncNotifications();
 }
@@ -654,7 +660,7 @@ function renderHome(payload) {
     safeSetHtml('#home-overview', `
         <p class="eyebrow">CONNECTED</p>
         <h3>${escapeHtml(TYPE_LABELS[payload.pair.type] || payload.pair.type)} · ${escapeHtml(pairName)}</h3>
-        <p>今天的状态、风险和下一步都在这里。</p>
+        <p>当前展示的是这段关系的核心状态、提醒和下一步动作。</p>
     `);
 
     safeSetHtml('#home-metrics', [
@@ -677,16 +683,16 @@ function renderHome(payload) {
     </div>`);
 
     safeSetHtml('#home-report-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>本期报告</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>报告入口</h4></div></div>
     <div class="empty-state">
-      ${payload.todayStatus.both_done ? '双方已完成记录，可生成本期报告。' : '完成双方记录后生成正式报告。'}
+      ${payload.todayStatus.both_done ? '双方都已完成打卡，可以生成正式关系报告。' : '双方未全部完成时，网页端优先展示状态与下一步建议。'}
     </div>
     <div class="hero-actions">
       <button class="button button--secondary" type="button" onclick="showPage('report')">进入报告页</button>
     </div>`);
 
     safeSetHtml('#home-tree-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>成长曲线</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>关系树成长</h4></div></div>
     <div class="stack-item"><div>${svgIcon('i-tree')}</div><div><strong>${escapeHtml(payload.tree.level_name || '种子')}</strong><div class="stack-item__meta">当前成长值 ${payload.tree.growth_points || 0}</div></div></div>
     <div class="progress-track"><span class="progress-track__fill" style="width:${payload.tree.progress_percent || 0}%"></span></div>
     <div class="hero-actions">
@@ -696,7 +702,7 @@ function renderHome(payload) {
     const crisis = payload.crisis || { crisis_level: 'none' };
     const crisisIntervention = crisis.intervention ? `<div class="stack-item__meta">${escapeHtml(crisis.intervention.title || crisis.intervention.description || '')}</div>` : '<div class="stack-item__meta">暂无需要立即介入的强预警。</div>';
     safeSetHtml('#home-crisis-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">RISK</p><h4>风险信号</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">CRISIS</p><h4>危机预警</h4></div></div>
     <div class="stack-item"><div>${svgIcon('i-alert')}</div><div><strong>${crisisLabel(crisis.crisis_level || 'none')}</strong>${crisisIntervention}</div></div>
     <div class="hero-actions">
       <button class="button button--ghost" type="button" onclick="openCrisisDetail()">查看详情</button>
@@ -712,7 +718,7 @@ function renderHome(payload) {
 
     const tasks = payload.tasks.tasks || [];
     safeSetHtml('#home-tasks-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">TASKS</p><h4>今日动作</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">TASKS</p><h4>今日关系任务</h4></div></div>
     <div class="stack-list">
       ${tasks.length ? tasks.slice(0, 3).map((task) => renderTaskItem(task)).join('') : '<div class="empty-state">今天还没有生成任务。</div>'}
     </div>`);
@@ -1067,7 +1073,7 @@ function renderReport(report, history, trendData) {
     if (report && report.status === 'pending') {
         safeSetHtml('#report-main', `
             <div class="empty-state">
-                ${formatReportType(state.selectedReportType)}生成中。
+                当前${formatReportType(state.selectedReportType)}正在后台生成中。页面会在拿到结果后刷新；如果网络波动，也可以稍后再次进入本页查看。
             </div>`);
     } else if (report && report.status === 'failed') {
         safeSetHtml('#report-main', `
@@ -1077,7 +1083,7 @@ function renderReport(report, history, trendData) {
     } else if (!report || report.status !== 'completed') {
         safeSetHtml('#report-main', `
       <div class="empty-state">
-        暂无${state.selectedReportType === 'daily' ? '日报' : state.selectedReportType === 'weekly' ? '周报' : '月报'}。
+        当前还没有可展示的${state.selectedReportType === 'daily' ? '日报' : state.selectedReportType === 'weekly' ? '周报' : '月报'}。完成打卡并触发生成后，这里会显示最新报告。
       </div>`);
     } else {
         const content = report.content || {};
@@ -1086,9 +1092,9 @@ function renderReport(report, history, trendData) {
         const concerns = (content.concerns || content.growth_areas || content.action_plan || []).slice(0, 4);
         safeSetHtml('#report-main', `
       <div class="score-ring" style="--score:${Math.max(1, Math.min(100, score))}"><span>${score}</span></div>
-      <h4>${state.selectedReportType === 'daily' ? '今日指数' : state.selectedReportType === 'weekly' ? '本周指数' : '本月指数'}</h4>
-      <p class="muted-copy">${escapeHtml(content.insight || content.encouragement || content.executive_summary || '系统已生成本期洞察。')}</p>
-      ${content.suggestion || content.trend_description ? `<div class="hero-card hero-card--accent"><strong>建议</strong><p>${escapeHtml(content.suggestion || content.trend_description)}</p></div>` : ''}
+      <h4>${state.selectedReportType === 'daily' ? '今日关系指数' : state.selectedReportType === 'weekly' ? '周关系指数' : '月关系指数'}</h4>
+      <p class="muted-copy">${escapeHtml(content.insight || content.encouragement || content.executive_summary || '系统已经生成当前阶段的关系洞察。')}</p>
+      ${content.suggestion || content.trend_description ? `<div class="hero-card hero-card--accent"><strong>本阶段建议</strong><p>${escapeHtml(content.suggestion || content.trend_description)}</p></div>` : ''}
             ${renderAttachmentSignals(content)}
       ${renderTrend(trendData)}
       <div class="layout-grid">
@@ -1269,6 +1275,7 @@ async function loadProfilePage() {
 
     safeSetHtml('#profile-account-panel', `
         <div class="panel__header"><div><p class="panel__eyebrow">ACCOUNT DETAIL</p><h4>账户信息</h4></div></div>
+        <p class="panel-inline-hint">点击下面的条目就能直接修改昵称和密码，不再需要额外找设置入口。</p>
         <div class="detail-list">
             <div class="detail-list__item"><span>昵称</span><strong>${escapeHtml(me.nickname || '未设置')}</strong></div>
             <div class="detail-list__item"><span>邮箱</span><strong>${escapeHtml(me.email || '未绑定')}</strong></div>
@@ -1292,6 +1299,7 @@ async function loadProfilePage() {
 
     safeSetHtml('#profile-pair-panel', pair
         ? `<div class="panel__header"><div><p class="panel__eyebrow">RELATION</p><h4>当前关系与多关系切换</h4></div></div>
+                 <p class="panel-inline-hint">你可以同时管理多段关系，首页顶部和绑定页都会保留切换入口；这里负责当前关系的详细设置。</p>
               <div class="metric-strip">
                   <article class="mini-stat"><span>关系类型</span><strong>${escapeHtml(TYPE_LABELS[pair.type] || pair.type)}</strong></article>
                   <article class="mini-stat"><span>当前状态</span><strong>${pair.status === 'active' ? '已激活' : '等待加入'}</strong></article>
@@ -1312,6 +1320,7 @@ async function loadProfilePage() {
 
     safeSetHtml('#profile-relations-panel', `
         <div class="panel__header"><div><p class="panel__eyebrow">RELATIONS</p><h4>全部关系工作台</h4></div></div>
+        <p class="panel-inline-hint">这里集中展示你账号下的所有关系。点击任意一段关系，就能切换首页、报告、打卡和设置的当前上下文。</p>
         ${renderRelationManagementList(allPairs, pair?.id || null)}
         <div class="hero-actions">
             <button class="button button--primary" type="button" onclick="showPage('pair')">新增或加入关系</button>
@@ -2124,6 +2133,960 @@ function exposeGlobals() {
     window.openCheckinMode = openCheckinMode;
     window.saveProfileChanges = saveProfileChanges;
     window.savePasswordChanges = savePasswordChanges;
+}
+
+function syncTopbar() {
+    const titleMap = {
+        auth: '关系健康工作台',
+        pair: '建立一段关系',
+        'pair-waiting': '等待对方加入',
+        home: '今天最重要的一步',
+        checkin: '留下今天的关系记录',
+        discover: '灵感、内容与服务',
+        report: '关系简报',
+        profile: '我的关系空间',
+        milestones: '关系时间线',
+        longdistance: '异地关系模式',
+        'attachment-test': '依恋分析',
+        'health-test': '关系体检',
+        community: '社群技巧',
+        challenges: '今日挑战',
+        courses: '成长内容',
+        experts: '专业支持',
+        membership: '会员方案',
+    };
+    const subtitleMap = {
+        auth: '从今天开始，慢慢把关系养好。',
+        pair: '先把彼此放进同一个空间，再开始共同记录。',
+        'pair-waiting': '邀请码已经准备好，差最后一步。',
+        home: '先完成今天最值得照顾的那一步，再看其它。',
+        checkin: '表单和 AI 陪伴，都服务于更真实的一句心里话。',
+        discover: '测评、课程、咨询与会员，都应服务于关系本身。',
+        report: '把复杂情绪和互动模式，翻译成一份好读的简报。',
+        profile: '把账户、关系和边界感，收进一个安静空间。',
+        milestones: '重要时刻不只是纪念，也能成为成长线索。',
+        longdistance: '异地不是缺席，而是需要更精心的同步。',
+        'attachment-test': '看见互动背后的依恋模式，才知道怎么靠近。',
+        'health-test': '先知道关系在哪里，再知道下一步去哪。',
+        community: '把有用的方法，做成能马上实践的小动作。',
+        challenges: '任务不该像 KPI，而该像今天的一次小靠近。',
+        courses: '内容不只增长知识，也该提升相处质量。',
+        experts: '当关系需要更稳的支持时，这里接住你。',
+        membership: '把高频陪伴、报告和服务，放进长期关系系统。',
+    };
+    const captionMap = {
+        auth: 'QINJIAN',
+        pair: 'RELATIONSHIP SETUP',
+        'pair-waiting': 'INVITATION',
+        home: 'TODAY',
+        checkin: 'CHECK-IN',
+        discover: 'DISCOVER',
+        report: 'REPORT',
+        profile: 'PROFILE',
+        milestones: 'MILESTONES',
+        longdistance: 'LONG DISTANCE',
+        'attachment-test': 'ATTACHMENT',
+        'health-test': 'HEALTH TEST',
+        community: 'COMMUNITY',
+        challenges: 'CHALLENGES',
+        courses: 'COURSES',
+        experts: 'EXPERTS',
+        membership: 'MEMBERSHIP',
+    };
+
+    safeSetText('#topbar-title', titleMap[state.currentPage] || '关系健康工作台');
+    safeSetText('#topbar-subtitle', subtitleMap[state.currentPage] || '把复杂关系，做成更轻一点、更近一点的日常。');
+    safeSetText('#topbar-caption', captionMap[state.currentPage] || 'QINJIAN');
+
+    const ritualButton = document.querySelector('.pill-button[data-jump-page="checkin"]');
+    if (ritualButton) {
+        const hiddenPages = new Set(['auth', 'pair', 'pair-waiting']);
+        ritualButton.classList.toggle('hidden', hiddenPages.has(state.currentPage));
+        ritualButton.textContent = state.currentPage === 'checkin' ? '回到首页' : '今日记录';
+        ritualButton.dataset.jumpPage = state.currentPage === 'checkin' ? 'home' : 'checkin';
+    }
+}
+
+function demoMetric(label, value, note = '') {
+    return `
+    <article class="stat-card">
+      <span>${label}</span>
+      <strong>${value}</strong>
+      ${note ? `<p>${note}</p>` : ''}
+    </article>`;
+}
+
+function renderPairSelect() {
+    const select = $('#home-pair-select');
+    if (!select) return;
+
+    const source = state.pairs.filter((pair) => pair.status === 'active');
+    select.disabled = !source.length;
+
+    if (!source.length) {
+        select.innerHTML = '<option value="">单人模式中</option>';
+        select.value = '';
+        return;
+    }
+
+    select.innerHTML = source.map((pair) => `
+        <option value="${pair.id}">
+            ${escapeHtml(TYPE_LABELS[pair.type] || pair.type)} · ${escapeHtml(getPartnerDisplayName(pair))}
+        </option>`).join('');
+    select.value = getPairSnapshot()?.id || source[0].id;
+}
+
+function getHomeFocusConfig(payload) {
+    const today = payload.todayStatus || {};
+    const hasReport = Boolean(today.has_report || today.has_solo_report);
+
+    if (!today.my_done) {
+        return {
+            title: '今天还没有开始记录',
+            description: '先把此刻的情绪和互动留住，报告和建议才会真正贴近你们。',
+            primaryLabel: '开始今日记录',
+            primaryAction: "openCheckinMode('form')",
+            secondaryLabel: '用 AI 陪你说出来',
+            secondaryAction: "openCheckinMode('voice')",
+        };
+    }
+
+    if (!today.partner_done) {
+        return {
+            title: '你已经先迈出一步',
+            description: '你的记录已经落下，等对方完成后，今天的关系简报会更完整。',
+            primaryLabel: '再补充一句心里话',
+            primaryAction: "openCheckinMode('voice')",
+            secondaryLabel: '看看今日进展',
+            secondaryAction: "showPage('report')",
+        };
+    }
+
+    if (!hasReport) {
+        return {
+            title: '今晚适合生成一份关系简报',
+            description: '双方记录已齐，现在最有价值的动作是把今天的互动读懂。',
+            primaryLabel: '去看关系简报',
+            primaryAction: "showPage('report')",
+            secondaryLabel: '继续记录感受',
+            secondaryAction: "openCheckinMode('voice')",
+        };
+    }
+
+    return {
+        title: '今天的关系节奏已经成形',
+        description: '简报已经可读，现在适合看看积极信号、风险提醒和下一步建议。',
+        primaryLabel: '查看最新简报',
+        primaryAction: "showPage('report')",
+        secondaryLabel: '回到今日记录',
+        secondaryAction: "openCheckinMode('form')",
+    };
+}
+
+function renderNoPairHome() {
+    state.homeSnapshot = null;
+    safeSetHtml('#home-overview', `
+        <div class="home-hero">
+          <div class="home-hero__copy">
+            <p class="eyebrow">SOLO FIRST</p>
+            <h3>先照顾今天的自己，也是在照顾关系的未来</h3>
+            <p>没绑定关系也没关系。你可以先写个人记录、用 AI 陪伴整理情绪，等准备好了再把对方邀请进来。</p>
+          </div>
+          <div class="home-hero__badge">
+            <span>当前模式</span>
+            <strong>单人体验</strong>
+          </div>
+        </div>
+        <div class="context-pills">
+          <span class="context-chip">支持个人打卡</span>
+          <span class="context-chip">支持 AI 陪伴记录</span>
+          <span class="context-chip">支持个人简报</span>
+        </div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="showPage('pair')">现在去绑定关系</button>
+          <button class="button button--ghost" type="button" onclick="openCheckinMode('voice')">先从 AI 陪伴开始</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-metrics', [
+        demoMetric('今日模式', '单人记录', '先为自己留下今天，也能慢慢形成稳定节奏。'),
+        demoMetric('AI 陪伴', '已开启', '像聊天那样完成打卡，而不是面对冷冰冰表单。'),
+        demoMetric('个人简报', '可生成', '即使还没绑定，也能形成一份属于你的日记型简报。'),
+        demoMetric('下一步', '邀请对方', '准备好了再把这段关系变成共同空间。'),
+    ].join(''));
+
+    safeSetHtml('#home-status-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TODAY</p><h4>今天先照顾你自己</h4></div></div>
+        <div class="pulse-grid">
+          <article class="pulse-tile"><span>情绪</span><strong>还未记录</strong><p>先写下一句真实感受。</p></article>
+          <article class="pulse-tile"><span>互动</span><strong>自由模式</strong><p>没有关系绑定，也能开始积累自己的节奏。</p></article>
+        </div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="openCheckinMode('form')">写一条今日记录</button>
+          <button class="button button--secondary" type="button" onclick="openCheckinMode('voice')">让 AI 陪你聊</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-report-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>个人简报也值得被认真对待</h4></div></div>
+        <p class="panel-note">当你完成今天的个人记录后，这里会变成一张更柔和、更像日记的情绪简报入口。</p>
+        <div class="hero-actions">
+          <button class="button button--ghost" type="button" onclick="showPage('report')">去看个人简报页</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-tree-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>关系树会在绑定后开始生长</h4></div></div>
+        <p class="panel-note">现在先把记录习惯养起来，等彼此进入同一个空间，成长值和里程碑会自然接上。</p>
+    `);
+
+    safeSetHtml('#home-crisis-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">SUPPORT</p><h4>这里不会拿风险词吓你</h4></div></div>
+        <p class="panel-note">真正需要帮助时，系统会给出更温和的提醒与可执行的下一步，而不是制造焦虑。</p>
+    `);
+
+    safeSetHtml('#home-milestones-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TIMELINE</p><h4>重要时刻以后都能被记住</h4></div></div>
+        <p class="panel-note">纪念日、重要承诺、第一次和解，这些都值得成为关系时间线的一部分。</p>
+    `);
+
+    safeSetHtml('#home-tasks-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">RITUALS</p><h4>双人任务会在绑定后出现</h4></div></div>
+        <p class="panel-note">现在先把今天的心情留住，等关系建立后，系统会开始生成更贴合你们的日常小动作。</p>
+    `);
+
+    state.notifications = [];
+    syncNotifications();
+}
+
+async function loadHomePage() {
+    const pair = getPairSnapshot();
+    const greetingName = state.me?.nickname || '你';
+    safeSetText('#home-greeting', `${greetingName}，今天也适合把关系照顾好`);
+    renderPairSelect();
+
+    if (!pair) {
+        renderNoPairHome();
+        return;
+    }
+
+    const results = await Promise.allSettled([
+        api.getTodayStatus(pair.id),
+        api.getCheckinStreak(pair.id),
+        api.getTreeStatus(pair.id),
+        api.getCrisisStatus(pair.id),
+        api.getDailyTasks(pair.id),
+        api.getNotifications(),
+        api.getMilestones(pair.id),
+        api.getLatestReport(pair.id, 'daily'),
+    ]);
+
+    renderHome({
+        pair,
+        todayStatus: unwrapResult(results[0], {}),
+        streak: unwrapResult(results[1], {}),
+        tree: unwrapResult(results[2], {}),
+        crisis: unwrapResult(results[3], {}),
+        tasks: unwrapResult(results[4], {}),
+        notifications: unwrapResult(results[5], []),
+        milestones: unwrapResult(results[6], []),
+        latestReport: unwrapResult(results[7], null),
+    });
+}
+
+function renderHome(payload) {
+    state.homeSnapshot = payload;
+
+    const pairName = getPartnerDisplayName(payload.pair);
+    const focus = getHomeFocusConfig(payload);
+    const crisis = payload.crisis || { crisis_level: 'none' };
+    const milestones = Array.isArray(payload.milestones) ? payload.milestones : [];
+    const nextMilestone = milestones[0] || null;
+    const latestContent = payload.latestReport?.content || {};
+    const latestScore = latestContent.health_score || latestContent.overall_health_score || null;
+    const latestInsight = latestContent.insight || latestContent.encouragement || latestContent.executive_summary || '';
+    const myCheckin = payload.todayStatus?.my_checkin || {};
+    const moodText = myCheckin.mood_score ? `${myCheckin.mood_score}/4` : '未记录';
+    const interactionText = myCheckin.interaction_freq || myCheckin.interaction_freq === 0 ? `${myCheckin.interaction_freq} 次` : '未记录';
+    const deepTalkText = myCheckin.deep_conversation === true ? '有' : myCheckin.deep_conversation === false ? '没有' : '未记录';
+    const myStatusText = payload.todayStatus?.my_done ? '你已完成今日记录' : '今天还没开始';
+    const partnerStatusText = payload.todayStatus?.partner_done ? '对方也已完成' : '还在等待对方';
+
+    safeSetHtml('#home-overview', `
+        <div class="home-hero">
+          <div class="home-hero__copy">
+            <p class="eyebrow">TODAY'S RHYTHM</p>
+            <h3>${focus.title}</h3>
+            <p>${focus.description}</p>
+          </div>
+          <div class="home-hero__badge">
+            <span>${escapeHtml(TYPE_LABELS[payload.pair.type] || payload.pair.type)}</span>
+            <strong>${escapeHtml(pairName)}</strong>
+          </div>
+        </div>
+        <div class="context-pills">
+          <span class="context-chip">${myStatusText}</span>
+          <span class="context-chip">${partnerStatusText}</span>
+          <span class="context-chip">${payload.todayStatus?.has_report ? '今日简报已可读' : payload.todayStatus?.both_done ? '已满足生成简报条件' : '先完成今天的记录'}</span>
+        </div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="${focus.primaryAction}">${focus.primaryLabel}</button>
+          <button class="button button--ghost" type="button" onclick="${focus.secondaryAction}">${focus.secondaryLabel}</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-metrics', [
+        demoMetric('连续节奏', `${payload.streak.streak || 0} 天`, '关系最好的变化，往往来自连续，而不是用力。'),
+        demoMetric('关系树', payload.tree.level_name || '萌芽中', `${payload.tree.growth_points || 0} 成长值`),
+        demoMetric('风险状态', crisisLabel(crisis.crisis_level || 'none'), crisis.crisis_level === 'none' ? '今天整体平稳。' : '建议看看系统给出的介入建议。'),
+        demoMetric('下个节点', nextMilestone ? milestoneTimeText(nextMilestone) : '还未设置', nextMilestone ? nextMilestone.title : '把纪念日或重要决定放进时间线。'),
+    ].join(''));
+
+    safeSetHtml('#home-status-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TODAY SNAPSHOT</p><h4>今天的关系切片</h4></div></div>
+        <div class="pulse-grid">
+          <article class="pulse-tile"><span>心情</span><strong>${moodText}</strong><p>先记录情绪，再谈问题。</p></article>
+          <article class="pulse-tile"><span>互动</span><strong>${interactionText}</strong><p>频率只是表象，节奏更重要。</p></article>
+          <article class="pulse-tile"><span>深聊</span><strong>${deepTalkText}</strong><p>真正靠近，往往发生在深聊里。</p></article>
+          <article class="pulse-tile"><span>状态</span><strong>${payload.todayStatus?.both_done ? '双方已齐' : payload.todayStatus?.my_done ? '你已完成' : '待开始'}</strong><p>${partnerStatusText}</p></article>
+        </div>
+        <div class="journal-quote">
+          ${myCheckin.content ? escapeHtml(myCheckin.content) : '今天的记录还没落下。哪怕先写一句，也会让后面的简报更接近你们。'}
+        </div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="openCheckinMode('form')">继续记录</button>
+          <button class="button button--secondary" type="button" onclick="openCheckinMode('voice')">切到 AI 陪伴</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-report-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">LATEST BRIEF</p><h4>${payload.todayStatus?.has_report ? '最新关系简报' : '简报入口'}</h4></div></div>
+        ${latestInsight ? `
+            <div class="report-preview">
+              <div class="report-preview__score">${latestScore ?? '--'}</div>
+              <div>
+                <strong>${payload.todayStatus?.has_report ? '今天的结论已经出来了' : '这是一份最近的参考简报'}</strong>
+                <p>${escapeHtml(latestInsight)}</p>
+              </div>
+            </div>
+        ` : `<p class="panel-note">${payload.todayStatus?.both_done ? '双方记录已齐，现在最值得做的是去看今天的关系简报。' : '简报不该先于记录出现，所以这里会等你们先把今天说清楚。'}</p>`}
+        <div class="hero-actions">
+          <button class="button button--ghost" type="button" onclick="showPage('report')">${payload.todayStatus?.has_report ? '阅读完整简报' : '进入简报页'}</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-tree-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>关系树正在怎样生长</h4></div></div>
+        <div class="report-preview">
+          <div class="report-preview__score report-preview__score--soft">${payload.tree.progress_percent || 0}%</div>
+          <div>
+            <strong>${escapeHtml(payload.tree.level_name || '萌芽中')}</strong>
+            <p>当前成长值 ${payload.tree.growth_points || 0}，再持续一点点，关系会自己长出厚度。</p>
+          </div>
+        </div>
+        <div class="progress-track"><span class="progress-track__fill" style="width:${payload.tree.progress_percent || 0}%"></span></div>
+        <div class="hero-actions">
+          <button class="button button--ghost" type="button" ${payload.tree.can_water ? '' : 'disabled'} onclick="handleWaterTree()">${payload.tree.can_water ? '今天浇一次水' : '今天已经浇过了'}</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-crisis-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">SUPPORT</p><h4>${crisisLabel(crisis.crisis_level || 'none')}</h4></div></div>
+        <p class="panel-note">${escapeHtml(crisis.intervention?.description || crisis.intervention?.title || (crisis.crisis_level === 'none' ? '今天没有明显风险信号，继续保持稳定记录就好。' : '系统已经捕捉到一些需要留意的互动变化。'))}</p>
+        <div class="hero-actions">
+          <button class="button button--ghost" type="button" onclick="openCrisisDetail()">查看支持建议</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-milestones-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TIMELINE</p><h4>${nextMilestone ? '离下一个重要时刻更近了一点' : '给关系留一条时间线'}</h4></div></div>
+        ${nextMilestone ? `
+          <div class="stack-list">
+            ${renderMilestoneItem(nextMilestone, { compact: true })}
+          </div>
+        ` : '<p class="panel-note">纪念日、重要承诺、第一次和解，都会让这段关系更有被珍惜的感觉。</p>'}
+        <div class="hero-actions">
+          <button class="button button--ghost" type="button" onclick="showPage('milestones')">进入关系时间线</button>
+        </div>
+    `);
+
+    const tasks = payload.tasks.tasks || [];
+    safeSetHtml('#home-tasks-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">RITUALS</p><h4>今天更适合做什么</h4></div></div>
+        <p class="panel-note">${escapeHtml(payload.tasks.combination_insight || '系统会根据你们的关系节奏，慢慢给出更贴合的互动建议。')}</p>
+        <div class="stack-list">
+          ${tasks.length ? tasks.slice(0, 3).map((task) => renderTaskItem(task)).join('') : '<div class="empty-state">今天还没有生成任务，先去完成记录吧。</div>'}
+        </div>
+    `);
+
+    state.notifications = Array.isArray(payload.notifications) ? payload.notifications : payload.notifications || [];
+    syncNotifications();
+}
+
+function renderTaskItem(task) {
+    const done = task.status === 'completed';
+    return `
+    <div class="challenge-item challenge-item--task">
+      <div>${done ? svgIcon('i-check') : svgIcon('i-spark')}</div>
+      <div class="stack-item__content">
+        <strong>${escapeHtml(task.title)}</strong>
+        <div class="stack-item__meta">${escapeHtml(task.description || '')}</div>
+      </div>
+      ${done ? '<span class="pill">已完成</span>' : `<button class="text-button" type="button" onclick="completeTask('${task.id}')">去完成</button>`}
+    </div>`;
+}
+
+function crisisLabel(level) {
+    return {
+        none: '平稳进行中',
+        mild: '有一点需要留意',
+        moderate: '建议认真介入',
+        severe: '需要立刻支持',
+    }[level] || '平稳进行中';
+}
+
+function syncReportTypeAvailability(isSolo) {
+    $$('[data-report-type]').forEach((button) => {
+        const blocked = isSolo && button.dataset.reportType !== 'daily';
+        button.disabled = blocked;
+        button.classList.toggle('segmented__item--disabled', blocked);
+        button.classList.toggle('segmented__item--active', button.dataset.reportType === state.selectedReportType);
+    });
+}
+
+async function loadReportPage() {
+    const pairId = state.currentPair?.id || null;
+    const isSolo = !pairId;
+
+    if (isSolo && state.selectedReportType !== 'daily') {
+        state.selectedReportType = 'daily';
+    }
+
+    syncReportTypeAvailability(isSolo);
+    safeSetText('#report-generate-btn', isSolo ? '生成个人简报' : '生成当前简报');
+
+    const reportType = isSolo ? 'daily' : state.selectedReportType;
+    const [latest, history, trend] = await Promise.allSettled([
+        api.getLatestReport(pairId, reportType),
+        api.getReportHistory(pairId, reportType, 6),
+        api.getHealthTrend(pairId, 14),
+    ]);
+
+    renderReport(
+        unwrapResult(latest, null),
+        unwrapResult(history, []),
+        unwrapResult(trend, { trend: [] }),
+        { solo: isSolo, reportType },
+    );
+}
+
+function renderReport(report, history, trendData, options = {}) {
+    const isSolo = Boolean(options.solo);
+    const reportType = options.reportType || state.selectedReportType;
+    const reportLabel = formatReportType(reportType, { solo: isSolo });
+
+    if (report && report.status === 'pending') {
+        safeSetHtml('#report-main', `
+            <div class="empty-state">
+                ${reportLabel} 正在后台生成。稍等片刻再回来，它会比即时结果更像一份真正可读的简报。
+            </div>`);
+    } else if (report && report.status === 'failed') {
+        safeSetHtml('#report-main', `
+            <div class="empty-state">
+                ${reportLabel} 生成失败了。别担心，重新触发一次通常就能恢复。
+            </div>`);
+    } else if (!report || report.status !== 'completed') {
+        safeSetHtml('#report-main', `
+            <div class="empty-state">
+                这里还没有可展示的${reportLabel}。先完成今天的记录，再回来读一份更像“关系编辑稿”的简报。
+            </div>`);
+    } else {
+        const content = report.content || {};
+        const score = content.health_score || content.overall_health_score || 72;
+        const primaryInsight = content.insight || content.self_insight || content.executive_summary || '系统已经整理好这一阶段的关系洞察。';
+        const suggestion = content.suggestion || content.self_care_tip || content.trend_description || content.professional_note || '';
+        const encouragement = content.encouragement || content.relationship_note || '';
+        const highlights = (content.highlights || content.weekly_highlights || content.strengths || []).slice(0, 4);
+        const concerns = (content.concerns || content.growth_areas || content.action_plan || []).slice(0, 4);
+        const focusText = suggestion || (concerns[0] || '继续把真实感受说清楚，比急着解决更重要。');
+
+        safeSetHtml('#report-main', `
+            <section class="report-hero">
+                <div class="report-hero__score">
+                    <span>${Math.max(1, Math.min(100, score))}</span>
+                    <small>/100</small>
+                </div>
+                <div class="report-hero__copy">
+                    <p class="eyebrow">${isSolo ? 'SOLO BRIEF' : 'RELATIONSHIP BRIEF'}</p>
+                    <h4>${reportLabel}</h4>
+                    <p>${escapeHtml(primaryInsight)}</p>
+                </div>
+            </section>
+            <div class="report-summary-grid">
+                <article class="insight-card">
+                    <span>一句结论</span>
+                    <strong>${escapeHtml(primaryInsight)}</strong>
+                </article>
+                <article class="insight-card">
+                    <span>下一步动作</span>
+                    <strong>${escapeHtml(focusText)}</strong>
+                </article>
+                <article class="insight-card">
+                    <span>报告日期</span>
+                    <strong>${escapeHtml(report.report_date || formatDateOnly(new Date().toISOString()))}</strong>
+                </article>
+            </div>
+            ${suggestion ? `<div class="panel panel--tint"><div class="panel__header"><div><p class="panel__eyebrow">NEXT MOVE</p><h4>这一阶段最值得做的动作</h4></div></div><p class="panel-note">${escapeHtml(suggestion)}</p></div>` : ''}
+            ${renderAttachmentSignals(content)}
+            ${renderTrend(trendData, { solo: isSolo })}
+            <div class="layout-grid report-grid">
+                <div class="panel">
+                    <div class="panel__header"><div><p class="panel__eyebrow">BRIGHT SIDE</p><h4>积极信号</h4></div></div>
+                    ${renderBulletList(highlights, '目前还没有明显高亮项，继续记录会让这部分更清晰。')}
+                </div>
+                <div class="panel">
+                    <div class="panel__header"><div><p class="panel__eyebrow">FOCUS</p><h4>需要关注</h4></div></div>
+                    ${renderBulletList(concerns, '目前没有额外提醒，继续保持稳定节奏就好。')}
+                </div>
+            </div>
+            ${encouragement ? `<div class="editorial-quote"><p>${escapeHtml(encouragement)}</p></div>` : ''}
+        `);
+    }
+
+    const list = $('#report-history-list');
+    if (!list) return;
+
+    if (!history.length) {
+        list.innerHTML = '<div class="empty-state">现在还没有历史简报记录。</div>';
+        return;
+    }
+
+    list.innerHTML = history.map((item) => `
+        <article class="stack-item history-card">
+            <div class="stack-item__content">
+                <strong>${formatReportType(item.type || reportType, { solo: isSolo })}</strong>
+                <div class="stack-item__meta">${escapeHtml(item.report_date || '未命名日期')} · ${escapeHtml(item.status || 'completed')}</div>
+            </div>
+            <span class="pill">可回看</span>
+        </article>
+    `).join('');
+}
+
+function renderTrend(trendData, options = {}) {
+    const isSolo = Boolean(options.solo);
+    const points = trendData?.trend || [];
+    if (points.length < 2) return '';
+
+    const width = 320;
+    const height = 108;
+    const pad = 12;
+    const coords = points.map((point, index) => {
+        const x = pad + (index / Math.max(points.length - 1, 1)) * (width - pad * 2);
+        const y = height - pad - ((point.score || 0) / 100) * (height - pad * 2);
+        return { x, y, score: point.score || 0, date: point.date };
+    });
+    const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
+    const directionLabel = {
+        improving: '正在慢慢变好',
+        stable: '整体比较平稳',
+        declining: '需要更多照顾',
+        insufficient_data: '还在形成趋势',
+    }[trendData?.direction] || '趋势仍在形成';
+
+    return `
+    <div class="panel panel--trend">
+      <div class="panel__header">
+        <div>
+          <p class="panel__eyebrow">${isSolo ? 'EMOTIONAL TREND' : 'RELATIONSHIP TREND'}</p>
+          <h4>近阶段走势</h4>
+        </div>
+        <span class="pill">${directionLabel}</span>
+      </div>
+      <svg viewBox="0 0 ${width} ${height}" class="trend-chart" aria-hidden="true">
+        <defs>
+          <linearGradient id="trend-line" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#d68463"></stop>
+            <stop offset="100%" stop-color="#5b7a6c"></stop>
+          </linearGradient>
+        </defs>
+        <polyline points="${polyline}" fill="none" stroke="url(#trend-line)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        ${coords.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="4.5" fill="#fff7f2" stroke="#d68463" stroke-width="2"></circle>`).join('')}
+      </svg>
+    </div>`;
+}
+
+function formatReportType(type, options = {}) {
+    const solo = Boolean(options.solo);
+    if (solo && type === 'daily') return '个人简报';
+    return { daily: '日报', weekly: '周报', monthly: '月报', solo: '个人简报' }[type] || '简报';
+}
+
+async function generateReport() {
+    const pairId = state.currentPair?.id || null;
+    const isSolo = !pairId;
+    const reportType = isSolo ? 'daily' : state.selectedReportType;
+
+    if (isSolo && reportType !== 'daily') {
+        showToast('单人模式目前只支持个人简报');
+        return;
+    }
+
+    const button = $('#report-generate-btn');
+    if (button) {
+        button.disabled = true;
+        button.textContent = '生成中...';
+    }
+
+    try {
+        if (reportType === 'daily') {
+            await api.generateDailyReport(pairId);
+        } else if (reportType === 'weekly') {
+            await api.generateWeeklyReport(pairId);
+        } else {
+            await api.generateMonthlyReport(pairId);
+        }
+
+        if (button) button.textContent = '等待结果...';
+        showToast(`已开始生成${formatReportType(reportType, { solo: isSolo })}`);
+
+        const report = await api.waitForReport(pairId, reportType);
+        await loadReportPage();
+
+        if (report?.status === 'completed') {
+            showToast(`${formatReportType(reportType, { solo: isSolo })}已生成完成`);
+        } else if (report?.status === 'failed') {
+            showToast(`${formatReportType(reportType, { solo: isSolo })}生成失败，请稍后重试`);
+        } else {
+            showToast(`${formatReportType(reportType, { solo: isSolo })}仍在后台生成，可稍后刷新查看`);
+        }
+    } catch (error) {
+        showToast(error.message || '生成失败');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = isSolo ? '生成个人简报' : '生成当前简报';
+        }
+    }
+}
+
+function getSoloReportButtonState(todayStatus = {}, latestReport = null) {
+    if (!todayStatus?.my_done) {
+        return { label: '先完成今日记录', disabled: false, tone: 'idle' };
+    }
+
+    if (latestReport?.status === 'pending') {
+        return { label: '个人简报生成中...', disabled: true, tone: 'pending' };
+    }
+
+    if (todayStatus?.has_report && latestReport?.status === 'completed') {
+        return { label: '今日简报已就绪', disabled: true, tone: 'ready' };
+    }
+
+    return { label: '生成个人简报', disabled: false, tone: 'action' };
+}
+
+function renderNoPairHome(payload = {}) {
+    const todayStatus = payload.todayStatus || {};
+    const myCheckin = todayStatus.my_checkin || {};
+    const latestReport = payload.latestReport || null;
+    const latestContent = latestReport?.content || {};
+    const streakDays = payload.streak?.streak || 0;
+    const reportState = getSoloReportButtonState(todayStatus, latestReport);
+    const hasCheckin = Boolean(todayStatus?.my_done);
+    const hasReadyReport = reportState.tone === 'ready';
+    const latestInsight = latestContent.insight || latestContent.self_insight || latestContent.encouragement || '';
+    const latestSuggestion = latestContent.suggestion || latestContent.self_care_tip || '';
+    const latestScore = latestContent.health_score || null;
+    const moodText = myCheckin.mood_score ? `${myCheckin.mood_score}/4` : hasCheckin ? '已记录' : '还未记录';
+    const interactionText = myCheckin.interaction_freq || myCheckin.interaction_freq === 0
+        ? `${myCheckin.interaction_freq} 次`
+        : '自由模式';
+    const deepTalkText = myCheckin.deep_conversation === true
+        ? '有'
+        : myCheckin.deep_conversation === false
+            ? '没有'
+            : '未记录';
+
+    const heroTitle = hasReadyReport
+        ? '你已经把今天照顾成一份可以回看的简报'
+        : hasCheckin
+            ? '今天已经被认真记住了'
+            : '先照顾今天的自己，也是在照顾关系的未来';
+    const heroDescription = hasReadyReport
+        ? '个人记录、AI 整理和下一步建议都已经准备好。现在的体验更像一本温柔的关系日记，而不是冷冰冰的数据页。'
+        : hasCheckin
+            ? '你已经完成了今天的个人记录。关系的改变，往往从先把自己的真实感受说清楚开始。'
+            : '没绑定关系也没关系。你可以先写个人记录、用 AI 陪伴整理情绪，等准备好了再把对方邀请进来。';
+    const primaryAction = hasCheckin ? "showPage('report')" : "openCheckinMode('form')";
+    const primaryLabel = hasCheckin ? '去看个人简报' : '写一条今日记录';
+    const secondaryAction = hasReadyReport ? "showPage('pair')" : "openCheckinMode('voice')";
+    const secondaryLabel = hasReadyReport ? '现在去绑定关系' : '让 AI 陪你聊';
+    const reportPanelContent = hasReadyReport
+        ? `
+            <div class="report-preview">
+              <div class="report-preview__score">${latestScore ?? '--'}</div>
+              <div>
+                <strong>今天的个人简报已经准备好了</strong>
+                <p>${escapeHtml(latestInsight || '你今天留下的内容，已经被整理成一份更像日记的简报。')}</p>
+              </div>
+            </div>
+            ${latestSuggestion ? `<p class="panel-note">${escapeHtml(latestSuggestion)}</p>` : ''}
+        `
+        : reportState.tone === 'pending'
+            ? `<p class="panel-note">个人简报正在生成中。稍等一会儿回来，它会比“即时结果”更像一份真正可读的情绪编辑稿。</p>`
+            : hasCheckin
+                ? `<p class="panel-note">今天的记录已经保存。如果你还没看到简报，大概率只是 AI 还在整理，很快就会出现在这里。</p>`
+                : `<p class="panel-note">当你完成今天的个人记录后，这里会变成一张更柔和、更像日记的情绪简报入口。</p>`;
+
+    state.homeSnapshot = {
+        solo: true,
+        todayStatus,
+        streak: payload.streak || {},
+        latestReport,
+        notifications: Array.isArray(payload.notifications) ? payload.notifications : [],
+    };
+
+    safeSetHtml('#home-overview', `
+        <div class="home-hero">
+          <div class="home-hero__copy">
+            <p class="eyebrow">SOLO FIRST</p>
+            <h3>${heroTitle}</h3>
+            <p>${heroDescription}</p>
+          </div>
+          <div class="home-hero__badge">
+            <span>当前模式</span>
+            <strong>单人体验</strong>
+          </div>
+        </div>
+        <div class="context-pills">
+          <span class="context-chip">${hasCheckin ? '今日记录已完成' : '今天还没开始'}</span>
+          <span class="context-chip">${hasReadyReport ? '个人简报已就绪' : reportState.tone === 'pending' ? '个人简报生成中' : '随时开始单人体验'}</span>
+          <span class="context-chip">${streakDays ? `${streakDays} 天连续记录` : '先养成一点自己的节奏'}</span>
+        </div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="${primaryAction}">${primaryLabel}</button>
+          <button class="button button--ghost" type="button" onclick="${secondaryAction}">${secondaryLabel}</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-metrics', [
+        demoMetric('连续节奏', `${streakDays} 天`, streakDays ? '关系和情绪都更喜欢被连续地照顾。' : '从今天开始，也已经算一种节奏。'),
+        demoMetric('今日状态', hasCheckin ? '已记录' : '待开始', hasCheckin ? '你已经替今天留下一点痕迹。' : '先把一句真实的话留在今天。'),
+        demoMetric('个人简报', hasReadyReport ? '已生成' : reportState.tone === 'pending' ? '生成中' : '未生成', hasReadyReport ? '它已经准备好被阅读。' : '简报会在记录之后自然出现。'),
+        demoMetric('下一步', hasReadyReport ? '邀请对方' : hasCheckin ? '等待简报' : '开始记录', hasReadyReport ? '准备好了再把这段关系变成共同空间。' : '今天先照顾好自己。'),
+    ].join(''));
+
+    safeSetHtml('#home-status-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TODAY</p><h4>${hasCheckin ? '今天已经被你记住了' : '今天先照顾你自己'}</h4></div></div>
+        <div class="pulse-grid">
+          <article class="pulse-tile"><span>情绪</span><strong>${moodText}</strong><p>先看见自己，再决定怎么靠近别人。</p></article>
+          <article class="pulse-tile"><span>互动</span><strong>${interactionText}</strong><p>没绑定关系，也能先记录自己的节奏。</p></article>
+          <article class="pulse-tile"><span>深聊</span><strong>${deepTalkText}</strong><p>一句说清楚的话，常常比很多句表面交流更重要。</p></article>
+          <article class="pulse-tile"><span>当前阶段</span><strong>${hasReadyReport ? '可读简报' : hasCheckin ? '等待整理' : '待开始'}</strong><p>${hasReadyReport ? '今天的状态已经被整理成简报。' : hasCheckin ? 'AI 正在把今天的内容变成一份更好读的回顾。' : '先写下一句真实感受。'}</p></article>
+        </div>
+        <div class="journal-quote">
+          ${myCheckin.content ? escapeHtml(myCheckin.content) : '今天的记录还没落下。哪怕先写一句，也会让后面的简报更接近你自己。'}
+        </div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="${primaryAction}">${primaryLabel}</button>
+          <button class="button button--secondary" type="button" onclick="openCheckinMode('voice')">让 AI 继续陪你聊</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-report-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>${hasReadyReport ? '你的个人简报已经就绪' : '个人简报也值得被认真对待'}</h4></div></div>
+        ${reportPanelContent}
+        <div class="hero-actions">
+          <button class="button button--ghost" type="button" onclick="${hasCheckin ? "showPage('report')" : "openCheckinMode('form')"}">${hasCheckin ? '进入个人简报页' : '先去完成记录'}</button>
+        </div>
+    `);
+
+    safeSetHtml('#home-tree-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>关系树会在绑定后开始生长</h4></div></div>
+        <p class="panel-note">现在先把记录习惯养起来，等彼此进入同一个空间，成长值和里程碑会自然接上。</p>
+    `);
+
+    safeSetHtml('#home-crisis-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">SUPPORT</p><h4>这里不会拿风险词吓你</h4></div></div>
+        <p class="panel-note">真正需要帮助时，系统会给出更温和的提醒与可执行的下一步，而不是制造焦虑。</p>
+    `);
+
+    safeSetHtml('#home-milestones-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TIMELINE</p><h4>重要时刻以后都能被记住</h4></div></div>
+        <p class="panel-note">纪念日、重要承诺、第一次和解，这些都值得成为关系时间线的一部分。</p>
+    `);
+
+    safeSetHtml('#home-tasks-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">RITUALS</p><h4>双人任务会在绑定后出现</h4></div></div>
+        <p class="panel-note">现在先把今天的心情留住，等关系建立后，系统会开始生成更贴合你们的日常小动作。</p>
+    `);
+
+    state.notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+    syncNotifications();
+}
+
+async function loadHomePage() {
+    const pair = getPairSnapshot();
+    const greetingName = state.me?.nickname || '你';
+    safeSetText('#home-greeting', `${greetingName}，今天也适合把关系照顾好`);
+    renderPairSelect();
+
+    if (!pair) {
+        const results = await Promise.allSettled([
+            api.getTodayStatus(null),
+            api.getCheckinStreak(null),
+            api.getLatestReport(null, 'daily'),
+            api.getNotifications(),
+        ]);
+
+        renderNoPairHome({
+            todayStatus: unwrapResult(results[0], {}),
+            streak: unwrapResult(results[1], {}),
+            latestReport: unwrapResult(results[2], null),
+            notifications: unwrapResult(results[3], []),
+        });
+        return;
+    }
+
+    const results = await Promise.allSettled([
+        api.getTodayStatus(pair.id),
+        api.getCheckinStreak(pair.id),
+        api.getTreeStatus(pair.id),
+        api.getCrisisStatus(pair.id),
+        api.getDailyTasks(pair.id),
+        api.getNotifications(),
+        api.getMilestones(pair.id),
+        api.getLatestReport(pair.id, 'daily'),
+    ]);
+
+    renderHome({
+        pair,
+        todayStatus: unwrapResult(results[0], {}),
+        streak: unwrapResult(results[1], {}),
+        tree: unwrapResult(results[2], {}),
+        crisis: unwrapResult(results[3], {}),
+        tasks: unwrapResult(results[4], {}),
+        notifications: unwrapResult(results[5], []),
+        milestones: unwrapResult(results[6], []),
+        latestReport: unwrapResult(results[7], null),
+    });
+}
+
+async function loadReportPage() {
+    const pairId = state.currentPair?.id || null;
+    const isSolo = !pairId;
+
+    if (isSolo && state.selectedReportType !== 'daily') {
+        state.selectedReportType = 'daily';
+    }
+
+    syncReportTypeAvailability(isSolo);
+
+    const reportType = isSolo ? 'daily' : state.selectedReportType;
+    const [latest, history, trend, today] = await Promise.allSettled([
+        api.getLatestReport(pairId, reportType),
+        api.getReportHistory(pairId, reportType, 6),
+        api.getHealthTrend(pairId, 14),
+        api.getTodayStatus(pairId),
+    ]);
+
+    const latestReport = unwrapResult(latest, null);
+    const todayStatus = unwrapResult(today, {});
+    const button = $('#report-generate-btn');
+    const soloButton = getSoloReportButtonState(todayStatus, latestReport);
+
+    state.reportSnapshot = {
+        isSolo,
+        reportType,
+        latestReport,
+        todayStatus,
+    };
+
+    if (button) {
+        button.textContent = isSolo ? soloButton.label : '生成当前简报';
+        button.disabled = isSolo ? soloButton.disabled : false;
+    }
+
+    renderReport(
+        latestReport,
+        unwrapResult(history, []),
+        unwrapResult(trend, { trend: [] }),
+        { solo: isSolo, reportType },
+    );
+}
+
+async function generateReport() {
+    const pairId = state.currentPair?.id || null;
+    const isSolo = !pairId;
+    const reportType = isSolo ? 'daily' : state.selectedReportType;
+    const snapshot = state.reportSnapshot || {};
+
+    if (isSolo && reportType !== 'daily') {
+        showToast('单人模式目前只支持个人简报');
+        return;
+    }
+
+    if (isSolo && !snapshot.todayStatus?.my_done) {
+        showToast('先完成今日记录，再回来读个人简报');
+        await showPage('checkin');
+        return;
+    }
+
+    if (isSolo && snapshot.latestReport?.status === 'pending') {
+        showToast('个人简报正在生成中，稍等一下就好');
+        return;
+    }
+
+    if (isSolo && snapshot.todayStatus?.has_report && snapshot.latestReport?.status === 'completed') {
+        showToast('今天的个人简报已经准备好了');
+        return;
+    }
+
+    const button = $('#report-generate-btn');
+    if (button) {
+        button.disabled = true;
+        button.textContent = '生成中...';
+    }
+
+    try {
+        if (reportType === 'daily') {
+            await api.generateDailyReport(pairId);
+        } else if (reportType === 'weekly') {
+            await api.generateWeeklyReport(pairId);
+        } else {
+            await api.generateMonthlyReport(pairId);
+        }
+
+        if (button) button.textContent = '等待结果...';
+        showToast(`已开始生成${formatReportType(reportType, { solo: isSolo })}`);
+
+        const report = await api.waitForReport(pairId, reportType);
+        await loadReportPage();
+
+        if (report?.status === 'completed') {
+            showToast(`${formatReportType(reportType, { solo: isSolo })}已生成完成`);
+        } else if (report?.status === 'failed') {
+            showToast(`${formatReportType(reportType, { solo: isSolo })}生成失败，请稍后重试`);
+        } else {
+            showToast(`${formatReportType(reportType, { solo: isSolo })}仍在后台生成，可稍后刷新查看`);
+        }
+    } catch (error) {
+        showToast(error.message || '生成失败');
+    } finally {
+        if (button) {
+            if (isSolo) {
+                const soloButton = getSoloReportButtonState(
+                    state.reportSnapshot?.todayStatus || snapshot.todayStatus || {},
+                    state.reportSnapshot?.latestReport || snapshot.latestReport || null,
+                );
+                button.disabled = soloButton.disabled;
+                button.textContent = soloButton.label;
+            } else {
+                button.disabled = false;
+                button.textContent = '生成当前简报';
+            }
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

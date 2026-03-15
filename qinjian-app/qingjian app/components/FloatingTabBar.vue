@@ -46,17 +46,22 @@ export default {
 <style scoped>
 .floating-shell {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 50%;
+  right: auto;
+  bottom: calc(20rpx + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: calc(100vw - 48rpx);
+  max-width: 760rpx;
   z-index: 999;
   pointer-events: none;
 }
 
 .floating-bar {
   pointer-events: auto;
-  margin: 0 24rpx calc(20rpx + env(safe-area-inset-bottom));
-  padding: 14rpx;
+  width: 100%;
+  margin: 0;
+  padding: 14rpx 16rpx;
+  box-sizing: border-box;
   border-radius: 999rpx;
   background: rgba(255, 251, 247, 0.96);
   border: 1rpx solid rgba(212, 163, 115, 0.18);
@@ -67,7 +72,9 @@ export default {
 }
 
 .tab-item {
-  width: 20%;
+  flex: 1;
+  width: auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -3,6 +3,20 @@
 -->
 <view class="container container-safe">
 
+  <view class="report-hero-shell">
+    <view class="brand-ribbon">
+      <image class="brand-ribbon__logo" src="/images/brand-logo.jpg" mode="aspectFit"></image>
+      <view class="brand-ribbon__copy">
+        <view class="brand-ribbon__eyebrow">QINJIAN MINI</view>
+        <view class="brand-ribbon__title">关系简报</view>
+      </view>
+    </view>
+    <view class="report-hero-copy">
+      <view class="report-hero-copy__title">把情绪、互动和深聊，翻译成一份可回看的关系摘要。</view>
+      <view class="report-hero-copy__text">日报看今天，周报看节奏，月报看模式。先让每次记录都有一个更安静的落点。</view>
+    </view>
+  </view>
+
   <!-- Tab 选择器 -->
   <!-- Tab 选择器 (奶油风格) -->
   <view class="report-tabs-creamy flex-row">
