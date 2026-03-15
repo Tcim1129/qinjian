@@ -128,11 +128,7 @@ async def get_pair_summary(
     active_pairs = [pair for pair in pairs if pair.status == PairStatus.ACTIVE]
     pending_pairs = [pair for pair in pairs if pair.status == PairStatus.PENDING]
 
-    active_pair = (
-        active_pairs[0]
-        if active_pairs
-        else (pending_pairs[0] if pending_pairs else None)
-    )
+    active_pair = active_pairs[0] if active_pairs else None
     pair_response = None
     if active_pair:
         partner_id = (

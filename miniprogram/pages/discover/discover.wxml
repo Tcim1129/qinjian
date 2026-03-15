@@ -1,5 +1,5 @@
 <!-- 发现页 (参考图 2 风格) -->
-<view class="discover-container animate-fade-in">
+<view class="discover-container container-safe animate-fade-in">
   <!-- 顶部状态栏占位/自定义头部 -->
   <view class="discover-header">
     <view class="header-left">
@@ -7,8 +7,8 @@
       <text class="brand-sub">社区</text>
     </view>
     <view class="header-right">
-      <view class="icon-btn">📅 <text>签到</text></view>
-      <view class="icon-btn">💬 <text>消息</text></view>
+      <view class="icon-btn" bindtap="goCheckin">📅 <text>签到</text></view>
+      <view class="icon-btn" bindtap="goProfile">🙂 <text>我的</text></view>
     </view>
   </view>
 
@@ -22,7 +22,7 @@
 
   <!-- 主服务板块 (大卡片组) -->
   <view class="main-service-grid">
-    <view class="service-card-large" bindtap="goFeature" data-path="psychology">
+    <view class="service-card-large" bindtap="goFeature" data-path="/pages/discover/experts/experts">
       <view class="service-info">
         <text class="service-title">心理咨询</text>
         <view class="service-stats">
@@ -37,14 +37,14 @@
     </view>
 
     <view class="service-side-column">
-      <view class="service-card-small top" bindtap="goFeature" data-path="venting">
+      <view class="service-card-small top" bindtap="goFeature" data-path="/pages/discover/community/community">
         <view class="small-info">
           <text class="small-title">即时倾诉</text>
           <text class="small-desc">情绪解压愈首选</text>
         </view>
         <text class="small-emoji">📞</text>
       </view>
-      <view class="service-card-small bottom" bindtap="goFeature" data-path="courses">
+      <view class="service-card-small bottom" bindtap="goFeature" data-path="/pages/discover/courses/courses">
         <view class="small-info">
           <text class="small-title">心理课程</text>
           <text class="small-desc">从入门到精通</text>
@@ -56,7 +56,7 @@
 
   <!-- 横向图标导航 -->
   <view class="quick-nav-bar">
-    <view class="nav-item" wx:for="{{quickNavs}}" wx:key="name">
+    <view class="nav-item" wx:for="{{quickNavs}}" wx:key="name" bindtap="goQuickNav" data-path="{{item.path}}">
       <view class="nav-icon-bg">{{item.icon}}</view>
       <text class="nav-name">{{item.name}}</text>
     </view>

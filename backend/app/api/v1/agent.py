@@ -70,7 +70,7 @@ tools = [
 ]
 
 
-@router.post("/sessions", response_model=dict)
+@router.post("/sessions", response_model=AgentSessionResponse)
 async def create_or_get_session(
     pair_id: str | None = None,
     user: User = Depends(get_current_user),

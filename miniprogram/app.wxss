@@ -69,7 +69,7 @@ page {
 }
 
 .container-safe {
-  padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom));
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
 }
 
 /* ===== 卡片 ===== */

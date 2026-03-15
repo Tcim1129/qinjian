@@ -68,8 +68,8 @@
         <view class="panel-header">
           <text class="panel-title">使用提示</text>
         </view>
-        <text class="setting-copy">云服务器地址和 API 不会写死在 Git 里，当前 app 使用的是本地私有配置文件。</text>
-        <text class="setting-copy">如果你已经绑定，但页面显示未绑定，重新进入本页会强制同步后端关系摘要。</text>
+        <text class="setting-copy">进入本页时会自动同步账号、关系摘要和解绑状态，不用手动刷新。</text>
+        <text class="setting-copy">如果你刚完成绑定、备注或解绑，停留片刻再回到这里，就能看到最新状态。</text>
       </view>
 
       <view class="page-spacer"></view>

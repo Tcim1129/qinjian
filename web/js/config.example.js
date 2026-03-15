@@ -1,3 +1,3 @@
 window.QJ_CONFIG = {
-  apiRoot: 'http://127.0.0.1:8000/api/v1',
+  apiRoot: 'http://143.198.110.145:8080/api/v1',
 }

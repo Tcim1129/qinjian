@@ -4,7 +4,7 @@ const API_ROOT = (() => {
     }
 
     if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
-        return 'http://localhost:8000/api/v1';
+        return 'http://143.198.110.145:8080/api/v1';
     }
 
     return '/api/v1';
@@ -167,23 +167,23 @@ class ApiClient {
     }
 
     async submitCheckin(pairId, payload) {
-        return this.request('POST', '/checkins/', { pair_id: pairId, ...payload });
+        return this.request('POST', pairId ? '/checkins/' : '/checkins/?mode=solo', pairId ? { pair_id: pairId, ...payload } : payload);
     }
 
     async getTodayStatus(pairId) {
-        return this.request('GET', `/checkins/today?pair_id=${pairId}`);
+        return this.request('GET', pairId ? `/checkins/today?pair_id=${pairId}` : '/checkins/today?mode=solo');
     }
 
     async getCheckinHistory(pairId, limit = 14) {
-        return this.request('GET', `/checkins/history?pair_id=${pairId}&limit=${limit}`);
+        return this.request('GET', pairId ? `/checkins/history?pair_id=${pairId}&limit=${limit}` : `/checkins/history?mode=solo&limit=${limit}`);
     }
 
     async getCheckinStreak(pairId) {
-        return this.request('GET', `/checkins/streak?pair_id=${pairId}`);
+        return this.request('GET', pairId ? `/checkins/streak?pair_id=${pairId}` : '/checkins/streak?mode=solo');
     }
 
     async generateDailyReport(pairId) {
-        return this.request('POST', `/reports/generate-daily?pair_id=${pairId}`);
+        return this.request('POST', pairId ? `/reports/generate-daily?pair_id=${pairId}` : '/reports/generate-daily?mode=solo');
     }
 
     async generateWeeklyReport(pairId) {
@@ -195,7 +195,7 @@ class ApiClient {
     }
 
     async getLatestReport(pairId, reportType = 'daily') {
-        return this.request('GET', `/reports/latest?pair_id=${pairId}&report_type=${reportType}`);
+        return this.request('GET', pairId ? `/reports/latest?pair_id=${pairId}&report_type=${reportType}` : `/reports/latest?mode=solo&report_type=${reportType}`);
     }
 
     async waitForReport(pairId, reportType = 'daily', retries = 10, delayMs = 1500) {
@@ -211,11 +211,11 @@ class ApiClient {
     }
 
     async getReportHistory(pairId, reportType = 'daily', limit = 7) {
-        return this.request('GET', `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}`);
+        return this.request('GET', pairId ? `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}` : `/reports/history?mode=solo&report_type=${reportType}&limit=${limit}`);
     }
 
     async getHealthTrend(pairId, days = 14) {
-        return this.request('GET', `/reports/trend?pair_id=${pairId}&days=${days}`);
+        return this.request('GET', pairId ? `/reports/trend?pair_id=${pairId}&days=${days}` : `/reports/trend?mode=solo&days=${days}`);
     }
 
     async getTreeStatus(pairId) {

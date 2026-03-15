@@ -1,4 +1,10 @@
-const config = require('./config.js')
+let config
+
+try {
+  config = require('./config.js')
+} catch (error) {
+  config = require('./config.template.js')
+}
 
 /**
  * 亲健小程序 - 全局入口
@@ -42,7 +48,10 @@ App({
     const api = require('./utils/api.js')
     try {
       const summary = await api.get('/pairs/summary')
-      this.setPairInfo(summary.active_pair || null)
+      const activePair = summary && summary.is_paired && summary.active_pair && summary.active_pair.status === 'active'
+        ? summary.active_pair
+        : null
+      this.setPairInfo(activePair)
       return summary
     } catch (e) {
       this.setPairInfo(null)

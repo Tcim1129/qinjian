@@ -19,101 +19,8 @@ const state = {
     notifications: [],
     homeSnapshot: null,
     phoneCodeCooldown: 0,
-};
-
-const DEMO = {
-    me: { nickname: '演示用户', email: 'demo@qinjian.local' },
-    pair: { id: 'demo-pair', type: 'couple', partner_nickname: '演示伴侣', status: 'active', invite_code: '381624' },
-    todayStatus: { my_done: true, partner_done: false, both_done: false, has_report: false, has_solo_report: true },
-    streak: { streak: 12 },
-    tree: { level_name: '小树', growth_points: 368, progress_percent: 72, can_water: true },
-    crisis: { crisis_level: 'mild', health_score: 68, intervention: { title: '建议今天安排一次不被打断的 20 分钟对话', description: '重点不是解决问题，而是先对齐彼此的感受。', action_items: ['先说事实，不先下判断', '轮流说完再回应', '结束前给出一个可执行小动作'] } },
-    tasks: {
-        attachment_a: 'secure', attachment_b: 'anxious', tasks: [
-            { id: 'demo-task-1', title: '今天说一次具体的感谢', description: '不要泛泛而谈，指出一个具体瞬间。', category: 'communication', status: 'pending' },
-            { id: 'demo-task-2', title: '安排 15 分钟无手机聊天', description: '只聊今天的情绪和真实感受。', category: 'activity', status: 'completed' },
-        ], combination_insight: '一方更稳定，一方更需要回应时，最有效的是“及时确认”而不是“讲道理”。'
-    },
-    tips: {
-        tips: [
-            { title: '今天的经营提示', content: '当对方表达情绪时，先复述感受，再给建议。先被理解，才会愿意继续沟通。' },
-            { title: '小动作比大承诺更值钱', content: '关系改善最怕只在情绪高点说漂亮话，最有用的是每天一个真实的小动作。' },
-        ]
-    },
-    report: {
-        daily: {
-            status: 'completed',
-            report_date: '2026-03-06',
-            content: {
-                health_score: 74,
-                insight: '今天的关系状态并不差，但存在轻微节奏错位：你更愿意表达，对方更倾向于延后回应。',
-                suggestion: '今晚不讨论对错，只同步各自今天最在意的一件事。',
-                highlights: ['你们都保持了联系，没有完全回避', '冲突强度可控，仍有修复空间'],
-                concerns: ['回应时机不一致，容易被解读为忽视'],
-            },
-        },
-        weekly: {
-            status: 'completed',
-            report_date: '2026-03-06',
-            content: {
-                overall_health_score: 76,
-                trend_description: '过去一周整体稳定，情绪波动主要集中在沟通延迟。',
-                encouragement: '稳定关系的关键不是没有摩擦，而是出现摩擦后还能回到连接。',
-                weekly_highlights: ['连续 5 天保持互动', '冲突后的恢复速度变快'],
-                action_plan: ['建立固定的晚间同步时间', '减少“你总是”式表达'],
-            },
-        },
-        monthly: {
-            status: 'completed',
-            report_date: '2026-03-06',
-            content: {
-                overall_health_score: 79,
-                executive_summary: '这段关系具备稳定基础，主要提升空间在沟通效率和需求表达的清晰度。',
-                strengths: ['持续记录习惯正在形成', '遇到问题仍愿意继续交流'],
-                growth_areas: ['边界表达还不够具体', '对“被理解”的期待高于实际回应能力'],
-                next_month_goals: ['每周一次长对话', '建立冲突暂停机制'],
-            },
-        },
-    },
-    history: [
-        { report_date: '2026-03-06', status: 'completed' },
-        { report_date: '2026-03-05', status: 'completed' },
-        { report_date: '2026-03-04', status: 'completed' },
-    ],
-    trend: {
-        trend: [
-            { date: '2026-02-28', score: 61 },
-            { date: '2026-03-01', score: 63 },
-            { date: '2026-03-02', score: 66 },
-            { date: '2026-03-03', score: 67 },
-            { date: '2026-03-04', score: 69 },
-            { date: '2026-03-05', score: 72 },
-            { date: '2026-03-06', score: 74 },
-        ],
-        direction: 'improving',
-    },
-    notifications: [
-        { id: 'n1', type: 'tip', content: '今天适合做一次低防御沟通。', is_read: false, created_at: '2026-03-06T08:30:00' },
-        { id: 'n2', type: 'task', content: '你们今日任务已生成，建议晚饭后完成。', is_read: true, created_at: '2026-03-06T09:10:00' },
-    ],
-    longdistance: {
-        health_index: 71.5,
-        communication_timeliness: 64,
-        expression_frequency: 78,
-        deep_conversation_rate: 69,
-        overlap_days: 8,
-        checkin_days_a: 11,
-        checkin_days_b: 9,
-        activities: [
-            { id: 'a1', type: 'movie', title: '周末一起看电影', status: 'pending', created_at: '2026-03-05T18:00:00' },
-            { id: 'a2', type: 'chat', title: '晚间视频深聊', status: 'completed', created_at: '2026-03-03T20:30:00' },
-        ],
-    },
-    milestones: [
-        { id: 'm1', type: 'anniversary', title: '恋爱一周年', date: '2026-03-12', days_until: 6, days_since: 0, reminder_sent: false },
-        { id: 'm2', type: 'custom', title: '第一次一起旅行', date: '2025-11-03', days_until: null, days_since: 123, reminder_sent: true },
-    ],
-    attachment: { pair_id: 'demo-pair', attachment_a: { type: 'secure', label: '安全型' }, attachment_b: { type: 'anxious', label: '焦虑型' }, analyzed_at: '2026-03-05 22:00:00' },
+    shouldOpenPairOnBootstrap: false,
+    authIntent: 'login',
 };
 
 const MOOD_TAGS = ['开心', '平静', '感动', '期待', '焦虑', '委屈', '生气', '疲惫'];
@@ -181,12 +88,35 @@ function closeModal() {
     $('#modal-overlay')?.classList.add('hidden');
 }
 
-function isLiveMode() {
-    return api.isLoggedIn() && Boolean(state.currentPair);
+function hasCurrentPair() {
+    return Boolean(state.currentPair && state.currentPair.status === 'active');
 }
 
 function getPairSnapshot() {
-    return state.currentPair || DEMO.pair;
+    return hasCurrentPair() ? state.currentPair : null;
+}
+
+function ensurePairContext(message = '请先创建或加入关系') {
+    if (!api.isLoggedIn()) {
+        showToast('请先登录');
+        return false;
+    }
+
+    if (!hasCurrentPair()) {
+        showToast(message);
+        return false;
+    }
+
+    return true;
+}
+
+function ensureLoginContext(message = '请先登录') {
+    if (!api.isLoggedIn()) {
+        showToast(message);
+        return false;
+    }
+
+    return true;
 }
 
 function getPartnerDisplayName(pair) {
@@ -206,6 +136,42 @@ function setCurrentPair(pairId) {
     if (!match) return;
     state.currentPair = match;
     localStorage.setItem('qj_current_pair', pairId);
+}
+
+function handleSkipPairSetup() {
+    state.shouldOpenPairOnBootstrap = false;
+    showToast('已进入单人体验模式，你之后也可以随时去绑定关系');
+    showPage('home');
+}
+
+function relationStatusLabel(pair) {
+    return pair?.status === 'active' ? '已配对' : '等待加入';
+}
+
+function renderRelationManagementList(pairs, currentPairId) {
+    if (!pairs.length) {
+        return '<div class="empty-state">你还没有建立任何关系。准备好之后，可以先创建邀请码，或输入对方邀请码加入。</div>';
+    }
+
+    return `<div class="stack-list">${pairs.map((pair) => {
+        const isCurrent = currentPairId === pair.id;
+        const relationLabel = TYPE_LABELS[pair.type] || pair.type;
+        const partnerName = pair.status === 'active'
+            ? getPartnerDisplayName(pair)
+            : (pair.partner_nickname || pair.partner_email || pair.partner_phone || '等待对方加入');
+        const actionHint = isCurrent ? '当前关系' : (pair.status === 'active' ? '进入管理' : '查看邀请');
+        return `
+            <button class="stack-item stack-item--action" type="button" onclick="openRelationWorkspace('${pair.id}')" aria-label="切换关系 ${escapeHtml(partnerName)}">
+                <div>${svgIcon(isCurrent ? 'i-heart' : 'i-link')}</div>
+                <div class="stack-item__content">
+                    <strong>${escapeHtml(relationLabel)} · ${escapeHtml(partnerName)}</strong>
+                    <div class="stack-item__meta">${relationStatusLabel(pair)} · 创建于 ${escapeHtml(formatDateOnly(pair.created_at))}</div>
+                    <div class="stack-item__meta">邀请码：${escapeHtml(pair.invite_code || '未生成')} · ${isCurrent ? '当前工作上下文' : (pair.status === 'active' ? '点击切换为当前关系' : '点击查看等待加入状态')}</div>
+                    ${pair.custom_partner_nickname ? `<div class="stack-item__meta stack-item__meta--accent">备注名：${escapeHtml(pair.custom_partner_nickname)}</div>` : ''}
+                </div>
+                <div class="stack-item__aside"><span class="stack-item__hint">${actionHint}</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
+            </button>`;
+    }).join('')}</div>`;
 }
 
 function upsertPair(updatedPair) {
@@ -236,11 +202,10 @@ function syncTopbar() {
         membership: '会员方案',
     };
     safeSetText('#topbar-title', titleMap[state.currentPage] || '关系健康工作台');
-    safeSetText('#topbar-demo-badge', isLiveMode() ? '已连接后端' : '演示态');
 }
 
 function syncTabBar() {
-    const visible = api.isLoggedIn() && Boolean(state.currentPair);
+    const visible = api.isLoggedIn();
     $('#tab-bar')?.classList.toggle('hidden', !visible);
 }
 
@@ -317,26 +282,36 @@ async function bootstrapSession() {
         const storedPairId = localStorage.getItem('qj_current_pair');
         const activePairs = pairs.filter((pair) => pair.status === 'active');
         const pendingPairs = pairs.filter((pair) => pair.status === 'pending');
+        const activeSummaryPairId = summary?.active_pair?.id || null;
         state.currentPair = activePairs.find((pair) => pair.id === storedPairId)
-            || pendingPairs.find((pair) => pair.id === storedPairId)
-            || summary?.active_pair
+            || activePairs.find((pair) => pair.id === activeSummaryPairId)
             || activePairs[0]
+            || pendingPairs.find((pair) => pair.id === storedPairId)
             || pendingPairs[0]
             || null;
 
         syncTabBar();
 
+        if (state.shouldOpenPairOnBootstrap && state.authIntent === 'register' && !activePairs.length && !pendingPairs.length) {
+            state.shouldOpenPairOnBootstrap = false;
+            await showPage('pair');
+            return true;
+        }
+
         if (activePairs.length > 0) {
+            state.shouldOpenPairOnBootstrap = false;
             await showPage('home');
             return true;
         }
 
         if (pendingPairs.length > 0) {
+            state.shouldOpenPairOnBootstrap = false;
             await showPage('pair-waiting');
             return true;
         }
 
-        await showPage('pair');
+        state.shouldOpenPairOnBootstrap = false;
+        await showPage('home');
         return true;
     } catch (error) {
         api.clearToken();
@@ -467,7 +442,9 @@ async function handleAuthSubmit(event) {
         submit.textContent = '登录中...';
 
         try {
+            state.authIntent = 'login';
             await api.phoneLogin(phone, phoneCode);
+            state.shouldOpenPairOnBootstrap = false;
             showToast('登录成功');
             await bootstrapSession();
         } catch (error) {
@@ -494,10 +471,14 @@ async function handleAuthSubmit(event) {
 
     try {
         if (state.authMode === 'login') {
+            state.authIntent = 'login';
             await api.login(email, password);
+            state.shouldOpenPairOnBootstrap = false;
             showToast('登录成功');
         } else {
+            state.authIntent = 'register';
             await api.register(email, nickname, password);
+            state.shouldOpenPairOnBootstrap = true;
             showToast('注册成功');
         }
 
@@ -522,24 +503,7 @@ function renderPairPage() {
     const pendingPairs = state.pairs.filter((pair) => pair.status === 'pending');
     const allPairs = [...activePairs, ...pendingPairs];
 
-    if (!allPairs.length) {
-        list.innerHTML = '<div class="empty-state">你还没有建立任何关系。这里会显示你已经创建或加入的配对。</div>';
-        return;
-    }
-
-    list.innerHTML = allPairs.map((pair) => {
-        const label = TYPE_LABELS[pair.type] || pair.type;
-        const partner = pair.status === 'active' ? getPartnerDisplayName(pair) : (pair.partner_nickname || pair.partner_email || pair.partner_phone || '等待对方加入');
-        const activeText = state.currentPair?.id === pair.id ? '当前关系' : '切换到此关系';
-        return `
-      <button class="stack-item" type="button" onclick="handleSwitchPair('${pair.id}')">
-        <div>
-          <strong>${escapeHtml(label)}</strong>
-          <div class="stack-item__meta">${escapeHtml(partner)} · ${pair.status === 'active' ? '已配对' : '等待加入'}</div>
-        </div>
-        <span class="pill">${activeText}</span>
-      </button>`;
-    }).join('');
+    list.innerHTML = renderRelationManagementList(allPairs, state.currentPair?.id || null);
 }
 
 async function handleCreatePair() {
@@ -585,7 +549,7 @@ async function handleJoinPair() {
 }
 
 function renderWaitingPage() {
-    safeSetText('#waiting-invite-code', state.currentPair?.invite_code || DEMO.pair.invite_code);
+    safeSetText('#waiting-invite-code', state.currentPair?.invite_code || '------');
 }
 
 async function refreshPairStatus() {
@@ -600,23 +564,47 @@ function demoMetric(label, value) {
     return `<article class="stat-card"><span>${label}</span><strong>${value}</strong></article>`;
 }
 
+function renderNoPairHome() {
+    state.homeSnapshot = null;
+    safeSetHtml('#home-overview', `
+        <p class="eyebrow">READY</p>
+        <h3>先开始今天的记录</h3>
+        <p>单人模式已可使用，关系功能可稍后接入。</p>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="openCheckinMode('form')">开始记录</button>
+          <button class="button button--ghost" type="button" onclick="showPage('pair')">连接关系</button>
+        </div>
+    `);
+    safeSetHtml('#home-metrics', [
+        demoMetric('连续打卡', '0 天'),
+        demoMetric('关系树', '待开启'),
+        demoMetric('成长值', '0'),
+        demoMetric('当前预警', '未开始'),
+    ].join(''));
+    safeSetHtml('#home-status-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">TODAY</p><h4>今日入口</h4></div></div>
+        <div class="empty-state">选择一种方式开始。</div>
+        <div class="hero-actions">
+          <button class="button button--primary" type="button" onclick="openCheckinMode('form')">表单打卡</button>
+          <button class="button button--ghost" type="button" onclick="openCheckinMode('voice')">AI 陪伴打卡</button>
+        </div>`);
+    safeSetHtml('#home-report-panel', '<div class="empty-state">连接关系后解锁双人报告。</div>');
+    safeSetHtml('#home-tree-panel', '<div class="empty-state">成长记录会在连接关系后开启。</div>');
+    safeSetHtml('#home-crisis-panel', '<div class="empty-state">风险提醒将在双人记录后出现。</div>');
+    safeSetHtml('#home-milestones-panel', '<div class="empty-state">连接关系后可开始沉淀关键节点。</div>');
+    safeSetHtml('#home-tasks-panel', '<div class="empty-state">连接关系后生成协作任务。</div>');
+    state.notifications = [];
+    syncNotifications();
+}
+
 async function loadHomePage() {
     const pair = getPairSnapshot();
-    const greetingName = state.me?.nickname || DEMO.me.nickname;
+    const greetingName = state.me?.nickname || '你';
     safeSetText('#home-greeting', `${greetingName}，今天也适合把关系照顾好`);
     renderPairSelect();
 
-    if (!isLiveMode()) {
-        renderHome({
-            pair,
-            todayStatus: DEMO.todayStatus,
-            streak: DEMO.streak,
-            tree: DEMO.tree,
-            crisis: DEMO.crisis,
-            tasks: DEMO.tasks,
-            notifications: DEMO.notifications,
-            milestones: [],
-        }, true);
+    if (!pair) {
+        renderNoPairHome();
         return;
     }
 
@@ -632,14 +620,14 @@ async function loadHomePage() {
 
     renderHome({
         pair,
-        todayStatus: unwrapResult(results[0], DEMO.todayStatus),
-        streak: unwrapResult(results[1], DEMO.streak),
-        tree: unwrapResult(results[2], DEMO.tree),
-        crisis: unwrapResult(results[3], DEMO.crisis),
-        tasks: unwrapResult(results[4], DEMO.tasks),
+        todayStatus: unwrapResult(results[0], {}),
+        streak: unwrapResult(results[1], {}),
+        tree: unwrapResult(results[2], {}),
+        crisis: unwrapResult(results[3], {}),
+        tasks: unwrapResult(results[4], {}),
         notifications: unwrapResult(results[5], []),
         milestones: unwrapResult(results[6], []),
-    }, false);
+    });
 }
 
 function unwrapResult(result, fallback) {
@@ -649,19 +637,24 @@ function unwrapResult(result, fallback) {
 function renderPairSelect() {
     const select = $('#home-pair-select');
     if (!select) return;
-    const source = isLiveMode() ? state.pairs.filter((pair) => pair.status === 'active') : [DEMO.pair];
+    const source = state.pairs.filter((pair) => pair.status === 'active');
+    if (!source.length) {
+        select.innerHTML = '<option value="">暂无已激活关系</option>';
+        select.value = '';
+        return;
+    }
     select.innerHTML = source.map((pair) => `<option value="${pair.id}">${escapeHtml(TYPE_LABELS[pair.type] || pair.type)} · ${escapeHtml(getPartnerDisplayName(pair))}</option>`).join('');
-    select.value = getPairSnapshot().id;
+    select.value = getPairSnapshot()?.id || source[0].id;
 }
 
-function renderHome(payload, isDemo) {
+function renderHome(payload) {
     state.homeSnapshot = payload;
     const pairName = getPartnerDisplayName(payload.pair);
     
     safeSetHtml('#home-overview', `
-        <p class="eyebrow">${isDemo ? 'DEMO MODE' : 'CONNECTED'}</p>
+        <p class="eyebrow">CONNECTED</p>
         <h3>${escapeHtml(TYPE_LABELS[payload.pair.type] || payload.pair.type)} · ${escapeHtml(pairName)}</h3>
-        <p>${isDemo ? '当前为演示数据，只展示核心功能状态。' : '当前展示的是这段关系的核心功能状态。'}</p>
+        <p>今天的状态、风险和下一步都在这里。</p>
     `);
 
     safeSetHtml('#home-metrics', [
@@ -678,21 +671,22 @@ function renderHome(payload, isDemo) {
       <div class="stack-item"><div><strong>对方</strong><div class="stack-item__meta">${payload.todayStatus.partner_done ? '对方已经完成' : '对方尚未完成'}</div></div><span class="pill">${payload.todayStatus.partner_done ? '完成' : '等待中'}</span></div>
     </div>
     <div class="hero-actions">
-      <button class="button button--primary" type="button" onclick="showPage('checkin')">去打卡</button>
+      <button class="button button--primary" type="button" onclick="openCheckinMode('form')">表单打卡</button>
+      <button class="button button--secondary" type="button" onclick="openCheckinMode('voice')">AI 陪伴打卡</button>
       <button class="button button--ghost" type="button" onclick="showPage('report')">看报告</button>
     </div>`);
 
     safeSetHtml('#home-report-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>报告入口</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">REPORT</p><h4>本期报告</h4></div></div>
     <div class="empty-state">
-      ${payload.todayStatus.both_done ? '双方都已完成打卡，可以生成正式关系报告。' : '双方未全部完成时，网页端优先展示状态与下一步建议。'}
+      ${payload.todayStatus.both_done ? '双方已完成记录，可生成本期报告。' : '完成双方记录后生成正式报告。'}
     </div>
     <div class="hero-actions">
       <button class="button button--secondary" type="button" onclick="showPage('report')">进入报告页</button>
     </div>`);
 
     safeSetHtml('#home-tree-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>关系树成长</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">TREE</p><h4>成长曲线</h4></div></div>
     <div class="stack-item"><div>${svgIcon('i-tree')}</div><div><strong>${escapeHtml(payload.tree.level_name || '种子')}</strong><div class="stack-item__meta">当前成长值 ${payload.tree.growth_points || 0}</div></div></div>
     <div class="progress-track"><span class="progress-track__fill" style="width:${payload.tree.progress_percent || 0}%"></span></div>
     <div class="hero-actions">
@@ -702,7 +696,7 @@ function renderHome(payload, isDemo) {
     const crisis = payload.crisis || { crisis_level: 'none' };
     const crisisIntervention = crisis.intervention ? `<div class="stack-item__meta">${escapeHtml(crisis.intervention.title || crisis.intervention.description || '')}</div>` : '<div class="stack-item__meta">暂无需要立即介入的强预警。</div>';
     safeSetHtml('#home-crisis-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">CRISIS</p><h4>危机预警</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">RISK</p><h4>风险信号</h4></div></div>
     <div class="stack-item"><div>${svgIcon('i-alert')}</div><div><strong>${crisisLabel(crisis.crisis_level || 'none')}</strong>${crisisIntervention}</div></div>
     <div class="hero-actions">
       <button class="button button--ghost" type="button" onclick="openCrisisDetail()">查看详情</button>
@@ -711,14 +705,14 @@ function renderHome(payload, isDemo) {
     const milestones = payload.milestones || [];
     safeSetHtml('#home-milestones-panel', `
         <div class="panel__header"><div><p class="panel__eyebrow">MILESTONES</p><h4>关键节点</h4></div></div>
-        ${milestones.length ? `<div class="stack-list">${milestones.slice(0, 2).map((item) => renderMilestoneItem(item, { isDemo, compact: true })).join('')}</div>` : '<div class="empty-state">还没有记录关系里程碑。</div>'}
+        ${milestones.length ? `<div class="stack-list">${milestones.slice(0, 2).map((item) => renderMilestoneItem(item, { compact: true })).join('')}</div>` : '<div class="empty-state">还没有记录关系里程碑。</div>'}
         <div class="hero-actions">
             <button class="button button--ghost" type="button" onclick="showPage('milestones')">进入里程碑页</button>
         </div>`);
 
     const tasks = payload.tasks.tasks || [];
     safeSetHtml('#home-tasks-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">TASKS</p><h4>今日关系任务</h4></div></div>
+    <div class="panel__header"><div><p class="panel__eyebrow">TASKS</p><h4>今日动作</h4></div></div>
     <div class="stack-list">
       ${tasks.length ? tasks.slice(0, 3).map((task) => renderTaskItem(task)).join('') : '<div class="empty-state">今天还没有生成任务。</div>'}
     </div>`);
@@ -821,7 +815,7 @@ function milestoneTimeText(item) {
     return '时间待确认';
 }
 
-function renderMilestoneItem(item, { isDemo = false, compact = false } = {}) {
+function renderMilestoneItem(item, { compact = false } = {}) {
     return `
     <article class="${compact ? 'stack-item' : 'timeline-card'}">
       <div class="${compact ? '' : 'timeline-card__head'}">
@@ -832,7 +826,7 @@ function renderMilestoneItem(item, { isDemo = false, compact = false } = {}) {
         </div>
         <span class="pill">${item.reminder_sent ? '已提醒' : '待提醒'}</span>
       </div>
-      ${compact ? '' : `<div class="timeline-card__actions">${isDemo ? '<span class="pill">演示态不可生成回顾</span>' : `<button class="button button--ghost" type="button" data-milestone-review="${item.id}">生成成长回顾</button>`}</div>`}
+      ${compact ? '' : `<div class="timeline-card__actions"><button class="button button--ghost" type="button" data-milestone-review="${item.id}">生成成长回顾</button></div>`}
     </article>`;
 }
 
@@ -892,8 +886,7 @@ async function ensureAgentSession() {
 }
 
 async function sendAgentChat() {
-    if (!isLiveMode()) {
-        showToast('演示态下不调用 AI');
+    if (!ensureLoginContext()) {
         return;
     }
     const input = $('#agent-chat-input');
@@ -952,8 +945,7 @@ function renderOptionGroup(selector, options) {
 
 async function handleCheckinSubmit(event) {
     event.preventDefault();
-    if (!isLiveMode()) {
-        showToast('演示态下不写入数据，请先登录并建立关系');
+    if (!ensureLoginContext()) {
         return;
     }
 
@@ -980,8 +972,8 @@ async function handleCheckinSubmit(event) {
     button.textContent = '提交中...';
 
     try {
-        await api.submitCheckin(state.currentPair.id, payload);
-        showToast('今日打卡已提交');
+        await api.submitCheckin(state.currentPair?.id || null, payload);
+        showToast(state.currentPair?.id ? '今日打卡已提交' : '个人记录已保存');
         resetCheckinForm();
         await showPage('home');
     } catch (error) {
@@ -1027,8 +1019,7 @@ function resetCheckinForm() {
 }
 
 async function handleUpload(type, file) {
-    if (!isLiveMode()) {
-        showToast('演示态下不上传文件');
+    if (!ensureLoginContext()) {
         return;
     }
 
@@ -1048,8 +1039,8 @@ async function handleUpload(type, file) {
 }
 
 async function loadReportPage() {
-    if (!isLiveMode()) {
-        renderReport(DEMO.report[state.selectedReportType], DEMO.history, DEMO.trend, true);
+    if (!hasCurrentPair()) {
+        renderReport(null, [], { trend: [] });
         return;
     }
 
@@ -1064,15 +1055,19 @@ async function loadReportPage() {
         unwrapResult(latest, null),
         unwrapResult(history, []),
         unwrapResult(trend, { trend: [] }),
-        false,
     );
 }
 
-function renderReport(report, history, trendData, isDemo) {
+async function openCheckinMode(mode = 'form') {
+    state.checkinMode = mode;
+    await showPage('checkin');
+}
+
+function renderReport(report, history, trendData) {
     if (report && report.status === 'pending') {
         safeSetHtml('#report-main', `
             <div class="empty-state">
-                当前${formatReportType(state.selectedReportType)}正在后台生成中。页面会在拿到结果后刷新；如果网络波动，也可以稍后再次进入本页查看。
+                ${formatReportType(state.selectedReportType)}生成中。
             </div>`);
     } else if (report && report.status === 'failed') {
         safeSetHtml('#report-main', `
@@ -1082,7 +1077,7 @@ function renderReport(report, history, trendData, isDemo) {
     } else if (!report || report.status !== 'completed') {
         safeSetHtml('#report-main', `
       <div class="empty-state">
-        当前还没有可展示的${state.selectedReportType === 'daily' ? '日报' : state.selectedReportType === 'weekly' ? '周报' : '月报'}。${isDemo ? '你现在看到的是演示状态。' : '完成打卡并触发生成后，这里会显示最新报告。'}
+        暂无${state.selectedReportType === 'daily' ? '日报' : state.selectedReportType === 'weekly' ? '周报' : '月报'}。
       </div>`);
     } else {
         const content = report.content || {};
@@ -1091,9 +1086,9 @@ function renderReport(report, history, trendData, isDemo) {
         const concerns = (content.concerns || content.growth_areas || content.action_plan || []).slice(0, 4);
         safeSetHtml('#report-main', `
       <div class="score-ring" style="--score:${Math.max(1, Math.min(100, score))}"><span>${score}</span></div>
-      <h4>${state.selectedReportType === 'daily' ? '今日关系指数' : state.selectedReportType === 'weekly' ? '周关系指数' : '月关系指数'}</h4>
-      <p class="muted-copy">${escapeHtml(content.insight || content.encouragement || content.executive_summary || '系统已经生成当前阶段的关系洞察。')}</p>
-      ${content.suggestion || content.trend_description ? `<div class="hero-card hero-card--accent"><strong>本阶段建议</strong><p>${escapeHtml(content.suggestion || content.trend_description)}</p></div>` : ''}
+      <h4>${state.selectedReportType === 'daily' ? '今日指数' : state.selectedReportType === 'weekly' ? '本周指数' : '本月指数'}</h4>
+      <p class="muted-copy">${escapeHtml(content.insight || content.encouragement || content.executive_summary || '系统已生成本期洞察。')}</p>
+      ${content.suggestion || content.trend_description ? `<div class="hero-card hero-card--accent"><strong>建议</strong><p>${escapeHtml(content.suggestion || content.trend_description)}</p></div>` : ''}
             ${renderAttachmentSignals(content)}
       ${renderTrend(trendData)}
       <div class="layout-grid">
@@ -1203,8 +1198,7 @@ function formatReportType(type) {
 }
 
 async function generateReport() {
-    if (!isLiveMode()) {
-        showToast('演示态下不触发真实生成');
+    if (!ensurePairContext('请先创建或加入关系，再生成报告')) {
         return;
     }
 
@@ -1245,10 +1239,10 @@ async function generateReport() {
 
 async function loadProfilePage() {
     if (!api.isLoggedIn()) {
-        safeSetHtml('#profile-summary', `<p class="eyebrow">PROFILE</p><h3>当前处于演示态</h3><p>登录后这里会显示你的账号、关系状态和解绑入口。</p>`);
-        safeSetHtml('#profile-account-panel', '<div class="empty-state">演示态下不显示真实账户资料。</div>');
-        safeSetHtml('#profile-pair-panel', '<div class="empty-state">演示态下不显示真实账户信息。</div>');
-        safeSetHtml('#profile-security-panel', '<div class="empty-state">请先登录后查看账户与安全设置。</div>');
+        safeSetHtml('#profile-summary', `<p class="eyebrow">PROFILE</p><h3>请先登录</h3><p>登录后这里会显示你的账号信息和当前关系状态。</p>`);
+        safeSetHtml('#profile-account-panel', '<div class="empty-state">登录后可查看账户资料。</div>');
+        safeSetHtml('#profile-pair-panel', '<div class="empty-state">登录后可查看当前关系状态。</div>');
+        safeSetHtml('#profile-relations-panel', '<div class="empty-state">登录后可查看全部关系列表和多关系切换入口。</div>');
         return;
     }
 
@@ -1275,7 +1269,6 @@ async function loadProfilePage() {
 
     safeSetHtml('#profile-account-panel', `
         <div class="panel__header"><div><p class="panel__eyebrow">ACCOUNT DETAIL</p><h4>账户信息</h4></div></div>
-        <p class="panel-inline-hint">点击下面的条目就能直接修改昵称和密码，不再需要额外找设置入口。</p>
         <div class="detail-list">
             <div class="detail-list__item"><span>昵称</span><strong>${escapeHtml(me.nickname || '未设置')}</strong></div>
             <div class="detail-list__item"><span>邮箱</span><strong>${escapeHtml(me.email || '未绑定')}</strong></div>
@@ -1298,12 +1291,11 @@ async function loadProfilePage() {
         </div>`);
 
     safeSetHtml('#profile-pair-panel', pair
-        ? `<div class="panel__header"><div><p class="panel__eyebrow">RELATION</p><h4>当前关系</h4></div></div>
-                 <p class="panel-inline-hint">直接点击下面的条目即可处理备注或解绑，不再需要额外找按钮。</p>
-             <div class="metric-strip">
-                 <article class="mini-stat"><span>关系类型</span><strong>${escapeHtml(TYPE_LABELS[pair.type] || pair.type)}</strong></article>
-                 <article class="mini-stat"><span>当前状态</span><strong>${pair.status === 'active' ? '已激活' : '等待加入'}</strong></article>
-                 <article class="mini-stat"><span>邀请码</span><strong>${escapeHtml(pair.invite_code || '无')}</strong></article>
+        ? `<div class="panel__header"><div><p class="panel__eyebrow">RELATION</p><h4>当前关系与多关系切换</h4></div></div>
+              <div class="metric-strip">
+                  <article class="mini-stat"><span>关系类型</span><strong>${escapeHtml(TYPE_LABELS[pair.type] || pair.type)}</strong></article>
+                  <article class="mini-stat"><span>当前状态</span><strong>${pair.status === 'active' ? '已激活' : '等待加入'}</strong></article>
+                  <article class="mini-stat"><span>邀请码</span><strong>${escapeHtml(pair.invite_code || '无')}</strong></article>
              </div>
                  <div class="stack-item stack-item--static"><div>${svgIcon('i-link')}</div><div class="stack-item__content"><strong>${escapeHtml(getPartnerDisplayName(pair))}</strong><div class="stack-item__meta">创建于 ${escapeHtml(formatDateOnly(pair.created_at))} · ${pair.status === 'active' ? '你们已经在共享关系数据' : '对方加入后会开始共享数据'}</div></div></div>
                  <button class="stack-item stack-item--action" type="button" onclick="openPartnerNicknameEditor()" aria-label="编辑对方备注">
@@ -1311,25 +1303,25 @@ async function loadProfilePage() {
                      <div class="stack-item__content"><strong>对方备注</strong><div class="stack-item__meta">${escapeHtml(pair.custom_partner_nickname || '尚未设置，当前默认显示系统昵称')}</div></div>
                      <div class="stack-item__aside"><span class="stack-item__hint">点击修改</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
                  </button>
-                 <button class="stack-item stack-item--action" type="button" onclick="openUnbindPanel()" aria-label="管理解绑状态">
-                     <div>${svgIcon('i-refresh')}</div>
-                     <div class="stack-item__content"><strong>解绑状态</strong><div class="stack-item__meta">${unbindStatus.has_request ? (unbindStatus.requested_by_me ? `你已发起解绑，剩余 ${unbindStatus.days_remaining} 天。` : '对方已发起解绑，等待你确认。') : '当前没有进行中的解绑申请。'}</div></div>
-                     <div class="stack-item__aside"><span class="stack-item__hint">点击处理</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
-                 </button>`
+                  <button class="stack-item stack-item--action" type="button" onclick="openUnbindPanel()" aria-label="管理解绑状态">
+                      <div>${svgIcon('i-refresh')}</div>
+                      <div class="stack-item__content"><strong>解绑状态</strong><div class="stack-item__meta">${unbindStatus.has_request ? (unbindStatus.requested_by_me ? `你已发起解绑，剩余 ${unbindStatus.days_remaining} 天。` : '对方已发起解绑，等待你确认。') : '当前没有进行中的解绑申请。'}</div></div>
+                      <div class="stack-item__aside"><span class="stack-item__hint">点击处理</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
+                  </button>`
         : '<div class="empty-state">当前没有激活关系。</div>');
 
-    safeSetHtml('#profile-security-panel', `
-    <div class="panel__header"><div><p class="panel__eyebrow">SECURITY</p><h4>账户边界</h4></div></div>
-    <div class="stack-list">
-      <div class="stack-item"><div>${svgIcon('i-lock')}</div><div><strong>JWT 登录</strong><div class="stack-item__meta">网页端当前通过令牌维持登录态。</div></div></div>
-            <div class="stack-item"><div>${svgIcon('i-heart')}</div><div><strong>小程序业务保留</strong><div class="stack-item__meta">这次改造只调整 Web 端体验，不影响小程序现有逻辑。</div></div></div>
-            <div class="stack-item"><div>${svgIcon('i-user')}</div><div><strong>信息展示策略</strong><div class="stack-item__meta">页面只展示必要的账户摘要，微信绑定状态以“已绑定/未绑定”呈现，不直接暴露原始标识。</div></div></div>
-    </div>`);
+    safeSetHtml('#profile-relations-panel', `
+        <div class="panel__header"><div><p class="panel__eyebrow">RELATIONS</p><h4>全部关系工作台</h4></div></div>
+        ${renderRelationManagementList(allPairs, pair?.id || null)}
+        <div class="hero-actions">
+            <button class="button button--primary" type="button" onclick="showPage('pair')">新增或加入关系</button>
+            <button class="button button--ghost" type="button" onclick="showPage('home')">回到当前关系首页</button>
+        </div>`);
+
 }
 
 async function openUnbindPanel() {
-    if (!isLiveMode()) {
-        showToast('演示态下不可操作解绑');
+    if (!ensurePairContext('请先选择一段关系，再处理解绑')) {
         return;
     }
     try {
@@ -1348,8 +1340,7 @@ async function openUnbindPanel() {
 }
 
 function openPartnerNicknameEditor() {
-    if (!isLiveMode()) {
-        showToast('演示态下不可修改备注');
+    if (!ensurePairContext('请先选择一段关系，再修改备注')) {
         return;
     }
 
@@ -1374,7 +1365,7 @@ function openPartnerNicknameEditor() {
 }
 
 async function loadCheckinAgentState() {
-    if (!isLiveMode() || state.checkinMode !== 'voice') {
+    if (!api.isLoggedIn() || state.checkinMode !== 'voice') {
         return;
     }
     try {
@@ -1470,8 +1461,7 @@ async function savePasswordChanges() {
 }
 
 async function savePartnerNickname() {
-    if (!isLiveMode() || !state.currentPair) {
-        showToast('当前不可修改备注');
+    if (!ensurePairContext('请先选择一段关系，再修改备注')) {
         return;
     }
 
@@ -1534,14 +1524,14 @@ async function cancelUnbind() {
 }
 
 async function loadMilestonesPage() {
-    if (!isLiveMode()) {
-        renderMilestones(DEMO.milestones, true);
+    if (!hasCurrentPair()) {
+        renderMilestones([]);
         return;
     }
 
     try {
         const milestones = await api.getMilestones(state.currentPair.id);
-        renderMilestones(milestones, false);
+        renderMilestones(milestones);
     } catch (error) {
         $('#milestone-summary').innerHTML = `
         <p class="eyebrow">LIVE DATA</p>
@@ -1551,14 +1541,14 @@ async function loadMilestonesPage() {
     }
 }
 
-function renderMilestones(milestones, isDemo) {
+function renderMilestones(milestones) {
     const list = Array.isArray(milestones) ? milestones : [];
     const upcoming = list.filter((item) => typeof item.days_until === 'number' && item.days_until >= 0);
     const past = list.filter((item) => typeof item.days_since === 'number' && item.days_since > 0);
     const nextMilestone = upcoming[0] || list[0] || null;
 
     $('#milestone-summary').innerHTML = `
-    <p class="eyebrow">${isDemo ? 'DEMO TIMELINE' : 'PAIR TIMELINE'}</p>
+    <p class="eyebrow">PAIR TIMELINE</p>
     <h3>${nextMilestone ? escapeHtml(nextMilestone.title) : '还没有记录关键节点'}</h3>
     <p>${nextMilestone ? `${escapeHtml(milestoneTypeLabel(nextMilestone.type))} · ${escapeHtml(milestoneTimeText(nextMilestone))}` : '从纪念日、重要承诺或育儿关键事件开始，让系统记住你们的重要时刻。'}</p>
     <div class="metric-strip">
@@ -1568,14 +1558,13 @@ function renderMilestones(milestones, isDemo) {
     </div>`;
 
     $('#milestone-list').innerHTML = list.length
-        ? list.map((item) => renderMilestoneItem(item, { isDemo })).join('')
+        ? list.map((item) => renderMilestoneItem(item)).join('')
         : '<div class="timeline-empty">还没有里程碑，先补一个对你们最重要的时间点。</div>';
 }
 
 async function handleMilestoneSubmit(event) {
     event.preventDefault();
-    if (!isLiveMode()) {
-        showToast('演示态下不写入里程碑');
+    if (!ensurePairContext('请先创建或加入关系，再保存里程碑')) {
         return;
     }
 
@@ -1605,8 +1594,7 @@ async function handleMilestoneSubmit(event) {
 }
 
 async function openMilestoneReview(milestoneId) {
-    if (!isLiveMode()) {
-        showToast('演示态下不生成真实回顾');
+    if (!ensurePairContext('请先选择一段关系，再生成成长回顾')) {
         return;
     }
 
@@ -1630,8 +1618,8 @@ async function openMilestoneReview(milestoneId) {
 }
 
 async function loadLongDistancePage() {
-    if (!isLiveMode()) {
-        renderLongDistance(DEMO.longdistance, true);
+    if (!hasCurrentPair()) {
+        renderLongDistance({ activities: [] });
         return;
     }
 
@@ -1640,14 +1628,14 @@ async function loadLongDistancePage() {
         api.getLongDistanceActivities(state.currentPair.id),
     ]);
     renderLongDistance({
-        ...unwrapResult(health, DEMO.longdistance),
-        activities: unwrapResult(activities, DEMO.longdistance.activities),
-    }, false);
+        ...unwrapResult(health, {}),
+        activities: unwrapResult(activities, []),
+    });
 }
 
-function renderLongDistance(data, isDemo) {
+function renderLongDistance(data) {
     $('#longdistance-health').innerHTML = `
-    <p class="eyebrow">${isDemo ? 'DEMO' : 'LIVE'} HEALTH</p>
+    <p class="eyebrow">LONG DISTANCE</p>
     <h3>异地关系健康指数 ${data.health_index ?? '--'}</h3>
     <p>沟通及时性 ${data.communication_timeliness ?? '--'} · 表达频率 ${data.expression_frequency ?? '--'} · 深聊率 ${data.deep_conversation_rate ?? '--'}</p>`;
 
@@ -1665,13 +1653,12 @@ function renderLongDistance(data, isDemo) {
         <strong>${escapeHtml(item.title || ACTIVITY_LABELS[item.type] || '活动')}</strong>
         <div class="stack-item__meta">${item.status === 'completed' ? '已完成' : '待完成'} · ${formatDate(item.created_at)}</div>
       </div>
-      ${item.status === 'completed' || isDemo ? '' : `<button class="text-button" type="button" onclick="completeLongDistanceActivity('${item.id}')">完成</button>`}
+      ${item.status === 'completed' ? '' : `<button class="text-button" type="button" onclick="completeLongDistanceActivity('${item.id}')">完成</button>`}
     </article>`).join('');
 }
 
 async function createLongDistanceActivity(type) {
-    if (!isLiveMode()) {
-        showToast('演示态下不写入活动');
+    if (!ensurePairContext('请先创建或加入关系，再创建异地活动')) {
         return;
     }
     try {
@@ -1694,22 +1681,22 @@ async function completeLongDistanceActivity(activityId) {
 }
 
 async function loadAttachmentPage() {
-    if (!isLiveMode()) {
-        renderAttachment(DEMO.attachment, true);
+    if (!hasCurrentPair()) {
+        renderAttachment({ attachment_a: { type: 'unknown', label: '未分析' }, attachment_b: { type: 'unknown', label: '未分析' }, analyzed_at: null });
         return;
     }
 
     try {
         const data = await api.getAttachmentAnalysis(state.currentPair.id);
-        renderAttachment(data, false);
+        renderAttachment(data);
     } catch (error) {
-        renderAttachment({ attachment_a: { type: 'unknown', label: '未分析' }, attachment_b: { type: 'unknown', label: '未分析' }, analyzed_at: null }, false);
+        renderAttachment({ attachment_a: { type: 'unknown', label: '未分析' }, attachment_b: { type: 'unknown', label: '未分析' }, analyzed_at: null });
     }
 }
 
-function renderAttachment(data, isDemo) {
+function renderAttachment(data) {
     $('#attachment-summary').innerHTML = `
-    <p class="eyebrow">${isDemo ? 'DEMO' : 'PAIR DATA'}</p>
+    <p class="eyebrow">PAIR DATA</p>
     <h3>依恋风格不是标签，而是理解互动方式的入口</h3>
     <p>${data.analyzed_at ? `上次分析时间：${escapeHtml(data.analyzed_at)}` : '当前还没有完成真实分析，可以直接点击按钮触发。'}</p>`;
 
@@ -1739,8 +1726,7 @@ function attachmentDescription(type) {
 }
 
 async function runAttachmentAnalysis() {
-    if (!isLiveMode()) {
-        showToast('演示态下不触发真实分析');
+    if (!ensurePairContext('请先创建或加入关系，再开始依恋分析')) {
         return;
     }
     const button = $('#attachment-run-btn');
@@ -1824,8 +1810,8 @@ function resetHealthTest() {
 }
 
 async function loadCommunityPage() {
-    if (!isLiveMode()) {
-        renderCommunity(DEMO.tips, DEMO.notifications, true);
+    if (!hasCurrentPair()) {
+        renderCommunity([], []);
         return;
     }
 
@@ -1833,14 +1819,14 @@ async function loadCommunityPage() {
         api.getCommunityTips(state.currentPair.type),
         api.getNotifications(),
     ]);
-    renderCommunity(unwrapResult(tips, DEMO.tips), unwrapResult(notifications, DEMO.notifications), false);
+    renderCommunity(unwrapResult(tips, []), unwrapResult(notifications, []));
 }
 
-function renderCommunity(tipsPayload, notificationsPayload, isDemo) {
+function renderCommunity(tipsPayload, notificationsPayload) {
     const tips = tipsPayload.tips || tipsPayload || [];
     const notifications = Array.isArray(notificationsPayload) ? notificationsPayload : notificationsPayload || [];
     $('#community-highlight').innerHTML = `
-    <p class="eyebrow">${isDemo ? 'DEMO' : 'LIVE CONTENT'}</p>
+    <p class="eyebrow">COMMUNITY</p>
     <h3>${escapeHtml(tips[0]?.title || '社群技巧')}</h3>
     <p>${escapeHtml(tips[0]?.content || '这里会显示关系经营建议与运营型内容。')}</p>`;
     $('#community-tips-list').innerHTML = tips.length
@@ -1852,8 +1838,7 @@ function renderCommunity(tipsPayload, notificationsPayload, isDemo) {
 }
 
 async function generateCommunityTip() {
-    if (!isLiveMode()) {
-        showToast('演示态下不生成真实建议');
+    if (!ensurePairContext('请先创建或加入关系，再生成新的建议')) {
         return;
     }
     try {
@@ -1866,8 +1851,8 @@ async function generateCommunityTip() {
 }
 
 async function loadChallengesPage() {
-    if (!isLiveMode()) {
-        renderChallenges(DEMO.tasks, DEMO.streak, true);
+    if (!hasCurrentPair()) {
+        renderChallenges({}, {});
         return;
     }
 
@@ -1875,15 +1860,15 @@ async function loadChallengesPage() {
         api.getDailyTasks(state.currentPair.id),
         api.getCheckinStreak(state.currentPair.id),
     ]);
-    renderChallenges(unwrapResult(tasks, DEMO.tasks), unwrapResult(streak, DEMO.streak), false);
+    renderChallenges(unwrapResult(tasks, {}), unwrapResult(streak, {}));
 }
 
-function renderChallenges(tasksPayload, streakPayload, isDemo) {
+function renderChallenges(tasksPayload, streakPayload) {
     const tasks = tasksPayload.tasks || [];
     const completed = tasks.filter((item) => item.status === 'completed').length;
     const percent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
     $('#challenge-overview').innerHTML = `
-    <p class="eyebrow">${isDemo ? 'DEMO' : 'LIVE TASKS'}</p>
+    <p class="eyebrow">TASKS</p>
     <h3>今日完成率 ${percent}%</h3>
     <p>连续打卡 ${streakPayload.streak || 0} 天 · 今日已完成 ${completed}/${tasks.length} 项任务。</p>
     <div class="progress-track"><span class="progress-track__fill" style="width:${percent}%"></span></div>`;
@@ -1893,8 +1878,7 @@ function renderChallenges(tasksPayload, streakPayload, isDemo) {
 }
 
 async function completeTask(taskId) {
-    if (!isLiveMode()) {
-        showToast('演示态下不写入任务状态');
+    if (!ensurePairContext('请先创建或加入关系，再更新任务状态')) {
         return;
     }
     try {
@@ -1911,8 +1895,7 @@ async function completeTask(taskId) {
 }
 
 async function handleWaterTree() {
-    if (!isLiveMode()) {
-        showToast('演示态下不写入成长值');
+    if (!ensurePairContext('请先创建或加入关系，再浇灌关系树')) {
         return;
     }
     try {
@@ -1925,7 +1908,7 @@ async function handleWaterTree() {
 }
 
 function openCrisisDetail() {
-    const current = state.homeSnapshot?.crisis || DEMO.crisis;
+    const current = state.homeSnapshot?.crisis || { crisis_level: 'none' };
     const intervention = current.intervention || {};
     openModal(`
     <h3>${crisisLabel(current.crisis_level || 'none')}</h3>
@@ -1938,9 +1921,7 @@ function openCrisisDetail() {
 }
 
 async function openCrisisResources() {
-    const resources = isLiveMode()
-        ? await api.getCrisisResources().catch(() => ({ hotlines: [], tips: [] }))
-        : { hotlines: [{ name: '全国心理援助热线', number: '400-161-9995', hours: '24 小时' }], tips: ['先把沟通目标收窄到“让彼此听懂”，而不是立刻解决所有问题。'] };
+    const resources = await api.getCrisisResources().catch(() => ({ hotlines: [], tips: [] }));
     openModal(`
     <h3>专业帮助资源</h3>
     <div class="stack-list">
@@ -1953,6 +1934,18 @@ async function openCrisisResources() {
 function handleSwitchPair(pairId) {
     setCurrentPair(pairId);
     bootstrapSession();
+}
+
+function openRelationWorkspace(pairId) {
+    const pair = state.pairs.find((item) => item.id === pairId);
+    if (!pair) {
+        showToast('没有找到这段关系');
+        return;
+    }
+
+    setCurrentPair(pairId);
+    showToast(pair.status === 'active' ? '已切换当前关系' : '已打开等待加入状态');
+    showPage(pair.status === 'active' ? 'home' : 'pair-waiting');
 }
 
 function handleLogout() {
@@ -2053,6 +2046,7 @@ function bindStaticEvents() {
         }
     });
     $('#waiting-refresh-btn')?.addEventListener('click', refreshPairStatus);
+    $('#pair-skip-btn')?.addEventListener('click', handleSkipPairSetup);
     $('#home-pair-select')?.addEventListener('change', (event) => {
         setCurrentPair(event.target.value);
         loadHomePage();
@@ -2067,7 +2061,7 @@ function bindStaticEvents() {
     $('#checkin-mode-voice')?.addEventListener('click', async () => {
         state.checkinMode = 'voice';
         syncCheckinModeUI();
-        if (isLiveMode()) {
+        if (api.isLoggedIn()) {
             await ensureAgentSession().catch(() => null);
         }
     });
@@ -2089,8 +2083,8 @@ function bindStaticEvents() {
     $('#community-generate-btn')?.addEventListener('click', generateCommunityTip);
     $('#notification-toggle')?.addEventListener('click', () => $('#notification-drawer')?.classList.toggle('hidden'));
     $('#notification-read-all')?.addEventListener('click', async () => {
-        if (!isLiveMode()) {
-            showToast('演示态下不写入通知状态');
+        if (!api.isLoggedIn()) {
+            showToast('请先登录');
             return;
         }
         await api.markNotificationsRead();
@@ -2116,6 +2110,7 @@ function exposeGlobals() {
     window.resetHealthTest = resetHealthTest;
     window.completeTask = completeTask;
     window.handleSwitchPair = handleSwitchPair;
+    window.openRelationWorkspace = openRelationWorkspace;
     window.handleWaterTree = handleWaterTree;
     window.openCrisisDetail = openCrisisDetail;
     window.openCrisisResources = openCrisisResources;
@@ -2126,6 +2121,7 @@ function exposeGlobals() {
     window.completeLongDistanceActivity = completeLongDistanceActivity;
     window.openProfileEditor = openProfileEditor;
     window.openPasswordEditor = openPasswordEditor;
+    window.openCheckinMode = openCheckinMode;
     window.saveProfileChanges = saveProfileChanges;
     window.savePasswordChanges = savePasswordChanges;
 }

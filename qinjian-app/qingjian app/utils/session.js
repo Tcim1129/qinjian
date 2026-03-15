@@ -14,6 +14,12 @@ export function normalizePair(pair) {
   }
 }
 
+function normalizeActivePair(summary) {
+  if (!summary || !summary.is_paired || !summary.active_pair) return null
+  if (summary.active_pair.status !== 'active') return null
+  return normalizePair(summary.active_pair)
+}
+
 export function loadCachedSession() {
   const userInfo = uni.getStorageSync(USER_KEY) || null
   const pairSummary = uni.getStorageSync(PAIR_SUMMARY_KEY) || null
@@ -21,7 +27,7 @@ export function loadCachedSession() {
     userInfo,
     pairSummary: pairSummary ? {
       ...pairSummary,
-      active_pair: normalizePair(pairSummary.active_pair),
+      active_pair: normalizeActivePair(pairSummary),
     } : null,
   }
 }
@@ -44,7 +50,7 @@ export function normalizeSummary(summary) {
   if (!summary) return null
   return {
     ...summary,
-    active_pair: normalizePair(summary.active_pair),
+    active_pair: normalizeActivePair(summary),
   }
 }
 

@@ -193,11 +193,66 @@ function getBaseApiUrl() {
   return `${baseUrl}${API_PREFIX}`
 }
 
+/**
+ * 上传语音文件并转录为文字
+ * @param {string} filePath - 本地语音文件路径
+ * @returns {Promise<{text: string, size: number}>}
+ */
+function uploadAndTranscribe(filePath) {
+  return new Promise((resolve, reject) => {
+    const globalData = getGlobalData()
+    const baseUrl = globalData.baseUrl || ''
+    const token = globalData.token || ''
+
+    const header = {}
+    if (token) {
+      header['Authorization'] = `Bearer ${token}`
+    }
+
+    wx.uploadFile({
+      url: `${baseUrl}${API_PREFIX}/upload/transcribe`,
+      filePath,
+      name: 'file',
+      header,
+      success(res) {
+        if (res.statusCode === 401) {
+          handleUnauthorized()
+          reject({ code: 401, message: '登录已过期，请重新登录' })
+          return
+        }
+
+        let data = res.data
+        try {
+          data = JSON.parse(data)
+        } catch (e) {
+          // 解析失败则保留原始字符串
+        }
+
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(data)
+        } else {
+          const errMsg = (data && data.detail) || data.message || '转录失败'
+          reject({ code: res.statusCode, message: errMsg, data })
+        }
+      },
+      fail(err) {
+        wx.showToast({
+          title: '网络连接失败，请检查网络设置',
+          icon: 'none',
+          duration: 2000
+        })
+        reject({ code: -1, message: '网络异常', detail: err })
+      }
+    })
+  })
+}
+
 module.exports = {
   get,
   post,
   put,
   del,
   upload,
+  uploadAndTranscribe,
   getBaseApiUrl
 }

@@ -65,11 +65,11 @@ Page({
     ],
     // 快速导航 (参考图 2)
     quickNavs: [
-      { name: '测评', icon: '📝' },
-      { name: '读书会', icon: '📔' },
-      { name: '文章', icon: '📄' },
-      { name: '问答', icon: '❓' },
-      { name: '冥想', icon: '🧘' }
+      { name: '测评', icon: '📝', path: '/pages/discover/health-test/health-test' },
+      { name: '依恋', icon: '🔗', path: '/pages/discover/attachment-test/attachment-test' },
+      { name: '课程', icon: '📔', path: '/pages/discover/courses/courses' },
+      { name: '社群', icon: '👥', path: '/pages/discover/community/community' },
+      { name: '挑战', icon: '🏆', path: '/pages/discover/challenges/challenges' }
     ],
     // 限时福利 (参考图 2)
     benefits: [
@@ -97,5 +97,17 @@ Page({
     if (path) {
       wx.navigateTo({ url: path })
     }
+  },
+
+  goQuickNav(e) {
+    this.goFeature(e)
+  },
+
+  goCheckin() {
+    wx.switchTab({ url: '/pages/checkin/checkin' })
+  },
+
+  goProfile() {
+    wx.switchTab({ url: '/pages/profile/profile' })
   }
 })

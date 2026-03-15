@@ -7,18 +7,19 @@
     </view>
 
     <scroll-view class="discover-scroll" scroll-y>
-      <view class="feature-hero">
+      <view class="feature-hero" @click="openVoiceCheckin">
         <view>
           <text class="hero-title">今日推荐：AI 语音陪伴打卡</text>
           <text class="hero-copy">像聊天一样完成今天的关系记录，特别适合不想面对表单的时候。</text>
+          <text class="hero-cta">立即开始 ></text>
         </view>
         <text class="hero-icon">◎</text>
       </view>
 
       <view class="section-card">
-        <text class="section-title">热门功能</text>
+        <text class="section-title">现在就能用</text>
         <view class="feature-grid">
-          <view class="feature-item" v-for="item in features" :key="item.name">
+          <view class="feature-item" v-for="item in features" :key="item.name" @click="openFeature(item)">
             <text class="feature-icon">{{ item.icon }}</text>
             <text class="feature-name">{{ item.name }}</text>
             <text class="feature-desc">{{ item.desc }}</text>
@@ -27,9 +28,9 @@
       </view>
 
       <view class="section-card">
-        <text class="section-title">内容与服务</text>
+        <text class="section-title">继续探索</text>
         <view class="service-list">
-          <view class="service-row" v-for="item in services" :key="item.title">
+          <view class="service-row" v-for="item in services" :key="item.title" @click="openService(item)">
             <view>
               <text class="service-title">{{ item.title }}</text>
               <text class="service-desc">{{ item.desc }}</text>
@@ -54,16 +55,36 @@ export default {
   data() {
     return {
       features: [
-        { icon: '◌', name: '依恋测试', desc: '看懂自己的互动习惯' },
-        { icon: '◍', name: '关系体检', desc: '快速判断当前状态' },
-        { icon: '◎', name: '异地关系', desc: '为异地恋设计的协作工具' },
-        { icon: '✦', name: '情侣挑战', desc: '每天一个小动作让关系升温' },
+        { icon: '◎', name: '语音陪伴', desc: '像聊天一样完成今天记录', type: 'voice-checkin' },
+        { icon: '✦', name: '四步打卡', desc: '用表单快速补齐今天状态', path: '/pages/checkin/index' },
+        { icon: '▥', name: '关系报告', desc: '查看日报、周报和趋势', path: '/pages/report/index' },
+        { icon: '◌', name: '绑定关系', desc: '创建或加入你们的关系空间', path: '/pages/pair/index' },
       ],
       services: [
-        { title: '心理课程', desc: '把复杂关系议题讲得清楚，也讲得温柔。', tag: '内容' },
-        { title: '专家咨询', desc: '需要更专业帮助时，服务入口继续保留。', tag: '服务' },
-        { title: '会员方案', desc: '把高频陪伴、报告和课程做成持续价值。', tag: '商业化' },
+        { title: '继续完善主页记录', desc: '回到首页补看今天的脉搏、连击天数和成长树状态。', tag: '首页', path: '/pages/index/index' },
+        { title: '同步账户与关系信息', desc: '进入我的页面更新昵称、备注、解绑状态与账号信息。', tag: '我的', path: '/pages/profile/index' },
+        { title: '开始建立关系', desc: '如果你还没绑定，可以直接进入绑定入口生成邀请码或加入对方。', tag: '关系', path: '/pages/pair/index' },
       ]
+    }
+  },
+  methods: {
+    go(path) {
+      if (!path) return
+      uni.reLaunch({ url: path })
+    },
+    openVoiceCheckin() {
+      uni.setStorageSync('qj_checkin_mode', 'voice')
+      this.go('/pages/checkin/index')
+    },
+    openFeature(item) {
+      if (item.type === 'voice-checkin') {
+        this.openVoiceCheckin()
+        return
+      }
+      this.go(item.path)
+    },
+    openService(item) {
+      this.go(item.path)
     }
   }
 }
@@ -143,6 +164,14 @@ export default {
   font-size: 22rpx;
   line-height: 1.8;
   opacity: 0.84;
+}
+
+.hero-cta {
+  display: inline-block;
+  margin-top: 18rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  color: #fff;
 }
 
 .hero-icon {
