@@ -3,9 +3,15 @@
 /* 奶油风格用户信息头部 */
 .profile-header-creamy {
   padding: 60rpx 40rpx;
-  background: #ffffff;
+  background: linear-gradient(135deg, rgba(255, 244, 236, 0.96), rgba(240, 250, 252, 0.88));
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 26rpx;
+}
+
+.profile-brand-ribbon {
+  align-self: flex-start;
 }
 
 .profile-avatar-creamy {
@@ -104,4 +110,23 @@
 
 .text-danger {
   color: var(--color-danger);
+}
+
+.profile-copyright-card {
+  text-align: center;
+  padding: 32rpx 28rpx;
+}
+
+.profile-copyright-eyebrow {
+  font-size: 20rpx;
+  letter-spacing: 4rpx;
+  text-transform: uppercase;
+  color: #a1887f;
+}
+
+.profile-copyright-text {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.8;
+  color: #6d4c41;
 }

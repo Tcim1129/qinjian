@@ -1,6 +1,13 @@
 <template>
   <view class="report-page">
     <view class="report-header">
+      <view class="brand-chip">
+        <image class="brand-chip__logo" src="../../static/brand-logo.jpg" mode="aspectFit"></image>
+        <view class="brand-chip__copy">
+          <text class="brand-chip__eyebrow">QINJIAN APP</text>
+          <text class="brand-chip__name">亲健</text>
+        </view>
+      </view>
       <text class="eyebrow">REPORT</text>
       <text class="title">关系报告与阶段回顾</text>
       <text class="subtitle">把每天的情绪、互动和深聊节奏沉淀成趋势与建议。</text>
@@ -179,12 +186,51 @@ export default {
 
 <style scoped>
 .report-page {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(180deg, #fff9f3 0%, #f5eee7 100%);
 }
 
 .report-header {
   padding: 84rpx 28rpx 28rpx;
+}
+
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 12rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255,255,255,0.72);
+  border: 1rpx solid rgba(212, 163, 115, 0.14);
+  margin-bottom: 18rpx;
+}
+
+.brand-chip__logo {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+}
+
+.brand-chip__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.brand-chip__eyebrow {
+  font-size: 18rpx;
+  letter-spacing: 4rpx;
+  text-transform: uppercase;
+  color: #a1887f;
+}
+
+.brand-chip__name {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #2f2522;
 }
 
 .eyebrow {
@@ -212,7 +258,8 @@ export default {
 }
 
 .report-scroll {
-  height: calc(100vh - 140rpx);
+  flex: 1;
+  min-height: 0;
   padding: 0 28rpx;
   box-sizing: border-box;
 }
@@ -364,6 +411,6 @@ export default {
 }
 
 .page-spacer {
-  height: 180rpx;
+  height: 220rpx;
 }
 </style>

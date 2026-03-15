@@ -135,7 +135,7 @@ Page({
   showAbout() {
     wx.showModal({
       title: '关于亲健',
-      content: '亲健 v1.0.0\n青年亲密关系健康管理专家\n让爱有据可循',
+      content: '亲健 v2.8.0\n青年亲密关系健康管理专家\n让爱有据可循',
       showCancel: false,
       confirmColor: '#6C5CE7'
     })

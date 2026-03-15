@@ -1,11 +1,38 @@
 /* 报告页特有样式 */
 
+.report-hero-shell {
+  display: grid;
+  gap: 24rpx;
+  margin-bottom: 28rpx;
+  padding: 32rpx;
+  border-radius: 40rpx;
+  background: linear-gradient(135deg, rgba(255, 244, 236, 0.96), rgba(240, 250, 252, 0.9));
+  border: 1rpx solid rgba(212, 163, 115, 0.14);
+  box-shadow: 0 18rpx 40rpx rgba(93, 64, 55, 0.08);
+}
+
+.report-hero-copy__title {
+  font-size: 34rpx;
+  line-height: 1.35;
+  font-weight: 800;
+  color: #3e2723;
+}
+
+.report-hero-copy__text {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #6d4c41;
+}
+
 /* 奶油风格 Tab 选择器 */
 .report-tabs-creamy {
-  background: #f0f0f0;
+  background: rgba(255, 255, 255, 0.8);
   border-radius: 40rpx;
   padding: 8rpx;
   margin-bottom: 32rpx;
+  border: 1rpx solid rgba(212, 163, 115, 0.12);
+  box-shadow: 0 12rpx 30rpx rgba(93, 64, 55, 0.06);
 }
 
 .report-tab-creamy {
@@ -19,10 +46,10 @@
 }
 
 .report-tab-creamy.active {
-  background: #ffffff;
-  color: #5d4037;
+  background: linear-gradient(135deg, #5d4037, #d4a373);
+  color: #ffffff;
   font-weight: 800;
-  box-shadow: 0 4rpx 12rpx rgba(93, 64, 55, 0.08);
+  box-shadow: 0 8rpx 20rpx rgba(93, 64, 55, 0.18);
 }
 
 /* 奶油风格报告内容 */

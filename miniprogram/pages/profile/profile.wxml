@@ -6,6 +6,13 @@
   <!-- 用户信息头部 -->
   <!-- 用户信息头部 (奶油风格大卡片) -->
   <view class="card-creamy profile-header-creamy animate-fade-in" bindtap="onMenuTap" data-id="pair" data-path="/pages/pair/pair">
+    <view class="brand-ribbon profile-brand-ribbon">
+      <image class="brand-ribbon__logo" src="/images/brand-logo.jpg" mode="aspectFit"></image>
+      <view class="brand-ribbon__copy">
+        <view class="brand-ribbon__eyebrow">QINJIAN MINI</view>
+        <view class="brand-ribbon__title">我的关系空间</view>
+      </view>
+    </view>
     <view class="flex-row gap-lg">
       <!-- 头像 -->
       <view class="profile-avatar-creamy">
@@ -51,6 +58,11 @@
       </view>
       <view class="arrow-sm-creamy" wx:if="{{item.id !== 'logout'}}">›</view>
     </view>
+  </view>
+
+  <view class="card-creamy mt-md profile-copyright-card">
+    <view class="profile-copyright-eyebrow">COPYRIGHT</view>
+    <view class="profile-copyright-text">版权所有：心晴合伙人项目组 黄菁蓝、吴秀秀、叶笙尧、钟昊桐、郑梓滢</view>
   </view>
 
 </view>

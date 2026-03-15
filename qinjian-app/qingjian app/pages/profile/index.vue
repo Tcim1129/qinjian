@@ -2,6 +2,13 @@
   <view class="profile-page">
     <scroll-view class="profile-scroll" scroll-y>
       <view class="profile-hero">
+        <view class="brand-chip">
+          <image class="brand-chip__logo" src="../../static/brand-logo.jpg" mode="aspectFit"></image>
+          <view class="brand-chip__copy">
+            <text class="brand-chip__eyebrow">QINJIAN APP</text>
+            <text class="brand-chip__name">我的关系空间</text>
+          </view>
+        </view>
         <view class="avatar-badge">{{ avatarLetter }}</view>
         <view class="hero-main">
           <text class="hero-name">{{ displayName }}</text>
@@ -70,6 +77,11 @@
         </view>
         <text class="setting-copy">进入本页时会自动同步账号、关系摘要和解绑状态，不用手动刷新。</text>
         <text class="setting-copy">如果你刚完成绑定、备注或解绑，停留片刻再回到这里，就能看到最新状态。</text>
+      </view>
+
+      <view class="panel-card copyright-card">
+        <text class="copyright-eyebrow">COPYRIGHT</text>
+        <text class="copyright-text">版权所有：心晴合伙人项目组 黄菁蓝、吴秀秀、叶笙尧、钟昊桐、郑梓滢</text>
       </view>
 
       <view class="page-spacer"></view>
@@ -285,13 +297,18 @@ export default {
 
 <style scoped>
 .profile-page {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(180deg, #fff8f2 0%, #f6efe9 100%);
 }
 
 .profile-scroll {
-  height: 100vh;
-  padding: 28rpx;
+  flex: 1;
+  min-height: 0;
+  padding: 28rpx 28rpx 0;
+  box-sizing: border-box;
 }
 
 .profile-hero,
@@ -306,8 +323,45 @@ export default {
 .profile-hero {
   padding: 30rpx;
   display: flex;
+  flex-wrap: wrap;
   gap: 20rpx;
   align-items: center;
+}
+
+.brand-chip {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 12rpx 18rpx;
+  border-radius: 999rpx;
+  background: #fff8f1;
+  border: 1rpx solid rgba(212, 163, 115, 0.16);
+}
+
+.brand-chip__logo {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+}
+
+.brand-chip__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.brand-chip__eyebrow {
+  font-size: 18rpx;
+  letter-spacing: 4rpx;
+  text-transform: uppercase;
+  color: #a1887f;
+}
+
+.brand-chip__name {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #2f2522;
 }
 
 .avatar-badge {
@@ -442,6 +496,26 @@ export default {
   color: #6d4c41;
 }
 
+.copyright-card {
+  text-align: center;
+}
+
+.copyright-eyebrow {
+  display: block;
+  font-size: 18rpx;
+  letter-spacing: 4rpx;
+  text-transform: uppercase;
+  color: #a1887f;
+}
+
+.copyright-text {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.8;
+  color: #6d4c41;
+}
+
 .modal-wrap {
   position: fixed;
   inset: 0;
@@ -506,6 +580,6 @@ export default {
 }
 
 .page-spacer {
-  height: 180rpx;
+  height: 220rpx;
 }
 </style>

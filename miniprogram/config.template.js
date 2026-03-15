@@ -1,5 +1,5 @@
 const CONFIG = {
-  baseUrl: 'http://143.198.110.145:8080',
+  baseUrl: 'https://your-domain.example',
   appName: '亲健',
 }
 

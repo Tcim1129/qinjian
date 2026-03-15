@@ -6,7 +6,15 @@
 
   <!-- 顶部渐变头部：问候、配对状态 -->
   <view class="home-header-creamy">
-    <view class="flex-between">
+    <view class="brand-ribbon">
+      <image class="brand-ribbon__logo" src="/images/brand-logo.jpg" mode="aspectFit"></image>
+      <view class="brand-ribbon__copy">
+        <view class="brand-ribbon__eyebrow">QINJIAN MINI</view>
+        <view class="brand-ribbon__title">把关系慢慢照顾好</view>
+      </view>
+    </view>
+
+    <view class="flex-between home-header-main">
       <view>
         <view class="home-greeting">{{greeting}}</view>
         <view class="home-pair-status-creamy" wx:if="{{pairInfo}}">
@@ -20,6 +28,12 @@
         <text class="mood-emoji-sm">{{todayCheckin.mood_score == 4 ? '😊' : todayCheckin.mood_score == 3 ? '🙂' : todayCheckin.mood_score == 2 ? '😐' : '😟'}}</text>
         <text class="mood-label-sm">今日心情</text>
       </view>
+    </view>
+
+    <view class="home-hero-card">
+      <view class="home-hero-card__eyebrow">TODAY</view>
+      <view class="home-hero-card__title">{{hasCheckedIn ? '今天已经留下关系记录' : '先完成今天最重要的一步'}}</view>
+      <view class="home-hero-card__copy">{{hasCheckedIn ? '你已经把情绪、互动和节奏留了下来，接下来更适合看简报与建议。' : '先用一次打卡，把今天的关系和心情安放下来，再决定下一步。'}}</view>
     </view>
   </view>
 
