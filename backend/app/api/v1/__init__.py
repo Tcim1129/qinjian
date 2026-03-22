@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from importlib import import_module
 
 from .auth import router as auth_router
 from .pairs import router as pairs_router
@@ -12,8 +13,20 @@ from .longdistance import router as longdistance_router
 from .milestones import router as milestones_router
 from .community import router as community_router
 from .agent import router as agent_router
-from .insights import router as insights_router
-from .admin import router as admin_router
+
+
+def _load_optional_router(module_name: str):
+    try:
+        return import_module(f"{__package__}.{module_name}").router
+    except ModuleNotFoundError as exc:
+        expected_names = {module_name, f"{__package__}.{module_name}"}
+        if exc.name in expected_names:
+            return None
+        raise
+
+
+insights_router = _load_optional_router("insights")
+admin_router = _load_optional_router("admin")
 
 api_router = APIRouter()
 
@@ -29,5 +42,7 @@ api_router.include_router(longdistance_router)
 api_router.include_router(milestones_router)
 api_router.include_router(community_router)
 api_router.include_router(agent_router)
-api_router.include_router(insights_router)
-api_router.include_router(admin_router)
+if insights_router is not None:
+    api_router.include_router(insights_router)
+if admin_router is not None:
+    api_router.include_router(admin_router)
