@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime, timezone
 from enum import Enum as PyEnum
 
-from sqlalchemy import String, Text, ForeignKey, Date, Enum, Float, JSON
+from sqlalchemy import String, Text, ForeignKey, Date, Enum, Float, JSON, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -60,6 +60,16 @@ class CrisisAlertStatus(str, PyEnum):
     ESCALATED = "escalated"  # 已升级至专业帮助
 
 
+def enum_values(enum_cls: type[PyEnum]) -> Enum:
+    return Enum(
+        enum_cls,
+        values_callable=lambda enum_items: [item.value for item in enum_items],
+        validate_strings=True,
+        native_enum=True,
+        name=enum_cls.__name__.lower(),
+    )
+
+
 # ── 模型 ──
 
 
@@ -99,9 +109,9 @@ class Pair(Base):
     user_b_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
-    type: Mapped[PairType] = mapped_column(Enum(PairType))
+    type: Mapped[PairType] = mapped_column(enum_values(PairType))
     status: Mapped[PairStatus] = mapped_column(
-        Enum(PairStatus), default=PairStatus.PENDING
+        enum_values(PairStatus), default=PairStatus.PENDING
     )
     invite_code: Mapped[str] = mapped_column(
         String(6), unique=True, index=True
@@ -182,9 +192,9 @@ class Report(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
-    type: Mapped[ReportType] = mapped_column(Enum(ReportType))
+    type: Mapped[ReportType] = mapped_column(enum_values(ReportType))
     status: Mapped[ReportStatus] = mapped_column(
-        Enum(ReportStatus), default=ReportStatus.COMPLETED
+        enum_values(ReportStatus), default=ReportStatus.COMPLETED
     )
     content: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     health_score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -236,7 +246,9 @@ class RelationshipTree(Base):
     )
     pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pairs.id"), unique=True)
     growth_points: Mapped[int] = mapped_column(default=0)
-    level: Mapped[TreeLevel] = mapped_column(Enum(TreeLevel), default=TreeLevel.SEED)
+    level: Mapped[TreeLevel] = mapped_column(
+        enum_values(TreeLevel), default=TreeLevel.SEED
+    )
     milestones: Mapped[dict | None] = mapped_column(
         JSON, nullable=True, default=lambda: []
     )
@@ -266,7 +278,7 @@ class RelationshipTask(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     category: Mapped[str] = mapped_column(String(30), default="activity")
     status: Mapped[TaskStatus] = mapped_column(
-        Enum(TaskStatus), default=TaskStatus.PENDING
+        enum_values(TaskStatus), default=TaskStatus.PENDING
     )
     due_date: Mapped[date] = mapped_column(Date)
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
@@ -364,13 +376,13 @@ class CrisisAlert(Base):
         ForeignKey("reports.id"), nullable=True
     )  # 触发此预警的报告
     level: Mapped[CrisisLevel] = mapped_column(
-        Enum(CrisisLevel), default=CrisisLevel.NONE
+        enum_values(CrisisLevel), default=CrisisLevel.NONE
     )
     previous_level: Mapped[CrisisLevel | None] = mapped_column(
-        Enum(CrisisLevel), nullable=True
+        enum_values(CrisisLevel), nullable=True
     )  # 上一次的等级，用于趋势对比
     status: Mapped[CrisisAlertStatus] = mapped_column(
-        Enum(CrisisAlertStatus), default=CrisisAlertStatus.ACTIVE
+        enum_values(CrisisAlertStatus), default=CrisisAlertStatus.ACTIVE
     )
     # 干预方案（从 AI 报告中提取）
     intervention_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -452,3 +464,219 @@ class AgentChatMessage(Base):
 
     # 关系
     session: Mapped["AgentChatSession"] = relationship(back_populates="messages")
+
+
+# ── 关系智能层（Relationship Intelligence Layer） ──
+
+
+class RelationshipEvent(Base):
+    __tablename__ = "relationship_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True, index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(50), index=True)
+    entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source: Mapped[str] = mapped_column(String(30), default="system")
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(100), unique=True, nullable=True
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    pair: Mapped["Pair"] = relationship()
+    user: Mapped["User"] = relationship()
+
+
+class RelationshipProfileSnapshot(Base):
+    __tablename__ = "relationship_profile_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True, index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    window_days: Mapped[int] = mapped_column(index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, index=True)
+    metrics_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    risk_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    attachment_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    suggested_focus: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    generated_from_event_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    version: Mapped[str] = mapped_column(String(30), default="v1")
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    pair: Mapped["Pair"] = relationship()
+    user: Mapped["User"] = relationship()
+
+
+class InterventionPlan(Base):
+    __tablename__ = "intervention_plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True, index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    plan_type: Mapped[str] = mapped_column(String(50), index=True)
+    trigger_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("relationship_events.id"), nullable=True
+    )
+    trigger_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("relationship_profile_snapshots.id"), nullable=True
+    )
+    risk_level: Mapped[str] = mapped_column(String(20), default="none")
+    goal_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    owner_version: Mapped[str] = mapped_column(String(30), default="v1")
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    pair: Mapped["Pair"] = relationship()
+    user: Mapped["User"] = relationship()
+    trigger_event: Mapped["RelationshipEvent"] = relationship(
+        foreign_keys=[trigger_event_id]
+    )
+    trigger_snapshot: Mapped["RelationshipProfileSnapshot"] = relationship(
+        foreign_keys=[trigger_snapshot_id]
+    )
+
+
+class PlaybookRun(Base):
+    __tablename__ = "playbook_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("intervention_plans.id"), unique=True
+    )
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True, index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    plan_type: Mapped[str] = mapped_column(String(50), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    current_day: Mapped[int] = mapped_column(default=1)
+    active_branch: Mapped[str] = mapped_column(String(30), default="steady", index=True)
+    branch_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    branch_started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    transition_count: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    plan: Mapped["InterventionPlan"] = relationship()
+    pair: Mapped["Pair"] = relationship()
+    user: Mapped["User"] = relationship()
+    transitions: Mapped[list["PlaybookTransition"]] = relationship(
+        back_populates="run",
+        order_by="asc(PlaybookTransition.created_at)",
+    )
+
+
+class PlaybookTransition(Base):
+    __tablename__ = "playbook_transitions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("playbook_runs.id"), index=True
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("intervention_plans.id"), index=True
+    )
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id"), nullable=True, index=True
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    transition_type: Mapped[str] = mapped_column(String(40), default="initialized")
+    trigger_type: Mapped[str] = mapped_column(String(40), default="run_started")
+    trigger_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    from_day: Mapped[int | None] = mapped_column(nullable=True)
+    to_day: Mapped[int] = mapped_column(default=1)
+    from_branch: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    to_branch: Mapped[str] = mapped_column(String(30))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    run: Mapped["PlaybookRun"] = relationship(back_populates="transitions")
+    plan: Mapped["InterventionPlan"] = relationship()
+    pair: Mapped["Pair"] = relationship()
+    user: Mapped["User"] = relationship()
+
+
+class InterventionPolicyLibrary(Base):
+    __tablename__ = "intervention_policy_library"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    policy_id: Mapped[str] = mapped_column(
+        String(80), unique=True, index=True
+    )
+    plan_type: Mapped[str] = mapped_column(String(50), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    summary: Mapped[str] = mapped_column(Text)
+    branch: Mapped[str] = mapped_column(String(30), index=True)
+    branch_label: Mapped[str] = mapped_column(String(50))
+    intensity: Mapped[str] = mapped_column(String(20), index=True)
+    intensity_label: Mapped[str] = mapped_column(String(50))
+    copy_mode: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    copy_mode_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    when_to_use: Mapped[str] = mapped_column(Text)
+    success_marker: Mapped[str] = mapped_column(Text)
+    guardrail: Mapped[str] = mapped_column(Text)
+    version: Mapped[str] = mapped_column(String(20), default="v1")
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    source: Mapped[str] = mapped_column(String(20), default="seed")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )

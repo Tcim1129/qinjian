@@ -38,6 +38,18 @@ OPENAPI_TAGS = [
 ]
 
 
+UPLOAD_ROOT = os.path.abspath(settings.UPLOAD_DIR)
+
+
+def _ensure_upload_dirs() -> None:
+    os.makedirs(UPLOAD_ROOT, exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_ROOT, "images"), exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_ROOT, "voices"), exist_ok=True)
+
+
+_ensure_upload_dirs()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not settings.DEBUG and settings.SECRET_KEY == "change-me-in-production":
@@ -50,9 +62,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     # 创建上传目录
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    os.makedirs(os.path.join(settings.UPLOAD_DIR, "images"), exist_ok=True)
-    os.makedirs(os.path.join(settings.UPLOAD_DIR, "voices"), exist_ok=True)
+    _ensure_upload_dirs()
     try:
         yield
     finally:
@@ -77,7 +87,7 @@ app.add_middleware(
 )
 
 # 静态文件：上传的图片/语音
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 # API 路由
 app.include_router(api_router, prefix="/api/v1")
