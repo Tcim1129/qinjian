@@ -8,12 +8,16 @@ class Settings(BaseSettings):
     APP_NAME: str = "亲健 API"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
+    ADMIN_EMAILS: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7天
     PHONE_CODE_EXPIRE_MINUTES: int = 5
     PHONE_CODE_RESEND_COOLDOWN_SECONDS: int = 60
     PHONE_CODE_MAX_ATTEMPTS: int = 5
     PHONE_CODE_LENGTH: int = 6
     PHONE_CODE_DEBUG_RETURN: bool = False
+    PHONE_CODE_STORE: str = "memory"
+    REDIS_URL: str = ""
+    PHONE_CODE_REDIS_PREFIX: str = "qinjian:phone-code:"
 
     # 数据库
     DATABASE_URL: str = "postgresql+psycopg://qinjian:qinjian@localhost:5432/qinjian"

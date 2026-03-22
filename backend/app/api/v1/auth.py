@@ -24,12 +24,20 @@ from app.schemas import (
     PhoneLoginRequest,
 )
 from app.core.config import settings
+from app.services.phone_code_store import PhoneCodeEntry, get_phone_code_store
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 logger = logging.getLogger(__name__)
 
-_phone_code_cache: dict[str, dict] = {}
 _login_attempts: dict[str, dict] = {}
+
+
+def _resolve_phone_code_store():
+    try:
+        return get_phone_code_store()
+    except (RuntimeError, ValueError) as exc:
+        logger.exception("Phone code store misconfigured")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _normalize_phone(phone: str) -> str:
@@ -171,19 +179,20 @@ async def wechat_login(req: WechatLoginRequest, db: AsyncSession = Depends(get_d
 
 @router.post("/phone/send-code", response_model=dict)
 async def send_phone_code(req: PhoneSendCodeRequest):
-    """发送手机验证码（当前使用内存缓存 + 频控，便于后续接短信网关）"""
+    """发送手机验证码（支持内存或 Redis 存储，便于后续接短信网关）"""
     phone = _normalize_phone(req.phone)
+    store = _resolve_phone_code_store()
     now = datetime.now(timezone.utc)
-    existing = _phone_code_cache.get(phone)
+    existing = await store.get(phone)
     if (
         existing
-        and existing["requested_at"]
+        and existing.requested_at
         + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS)
         > now
     ):
         remaining = int(
             (
-                existing["requested_at"]
+                existing.requested_at
                 + timedelta(seconds=settings.PHONE_CODE_RESEND_COOLDOWN_SECONDS)
                 - now
             ).total_seconds()
@@ -193,12 +202,15 @@ async def send_phone_code(req: PhoneSendCodeRequest):
         )
 
     code = _generate_phone_code()
-    _phone_code_cache[phone] = {
-        "code_hash": hash_password(code),
-        "requested_at": now,
-        "expires_at": now + timedelta(minutes=settings.PHONE_CODE_EXPIRE_MINUTES),
-        "attempts_left": settings.PHONE_CODE_MAX_ATTEMPTS,
-    }
+    await store.set(
+        phone,
+        PhoneCodeEntry(
+            code_hash=hash_password(code),
+            requested_at=now,
+            expires_at=now + timedelta(minutes=settings.PHONE_CODE_EXPIRE_MINUTES),
+            attempts_left=settings.PHONE_CODE_MAX_ATTEMPTS,
+        ),
+    )
 
     if settings.DEBUG:
         logger.info("Phone verification code generated for %s: %s", phone, code)
@@ -213,26 +225,27 @@ async def send_phone_code(req: PhoneSendCodeRequest):
 async def phone_login(req: PhoneLoginRequest, db: AsyncSession = Depends(get_db)):
     """手机号验证码登录"""
     phone = _normalize_phone(req.phone)
-    entry = _phone_code_cache.get(phone)
+    store = _resolve_phone_code_store()
+    entry = await store.get(phone)
     if not entry:
         raise HTTPException(status_code=400, detail="验证码错误")
 
     now = datetime.now(timezone.utc)
-    if entry["expires_at"] <= now:
-        _phone_code_cache.pop(phone, None)
+    if entry.expires_at <= now:
+        await store.delete(phone)
         raise HTTPException(status_code=400, detail="验证码已过期，请重新获取")
 
-    if entry["attempts_left"] <= 0:
-        _phone_code_cache.pop(phone, None)
+    if entry.attempts_left <= 0:
+        await store.delete(phone)
         raise HTTPException(status_code=400, detail="验证码尝试次数过多，请重新获取")
 
-    if not verify_password(req.code.strip(), entry["code_hash"]):
-        entry["attempts_left"] -= 1
-        if entry["attempts_left"] <= 0:
-            _phone_code_cache.pop(phone, None)
+    if not verify_password(req.code.strip(), entry.code_hash):
+        updated = await store.decrement_attempts(phone)
+        if updated and updated.attempts_left <= 0:
+            await store.delete(phone)
         raise HTTPException(status_code=400, detail="验证码错误")
 
-    _phone_code_cache.pop(phone, None)
+    await store.delete(phone)
 
     result = await db.execute(select(User).where(User.phone == phone))
     user = result.scalar_one_or_none()
