@@ -11,6 +11,9 @@ from .tasks import router as tasks_router
 from .longdistance import router as longdistance_router
 from .milestones import router as milestones_router
 from .community import router as community_router
+from .agent import router as agent_router
+from .insights import router as insights_router
+from .admin import router as admin_router
 
 api_router = APIRouter()
 
@@ -25,3 +28,6 @@ api_router.include_router(tasks_router)
 api_router.include_router(longdistance_router)
 api_router.include_router(milestones_router)
 api_router.include_router(community_router)
+api_router.include_router(agent_router)
+api_router.include_router(insights_router)
+api_router.include_router(admin_router)

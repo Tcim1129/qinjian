@@ -113,6 +113,9 @@ coverage.xml
 # === 其他 ===
 docker-compose.override.yml
 .deploy/
+output/
+tmp/
+tmp_playwright/
 
 # === 部署脚本（可能包含硬编码密钥） ===
 deploy-server.sh
