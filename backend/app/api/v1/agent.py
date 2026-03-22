@@ -9,15 +9,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import get_current_user, validate_pair_access
-from app.models import User, Pair, AgentChatSession, AgentChatMessage
+from app.models import (
+    User,
+    Pair,
+    AgentChatSession,
+    AgentChatMessage,
+    RelationshipProfileSnapshot,
+    InterventionPlan,
+)
 from app.schemas import (
     AgentSessionResponse,
     AgentMessageResponse,
     AgentChatRequest,
     AgentChatResponse,
+    MessageSimulationRequest,
+    MessageSimulationResponse,
 )
 from app.ai import client
+from app.ai.message_simulator import simulate_message_preview
 from app.core.config import settings
+from app.services.relationship_intelligence import (
+    record_relationship_event,
+    refresh_profile_and_plan,
+    refresh_profile_snapshot,
+)
+from app.services.safety_summary import build_safety_status
 
 router = APIRouter(prefix="/agent", tags=["智能陪伴"])
 logger = logging.getLogger(__name__)
@@ -68,6 +84,24 @@ tools = [
         },
     }
 ]
+
+
+def _simulation_fallback_context(pair: Pair, user: User) -> dict:
+    is_user_a = str(pair.user_a_id) == str(user.id)
+    partner_name = (
+        pair.custom_partner_nickname_a if is_user_a else pair.custom_partner_nickname_b
+    ) or "对方"
+    return {
+        "pair_type": pair.type.value,
+        "partner_name": partner_name,
+        "attachment_summary": {
+            "attachment_a": pair.attachment_style_a or "unknown",
+            "attachment_b": pair.attachment_style_b or "unknown",
+            "is_long_distance": bool(pair.is_long_distance),
+        },
+        "risk_summary": {"current_level": "none", "trend": "unknown"},
+        "suggested_focus": [],
+    }
 
 
 @router.post("/sessions", response_model=AgentSessionResponse)
@@ -308,3 +342,106 @@ async def chat_with_agent(
         await db.rollback()
         logger.exception("agent chat failed")
         raise HTTPException(status_code=500, detail="AI 服务暂时不可用，请稍后再试")
+
+
+@router.post("/simulate-message", response_model=MessageSimulationResponse)
+async def simulate_message(
+    req: MessageSimulationRequest,
+    pair_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """在消息发出前做一轮关系语境下的风险预演。"""
+    if not req.draft.strip():
+        raise HTTPException(status_code=400, detail="请先输入准备发送的内容")
+
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
+
+    result = await db.execute(
+        select(RelationshipProfileSnapshot)
+        .where(
+            RelationshipProfileSnapshot.pair_id == pair.id,
+            RelationshipProfileSnapshot.user_id.is_(None),
+            RelationshipProfileSnapshot.window_days == 7,
+        )
+        .order_by(
+            RelationshipProfileSnapshot.snapshot_date.desc(),
+            RelationshipProfileSnapshot.created_at.desc(),
+        )
+        .limit(1)
+    )
+    snapshot = result.scalar_one_or_none()
+    if not snapshot:
+        snapshot = await refresh_profile_snapshot(db, pair_id=pair.id, window_days=7)
+
+    plan_result = await db.execute(
+        select(InterventionPlan)
+        .where(
+            InterventionPlan.pair_id == pair.id,
+            InterventionPlan.user_id.is_(None),
+            InterventionPlan.status == "active",
+        )
+        .order_by(InterventionPlan.created_at.desc())
+        .limit(1)
+    )
+    active_plan = plan_result.scalar_one_or_none()
+
+    context = _simulation_fallback_context(pair, user)
+    if snapshot:
+        context.update(
+            {
+                "metrics": snapshot.metrics_json or {},
+                "risk_summary": snapshot.risk_summary or {},
+                "attachment_summary": snapshot.attachment_summary or {},
+                "suggested_focus": (snapshot.suggested_focus or {}).get("items", []),
+            }
+        )
+    if active_plan:
+        context["active_plan"] = {
+            "plan_type": active_plan.plan_type,
+            "risk_level": active_plan.risk_level,
+            "goal_json": active_plan.goal_json or {},
+        }
+
+    simulation = await simulate_message_preview(req.draft, context)
+    safety_status = await build_safety_status(db, pair_id=pair.id)
+    simulation_risk = str(simulation.get("risk_level") or "moderate").strip().lower()
+    safety_handoff = safety_status.get("handoff_recommendation")
+    if simulation_risk in {"high", "severe"} and not safety_handoff:
+        safety_handoff = (
+            "如果这句话更像会继续升级局面，先不要发送，改为暂停、降温，"
+            "必要时改用更低刺激的沟通方式或转向人工支持。"
+        )
+
+    await record_relationship_event(
+        db,
+        event_type="message.simulated",
+        pair_id=pair.id,
+        user_id=user.id,
+        entity_type="message_simulation",
+        payload={
+            "draft": req.draft[:200],
+            "risk_level": simulation.get("risk_level"),
+            "conversation_goal": simulation.get("conversation_goal"),
+            "suggested_tone": simulation.get("suggested_tone"),
+            "safer_rewrite": (simulation.get("safer_rewrite") or req.draft)[:200],
+        },
+    )
+
+    await refresh_profile_and_plan(db, pair_id=pair.id)
+
+    return MessageSimulationResponse(
+        draft=req.draft,
+        partner_view=simulation.get("partner_view", ""),
+        likely_impact=simulation.get("likely_impact", ""),
+        risk_level=simulation.get("risk_level", "medium"),
+        risk_reason=simulation.get("risk_reason", ""),
+        safer_rewrite=simulation.get("safer_rewrite", req.draft),
+        suggested_tone=simulation.get("suggested_tone", ""),
+        conversation_goal=simulation.get("conversation_goal"),
+        do_list=simulation.get("do_list") or [],
+        avoid_list=simulation.get("avoid_list") or [],
+        evidence_summary=safety_status.get("evidence_summary") or [],
+        limitation_note=safety_status.get("limitation_note"),
+        safety_handoff=safety_handoff,
+    )
