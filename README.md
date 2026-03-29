@@ -1,165 +1,251 @@
-# 亲健 · 青年亲密关系健康管理平台
+# 亲健 - 青年亲密关系健康管理平台
 
-## 部署到 DigitalOcean（3分钟）
+## 技术架构
 
-### 前置条件
-- DigitalOcean Droplet（2C/4GB，学生有$200额度）
-- 域名已在 Cloudflare 托管
-- 硅基流动 API Key（[siliconflow.cn](https://siliconflow.cn) 注册获取）
+### 后端框架
+- FastAPI 0.135.1 + Uvicorn 0.30.0
+- SQLAlchemy 2.0 (异步ORM)
+- PostgreSQL / SQLite
+- Pydantic v2 数据验证
+- JWT认证
 
-### 步骤一：推送代码到 GitHub
+### AI服务配置
+| 功能 | 模型 | 服务商 |
+|------|------|--------|
+| 语音识别 | qwen3-asr-flash | 阿里云DashScope |
+| 实时语音 | qwen3-asr-flash-realtime-2026-02-10 | 阿里云DashScope |
+| 文本分析 | Pro/deepseek-ai/DeepSeek-V3.2 | 硅基流动 |
+| 多模态 | moonshot/kimi-k2.5 | 硅基流动 |
 
-在你的电脑上：
-```bash
-cd ~/Desktop/亲健
-git init
-git add .
-git commit -m "亲健 MVP v1"
+### 前端
+- HTML5 / CSS3 / JavaScript
+- 移动端优先响应式设计
+- 无框架原生实现
 
-# 在 GitHub 创建私有仓库后：
-git remote add origin git@github.com:你的用户名/qinjian.git
-git push -u origin main
+### 部署架构
+- Docker Compose容器化
+- Nginx反向代理
+- Cloudflare CDN加速
+
+## 目录结构
+
+```
+qinjian/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/           # API路由模块
+│   │   │   ├── auth.py       # 认证接口
+│   │   │   ├── pairs.py      # 配对接口
+│   │   │   ├── checkins.py   # 打卡接口
+│   │   │   ├── reports.py    # 报告接口
+│   │   │   ├── upload.py     # 文件上传
+│   │   │   ├── agent.py      # AI对话
+│   │   │   └── ws.py         # WebSocket
+│   │   ├── core/
+│   │   │   ├── config.py     # 配置管理
+│   │   │   ├── security.py   # 安全模块
+│   │   │   └── database.py   # 数据库连接
+│   │   ├── models/           # SQLAlchemy模型
+│   │   ├── schemas/          # Pydantic模型
+│   │   ├── services/         # 业务逻辑层
+│   │   └── ai/
+│   │       ├── asr.py        # 语音识别
+│   │       ├── reporter.py   # 报告生成
+│   │       └── __init__.py   # AI服务入口
+│   ├── alembic/              # 数据库迁移
+│   ├── tests/                # 测试用例
+│   └── requirements.txt      # Python依赖
+├── web/
+│   ├── index.html            # 主页面
+│   ├── js/
+│   │   ├── app.js            # 主逻辑
+│   │   └── api.js            # API调用
+│   └── css/
+│       └── style.css         # 样式
+├── docker-compose.yml        # 容器编排
+├── nginx.conf                # Nginx配置
+└── deploy.sh                 # 部署脚本
 ```
 
-### 步骤二：在服务器上部署
+## 核心模块说明
 
-SSH 登录你的 DO 服务器，然后执行：
-```bash
-# 克隆代码
-git clone https://github.com/你的用户名/qinjian.git
-cd qinjian
+### 1. 认证模块 (app/api/v1/auth.py)
+- 邮箱注册/登录
+- 手机号验证码登录
+- JWT Token生成与验证
+- 密码加密存储
 
-# 一键部署（自动安装Docker、配置环境变量、启动服务）
-sudo bash deploy.sh
-```
+### 2. 配对模块 (app/api/v1/pairs.py)
+- 创建关系配对
+- 生成邀请码
+- 配对绑定/解绑
+- 配对状态管理
 
-脚本会提示你输入 **硅基流动 API Key**，粘贴后回车即可。
+### 3. 打卡模块 (app/api/v1/checkins.py)
+- 每日打卡提交
+- 情绪标签记录
+- 互动频率统计
+- 后台情感分析
 
-### 步骤三：配置 Cloudflare
+### 4. 报告模块 (app/api/v1/reports.py)
+- 日报/周报生成
+- AI情感分析
+- 关系健康评分
+- 趋势分析
 
-1. 进入 Cloudflare Dashboard → 你的域名
-2. **DNS** → 添加记录：
-   - 类型：`A`
-   - 名称：`@`（或子域名如 `qinjian`）
-   - IPv4：你的 DO 服务器 IP
-   - 代理：**开启**（橙色云朵 ☁️）
-3. **SSL/TLS** → 加密模式选 **Flexible**
-4. 等待几分钟 DNS 生效
+### 5. 语音模块 (app/ai/asr.py)
+- 语音文件上传转写
+- 实时语音流识别
+- 支持DashScope和讯飞两种Provider
 
-### 完成！🎉
+### 6. AI服务 (app/ai/__init__.py)
+- chat_completion(): 文本对话
+- analyze_sentiment(): 情感分析
+- transcribe_audio(): 语音转文字
 
-- 访问 `https://你的域名` 即可进入亲健 Web 关系健康工作台
-- API 文档在 `https://你的域名/api/health`
-
----
+### 7. 智能对话 (app/api/v1/agent.py)
+- AI伴侣对话
+- 情绪引导
+- 打卡信息提取
 
 ## 本地开发
 
-### 后端
+### 环境要求
+- Python 3.11+
+- PostgreSQL 15+ (可选,默认SQLite)
+
+### 后端启动
 ```bash
 cd backend
 python -m venv venv
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
 pip install -r requirements.txt
-cp .env.example .env   # 编辑填入你的 API Key
+cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 前端
+### 前端启动
 ```bash
 cd web
-# 用浏览器直接打开 index.html
-# 或 python -m http.server 3000
+python -m http.server 3000
+# 或直接用浏览器打开 index.html
 ```
 
----
+## 配置说明
 
-## 技术栈
-
-当前 Web 登录页已支持两种认证方式：
-
-- 邮箱注册 / 登录
-- 手机号验证码登录（未注册手机号首次登录时自动创建账号）
-
-| 层 | 技术 |
-|---|------|
-| 前端 | HTML / CSS / JS（移动端优先 Web 工作台） |
-| 后端 | Python FastAPI + PostgreSQL |
-| AI | 硅基流动 API（DeepSeek-V3 + Kimi K2.5 多模态） |
-| 部署 | Docker Compose + Nginx + Cloudflare |
-
-## 常用运维命令
-
+### 必需环境变量
 ```bash
-# 查看所有服务状态
+# 安全配置
+SECRET_KEY=your-secret-key-min-32-chars
+
+# 数据库
+DATABASE_URL=postgresql+psycopg://user:pass@host:5432/qinjian
+
+# 前端域名
+FRONTEND_ORIGIN=https://your-domain.com
+
+# AI服务
+AI_API_KEY=your-api-key
+AI_BASE_URL=https://api.siliconflow.cn/v1
+
+# 语音识别
+QWEN_ASR_API_KEY=your-dashscope-key
+ASR_PROVIDER=qwen3
+```
+
+### 模型配置
+```bash
+# 语音模型
+QWEN_ASR_FILE_MODEL=qwen3-asr-flash
+QWEN_ASR_REALTIME_MODEL=qwen3-asr-flash-realtime-2026-02-10
+
+# 文本模型
+AI_TEXT_MODEL=Pro/deepseek-ai/DeepSeek-V3.2
+AI_MULTIMODAL_MODEL=moonshot/kimi-k2.5
+```
+
+## 部署说明
+
+### 服务器路径
+项目统一部署到: /root/qinjian
+
+### 部署方式
+```bash
+# 方式一: 使用部署脚本
+python deploy_current_workspace.py --host <ip> --username root --password <pwd>
+
+# 方式二: 手动部署
+ssh root@<server>
+cd /root/qinjian
+git pull
+docker compose up -d --build
+```
+
+### 服务管理
+```bash
+cd /root/qinjian
+
+# 查看状态
 docker compose ps
 
-# 查看实时日志
-docker compose logs -f
-
-# 只看后端日志
+# 查看日志
 docker compose logs -f backend
 
-# 重启
+# 重启服务
 docker compose restart
 
-# 更新代码后重新部署
-git pull && docker compose up -d --build
-
-# 停止所有服务
+# 停止服务
 docker compose down
-
-# 完全清理（包括数据库！慎用）
-docker compose down -v
 ```
 
-## 2026-03 Upgrade Notes
+## API文档
 
-The project has moved beyond a simple "frontend + backend + API" stack and now includes a relationship intelligence layer with:
+启动后访问:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- 健康检查: http://localhost:8000/api/health
 
-- Relationship event stream and timeline replay
-- Relationship profile snapshots and intervention scorecards
-- Adaptive task strategy, policy registry, and policy scheduling
-- Seven-day playbook runtime with branch transitions
-- Message simulation, narrative alignment, and repair protocols
-- A dedicated timeline workspace with filters, branch overlay, and evidence drawer
+## 测试
 
-Recent UX upgrades:
+```bash
+cd backend
 
-- The report page now acts like a relationship cockpit
-- A dedicated timeline page can replay recent relationship events in order
-- Clicking a timeline node opens an evidence drawer that explains why the system recorded it and what it affects next
+# 运行所有测试
+pytest tests/ -v
 
-Recommended next steps:
+# 运行情感分析测试
+pytest tests/test_sentiment.py -v
 
-1. Add browser-level visual verification for the timeline page
-2. Build a richer evidence detail panel backed by dedicated per-event API data
-3. Build a stronger UI system layer for the report cockpit, timeline, and admin workbench
+# 运行安全测试
+pytest tests/test_auth_security.py -v
+```
 
-Latest timeline upgrade in this workspace:
+## 运维命令
 
-- `GET /api/v1/insights/timeline/events/{event_id}` now returns per-event metrics, evidence cards, and current-context hints
-- The timeline evidence drawer now loads detail asynchronously after node selection instead of relying only on local payload fallback
-- The right-side drawer has been restyled into a richer evidence panel with loading state, context block, and source cards
+```bash
+# 查看服务状态
+docker compose ps
 
-Latest strategy upgrade in this workspace:
+# 实时日志
+docker compose logs -f backend
 
-- `GET /api/v1/insights/plans/policy-audit` now exposes an event-backed decision audit snapshot
-- The audit ties together current policy, recommended next policy, selection rule, schedule rule, recent decision trail, and supporting events
-- The report page and timeline sidebar now surface the audit so policy changes are easier to explain during demos and reviews
-- `web/index.html` script/style version params were refreshed so browsers pick up the new JS/CSS instead of stale cached assets
+# 重启后端
+docker compose restart backend
 
-Latest admin rollout upgrade in this workspace:
+# 更新部署
+git pull && docker compose up -d --build
 
-- `GET /api/v1/admin/policies/{policy_id}/audit` now returns an event-backed release history for each strategy version
-- `POST /api/v1/admin/policies/{policy_id}/rollback` can restore a selected historical snapshot while appending a new rollback event
-- The policy workbench now has an audit view with field-level change cards, operator traceability, and one-click rollback
+# 进入容器
+docker compose exec backend bash
 
-Latest competition-oriented upgrade in this workspace:
+# 数据库迁移
+docker compose exec backend alembic upgrade head
+```
 
-- `?demo=1` now opens a read-only Demo Mode that can walk judges through the fixed story path: report cockpit -> timeline -> message simulation -> narrative alignment -> repair protocol -> policy audit
-- `GET /api/v1/insights/safety/status` now exposes a unified trust and safety summary with `risk_level`, evidence bullets, limitation notes, and handoff guidance
-- `POST /api/v1/insights/assessments/weekly`, `GET /api/v1/insights/assessments/latest`, and `GET /api/v1/insights/assessments/trend` now turn the old frontend-only health test into an event-backed weekly assessment loop
-- Report, timeline, and profile now share a more consistent “Hero / Evidence / Action” cockpit structure, making the project easier to demo as a coherent product instead of a collection of AI features
-- Message simulation, repair protocol, and report surfaces now all expose the same trust-boundary explanation fields: evidence summary, limitation note, and safety handoff
+## 版本信息
+
+- 版本: 2026.03
+- Python: 3.11+
+- FastAPI: 0.135.1
+- 最后更新: 2026-03-29

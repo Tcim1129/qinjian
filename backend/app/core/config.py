@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     QWEN_ASR_API_KEY: str = ""
     QWEN_ASR_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_ASR_FILE_MODEL: str = "qwen3-asr-flash"
-    QWEN_ASR_REALTIME_MODEL: str = "qwen3-asr-realtime"
+    QWEN_ASR_REALTIME_MODEL: str = "qwen3-asr-flash-realtime-2026-02-10"
     XFYUN_RTASR_APP_ID: str = ""
     XFYUN_RTASR_API_KEY: str = ""
     XFYUN_RTASR_API_SECRET: str = ""
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # 多模态模型（图片+文本分析）
     AI_MULTIMODAL_MODEL: str = "moonshot/kimi-k2.5"
     # 文本模型（情感分析，性价比高）
-    AI_TEXT_MODEL: str = "deepseek-ai/DeepSeek-V3"
+    AI_TEXT_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3.2"
 
     # 文件上传
     UPLOAD_DIR: str = "./uploads"
