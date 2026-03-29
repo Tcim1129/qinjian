@@ -22,17 +22,20 @@ from app.schemas import (
     AgentMessageResponse,
     AgentChatRequest,
     AgentChatResponse,
+    AgentRealtimeTicketResponse,
     MessageSimulationRequest,
     MessageSimulationResponse,
 )
-from app.ai import client
+from app.ai import create_chat_completion
 from app.ai.message_simulator import simulate_message_preview
 from app.core.config import settings
+from app.core.security import create_realtime_ws_ticket
 from app.services.relationship_intelligence import (
     record_relationship_event,
     refresh_profile_and_plan,
     refresh_profile_snapshot,
 )
+from app.services.privacy_audit import privacy_audit_scope
 from app.services.safety_summary import build_safety_status
 
 router = APIRouter(prefix="/agent", tags=["智能陪伴"])
@@ -84,6 +87,17 @@ tools = [
         },
     }
 ]
+
+
+@router.post("/asr/ws-ticket", response_model=AgentRealtimeTicketResponse)
+async def create_agent_asr_ws_ticket(
+    user: User = Depends(get_current_user),
+):
+    """签发短时实时 ASR WebSocket 票据，避免把长期 JWT 放进 URL。"""
+    return AgentRealtimeTicketResponse(
+        ticket=create_realtime_ws_ticket(str(user.id)),
+        expires_in=max(30, settings.REALTIME_ASR_TICKET_EXPIRE_SECONDS),
+    )
 
 
 def _simulation_fallback_context(pair: Pair, user: User) -> dict:
@@ -224,13 +238,20 @@ async def chat_with_agent(
     current_tools = tools if not session.has_extracted_checkin else None
 
     try:
-        response = await client.chat.completions.create(
-            model=settings.AI_TEXT_MODEL,
-            messages=messages_for_llm,
-            temperature=0.7,
-            tools=current_tools,
-            tool_choice="auto" if current_tools else "none",
-        )
+        with privacy_audit_scope(
+            db=db,
+            user_id=user.id,
+            pair_id=session.pair_id,
+            scope="pair" if session.pair_id else "solo",
+            run_type="agent_chat",
+        ):
+            response = await create_chat_completion(
+                model=settings.AI_TEXT_MODEL,
+                messages=messages_for_llm,
+                temperature=0.7,
+                tools=current_tools,
+                tool_choice="auto" if current_tools else "none",
+            )
         ai_msg = response.choices[0].message
 
         # 4. 判断 AI 是否决意调用工具（提取打卡）
@@ -311,11 +332,18 @@ async def chat_with_agent(
                     }
                 )
 
-                second_response = await client.chat.completions.create(
-                    model=settings.AI_TEXT_MODEL,
-                    messages=messages_for_llm,
-                    temperature=0.7,
-                )
+                with privacy_audit_scope(
+                    db=db,
+                    user_id=user.id,
+                    pair_id=session.pair_id,
+                    scope="pair" if session.pair_id else "solo",
+                    run_type="agent_chat_followup",
+                ):
+                    second_response = await create_chat_completion(
+                        model=settings.AI_TEXT_MODEL,
+                        messages=messages_for_llm,
+                        temperature=0.7,
+                    )
                 final_content = second_response.choices[0].message.content
 
                 final_assistant_msg = AgentChatMessage(
@@ -403,7 +431,14 @@ async def simulate_message(
             "goal_json": active_plan.goal_json or {},
         }
 
-    simulation = await simulate_message_preview(req.draft, context)
+    with privacy_audit_scope(
+        db=db,
+        user_id=user.id,
+        pair_id=pair.id,
+        scope="pair",
+        run_type="message_simulation",
+    ):
+        simulation = await simulate_message_preview(req.draft, context)
     safety_status = await build_safety_status(db, pair_id=pair.id)
     simulation_risk = str(simulation.get("risk_level") or "moderate").strip().lower()
     safety_handoff = safety_status.get("handoff_recommendation")

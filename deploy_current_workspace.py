@@ -5,7 +5,10 @@ import fnmatch
 import os
 import posixpath
 import secrets
+import shlex
 import sys
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 
@@ -15,7 +18,8 @@ import paramiko
 HOST = os.getenv("QJ_REMOTE_HOST", "")
 USERNAME = os.getenv("QJ_REMOTE_USER", "root")
 PASSWORD = os.getenv("QJ_REMOTE_PASSWORD", "")
-REMOTE_ROOT = "/opt/qinjian"
+FRONTEND_ORIGIN = os.getenv("QJ_FRONTEND_ORIGIN", os.getenv("FRONTEND_ORIGIN", "")).rstrip("/")
+REMOTE_ROOT = "/root/qinjian"
 LOCAL_ROOT = Path(__file__).resolve().parent
 
 INCLUDE_PATHS = [
@@ -29,14 +33,30 @@ IGNORE_PATTERNS = [
     "__pycache__",
     "*.pyc",
     "*.pyo",
+    "*.db",
+    "*.log",
+    "*.bak",
+    "*.orig",
+    "*.tmp",
     ".DS_Store",
+    ".env.local",
     ".env",
     "venv",
     ".venv",
     "node_modules",
     "site-packages",
     "uploads",
+    "backend.log",
+    "nul",
 ]
+
+KEEP_REMOTE_PATHS = {
+    ".env",
+    "backend",
+    "web",
+    "docker-compose.yml",
+    "nginx.conf",
+}
 
 
 def should_ignore(path: Path) -> bool:
@@ -69,9 +89,22 @@ def iter_upload_items() -> list[tuple[Path, str]]:
 
 def connect_client(host: str, username: str, password: str) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(host, username=username, password=password, timeout=30)
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    client.connect(
+        host,
+        username=username,
+        password=password,
+        look_for_keys=False,
+        allow_agent=False,
+        timeout=30,
+    )
     return client
+
+
+def resolve_frontend_origin(host: str) -> str:
+    origin = FRONTEND_ORIGIN or f"http://{host}"
+    return origin.rstrip("/")
 
 
 def run_remote(
@@ -126,7 +159,7 @@ def create_remote_env_if_missing(sftp: paramiko.SFTPClient, remote_root: str) ->
     db_password = secrets.token_hex(16)
     ai_api_key = os.getenv("AI_API_KEY", os.getenv("SILICONFLOW_API_KEY", ""))
     ai_base_url = os.getenv("AI_BASE_URL", "https://api.siliconflow.cn/v1")
-    frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost")
+    frontend_origin = resolve_frontend_origin("localhost")
     env_content = (
         "\n".join(
             [
@@ -151,24 +184,110 @@ def create_remote_env_if_missing(sftp: paramiko.SFTPClient, remote_root: str) ->
     return True
 
 
-def upload_files(
-    sftp: paramiko.SFTPClient, items: list[tuple[Path, str]], remote_root: str
-) -> None:
-    total = len(items)
-    for index, (local_path, remote_relative) in enumerate(items, start=1):
-        remote_path = posixpath.join(remote_root, remote_relative)
-        ensure_remote_dirs(sftp, posixpath.dirname(remote_path))
-        sftp.put(str(local_path), remote_path)
-        print(f"[{index}/{total}] 已上传 {remote_relative}")
+def prune_remote_root(client: paramiko.SSHClient, remote_root: str) -> tuple[int, str, str]:
+    command = f"""python3 - <<'PY'
+from pathlib import Path
+import shutil
+
+root = Path({remote_root!r})
+keep = {sorted(KEEP_REMOTE_PATHS)!r}
+removed = []
+
+for child in list(root.iterdir()):
+    if child.name in keep:
+        continue
+    removed.append(child.name)
+    if child.is_dir() and not child.is_symlink():
+        shutil.rmtree(child)
+    else:
+        child.unlink()
+
+print('removed=' + ','.join(sorted(removed)) if removed else 'removed=')
+PY"""
+    return run_remote(client, command, timeout=300)
 
 
-def wait_for_http(host: str, path: str, timeout_seconds: int = 120) -> tuple[bool, str]:
+def prune_remote_artifacts(client: paramiko.SSHClient, remote_root: str) -> tuple[int, str, str]:
+    command = f"""python3 - <<'PY'
+from pathlib import Path
+import shutil
+
+root = Path({remote_root!r})
+removed = []
+
+for pattern in ('*.bak', '*.orig', '*.tmp', '*.pyc'):
+    for child in root.rglob(pattern):
+        if child.is_file() or child.is_symlink():
+            removed.append(str(child.relative_to(root)))
+            child.unlink()
+
+for child in root.rglob('__pycache__'):
+    if child.is_dir():
+        removed.append(str(child.relative_to(root)))
+        shutil.rmtree(child)
+
+print('removed=' + ','.join(sorted(set(removed))) if removed else 'removed=')
+PY"""
+    return run_remote(client, command, timeout=300)
+
+
+def create_upload_bundle() -> Path:
+    bundle_file = tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz")
+    bundle_file.close()
+    bundle_path = Path(bundle_file.name)
+
+    with tarfile.open(bundle_path, "w:gz") as archive:
+        for local_path, remote_relative in iter_upload_items():
+            archive.add(local_path, arcname=remote_relative, recursive=False)
+
+    return bundle_path
+
+
+def upload_bundle(
+    sftp: paramiko.SFTPClient, bundle_path: Path, remote_root: str
+) -> str:
+    ensure_remote_dirs(sftp, remote_root)
+    remote_bundle = posixpath.join(remote_root, ".deploy_bundle.tar.gz")
+    sftp.put(str(bundle_path), remote_bundle)
+    return remote_bundle
+
+
+def sync_bundle_on_remote(
+    client: paramiko.SSHClient, remote_root: str, remote_bundle: str
+) -> tuple[int, str, str]:
+    remote_root = remote_root.rstrip("/")
+    remote_parent = posixpath.dirname(remote_root) or "/"
+    remote_name = posixpath.basename(remote_root)
+    remote_temp = posixpath.join(remote_parent, f".{remote_name}-deploy")
+    command = (
+        f"mkdir -p {shlex.quote(remote_root)} && "
+        f"rm -rf {shlex.quote(remote_temp)} && "
+        f"mkdir -p {shlex.quote(remote_temp)} && "
+        f"tar -xzf {shlex.quote(remote_bundle)} -C {shlex.quote(remote_temp)} && "
+        f"rm -rf {shlex.quote(posixpath.join(remote_root, 'backend'))} "
+        f"{shlex.quote(posixpath.join(remote_root, 'web'))} && "
+        f"rm -f {shlex.quote(posixpath.join(remote_root, 'docker-compose.yml'))} "
+        f"{shlex.quote(posixpath.join(remote_root, 'nginx.conf'))} && "
+        f"cp -a {shlex.quote(posixpath.join(remote_temp, 'backend'))} "
+        f"{shlex.quote(posixpath.join(remote_root, 'backend'))} && "
+        f"cp -a {shlex.quote(posixpath.join(remote_temp, 'web'))} "
+        f"{shlex.quote(posixpath.join(remote_root, 'web'))} && "
+        f"cp -a {shlex.quote(posixpath.join(remote_temp, 'docker-compose.yml'))} "
+        f"{shlex.quote(posixpath.join(remote_root, 'docker-compose.yml'))} && "
+        f"cp -a {shlex.quote(posixpath.join(remote_temp, 'nginx.conf'))} "
+        f"{shlex.quote(posixpath.join(remote_root, 'nginx.conf'))} && "
+        f"rm -rf {shlex.quote(remote_temp)} {shlex.quote(remote_bundle)}"
+    )
+    return run_remote(client, command, timeout=1200)
+
+
+def wait_for_http(base_url: str, path: str, timeout_seconds: int = 120) -> tuple[bool, str]:
     import urllib.error
     import urllib.request
 
     deadline = time.time() + timeout_seconds
     last_error = ""
-    url = f"http://{host}:8080{path}"
+    url = f"{base_url.rstrip('/')}{path}"
 
     while time.time() < deadline:
         try:
@@ -189,6 +308,8 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
         )
         return 2
 
+    frontend_origin = resolve_frontend_origin(host)
+
     print(f"连接服务器 {host} ...")
     client = connect_client(host, username, password)
     sftp = client.open_sftp()
@@ -197,37 +318,51 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
         print("检查服务器部署目录和环境文件...")
         ensure_remote_dirs(sftp, remote_root)
         env_created = create_remote_env_if_missing(sftp, remote_root)
+        env_code, env_output, env_error = set_remote_env_value(
+            client, remote_root, "FRONTEND_ORIGIN", frontend_origin
+        )
+        if env_output.strip():
+            print(env_output.strip())
+        if env_code != 0:
+            print(env_error.strip() or "更新 FRONTEND_ORIGIN 失败")
+            return 3
         if env_created:
             print("服务器缺少 .env，已自动生成基础生产配置。")
             print("当前未检测到本机 SILICONFLOW_API_KEY，AI 功能可能暂不可用。")
+        print(f"已设置前端来源: {frontend_origin}")
 
-        print("停止现有服务...")
-        down_command = (
-            f"cd {remote_root} && "
-            "if docker compose version >/dev/null 2>&1; then docker compose down; "
-            "elif command -v docker-compose >/dev/null 2>&1; then docker-compose down; "
-            'else echo "Docker Compose 不存在" >&2; exit 1; fi'
+        print("打包当前工作区并上传...")
+        bundle_path = create_upload_bundle()
+        try:
+            remote_bundle = upload_bundle(sftp, bundle_path, remote_root)
+        finally:
+            bundle_path.unlink(missing_ok=True)
+
+        print("同步远端代码目录...")
+        exit_code, output, error = sync_bundle_on_remote(
+            client, remote_root, remote_bundle
         )
-        exit_code, output, error = run_remote(client, down_command, timeout=1200)
         if output.strip():
             print(output.strip())
-        if exit_code != 0 and "no configuration file provided" not in error.lower():
-            print(error.strip() or "停止服务失败")
-            return 3
-
-        print("清理远端旧代码目录...")
-        cleanup_command = (
-            f"rm -rf {remote_root}/backend {remote_root}/web "
-            f"{remote_root}/docker-compose.yml {remote_root}/nginx.conf"
-        )
-        exit_code, output, error = run_remote(client, cleanup_command)
         if exit_code != 0:
-            print(error.strip() or "清理远端目录失败")
+            print(error.strip() or "同步远端目录失败")
             return 4
 
-        print("准备上传当前工作区运行文件...")
-        items = iter_upload_items()
-        upload_files(sftp, items, remote_root)
+        print("清理远端旧内容...")
+        exit_code, output, error = prune_remote_root(client, remote_root)
+        if output.strip():
+            print(output.strip())
+        if exit_code != 0:
+            print(error.strip() or "清理远端旧内容失败")
+            return 4
+
+        print("清理远端临时/备份文件...")
+        exit_code, output, error = prune_remote_artifacts(client, remote_root)
+        if output.strip():
+            print(output.strip())
+        if exit_code != 0:
+            print(error.strip() or "清理远端临时/备份文件失败")
+            return 4
 
         print("启动最新容器...")
         up_command = (
@@ -264,6 +399,30 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
         if exit_code != 0:
             print(error.strip() or "启动容器失败")
             return 5
+
+        print("强制刷新 Web 静态容器...")
+        web_refresh_command = (
+            f"cd {remote_root} && "
+            "if docker compose version >/dev/null 2>&1; then docker compose up -d --force-recreate web; "
+            "else docker-compose up -d --force-recreate web; fi"
+        )
+        exit_code, output, error = run_remote(client, web_refresh_command, timeout=1200)
+        if output.strip():
+            print(output.strip())
+        if exit_code != 0:
+            print(error.strip() or "重建 Web 容器失败")
+            return 8
+
+        print("验证 Web 静态文件...")
+        verify_web_command = (
+            f"cd {remote_root} && "
+            "if docker compose version >/dev/null 2>&1; then docker compose exec -T web test -f /usr/share/nginx/html/index.html; "
+            "else docker-compose exec -T web test -f /usr/share/nginx/html/index.html; fi"
+        )
+        exit_code, _, error = run_remote(client, verify_web_command, timeout=120)
+        if exit_code != 0:
+            print(error.strip() or "Web 容器内未找到 index.html")
+            return 9
 
         print("检查容器状态...")
         ps_command = (
@@ -303,7 +462,7 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
             print(logs_output.strip() or logs_error.strip())
 
         print("等待线上健康检查...")
-        ok, result = wait_for_http(host, "/api/health")
+        ok, result = wait_for_http(frontend_origin, "/api/health")
         if not ok:
             print("健康检查失败:")
             print(result)
@@ -311,8 +470,8 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
 
         print("健康检查成功:")
         print(result)
-        print(f"Web: http://{host}:8080")
-        print(f"API: http://{host}:8080/api/health")
+        print(f"Web: {frontend_origin}")
+        print(f"API: {frontend_origin}/api/health")
         return 0
     finally:
         sftp.close()

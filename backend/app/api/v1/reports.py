@@ -4,7 +4,7 @@ import uuid
 import logging
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy import select, func
+from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, async_session
@@ -17,6 +17,12 @@ from app.ai.reporter import (
     generate_monthly_report,
     generate_solo_report,
 )
+from app.services.relationship_intelligence import (
+    record_relationship_event,
+    refresh_profile_and_plan,
+)
+from app.services.safety_summary import build_safety_status
+from app.services.privacy_audit import privacy_audit_scope
 
 router = APIRouter(prefix="/reports", tags=["报告"])
 logger = logging.getLogger(__name__)
@@ -53,20 +59,46 @@ async def _process_daily_report(
 
         try:
             if pair_type == "solo":
-                report_content = await generate_solo_report(
-                    pair_type="solo", content=content_a
-                )
+                with privacy_audit_scope(
+                    db=db,
+                    user_id=report.user_id,
+                    scope="solo",
+                    run_type="solo_daily_report",
+                ):
+                    report_content = await generate_solo_report(
+                        pair_type="solo", content=content_a
+                    )
                 report.content = report_content
                 report.health_score = report_content.get("health_score")
                 report.status = ReportStatus.COMPLETED
+                await record_relationship_event(
+                    db,
+                    event_type="report.completed",
+                    user_id=report.user_id,
+                    entity_type="report",
+                    entity_id=report.id,
+                    payload={
+                        "report_type": report.type.value,
+                        "health_score": report.health_score,
+                        "crisis_level": (report.content or {}).get("crisis_level"),
+                    },
+                    idempotency_key=f"report:{report.id}:completed",
+                )
+                await refresh_profile_and_plan(db, user_id=report.user_id)
                 await db.commit()
                 return
 
-            report_content = await generate_daily_report(
-                pair_type=pair_type,
-                content_a=content_a,
-                content_b=content_b,
-            )
+            with privacy_audit_scope(
+                db=db,
+                pair_id=report.pair_id,
+                scope="pair",
+                run_type="daily_report",
+            ):
+                report_content = await generate_daily_report(
+                    pair_type=pair_type,
+                    content_a=content_a,
+                    content_b=content_b,
+                )
             report.content = report_content
             report.health_score = report_content.get("health_score")
             report.status = ReportStatus.COMPLETED
@@ -74,6 +106,21 @@ async def _process_daily_report(
             pair = await db.get(Pair, pair_id)
             if pair:
                 await process_crisis_from_report(db, report, pair)
+
+            await record_relationship_event(
+                db,
+                event_type="report.completed",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={
+                    "report_type": report.type.value,
+                    "health_score": report.health_score,
+                    "crisis_level": (report.content or {}).get("crisis_level"),
+                },
+                idempotency_key=f"report:{report.id}:completed",
+            )
+            await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
@@ -94,7 +141,13 @@ async def _process_weekly_report(
             return
 
         try:
-            report_content = await generate_weekly_report(pair_type, daily_reports)
+            with privacy_audit_scope(
+                db=db,
+                pair_id=report.pair_id,
+                scope="pair",
+                run_type="weekly_report",
+            ):
+                report_content = await generate_weekly_report(pair_type, daily_reports)
             report.content = report_content
             report.health_score = report_content.get("overall_health_score")
             report.status = ReportStatus.COMPLETED
@@ -102,6 +155,21 @@ async def _process_weekly_report(
             pair = await db.get(Pair, pair_id)
             if pair:
                 await process_crisis_from_report(db, report, pair)
+
+            await record_relationship_event(
+                db,
+                event_type="report.completed",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={
+                    "report_type": report.type.value,
+                    "health_score": report.health_score,
+                    "crisis_level": (report.content or {}).get("crisis_level"),
+                },
+                idempotency_key=f"report:{report.id}:completed",
+            )
+            await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
@@ -122,7 +190,13 @@ async def _process_monthly_report(
             return
 
         try:
-            report_content = await generate_monthly_report(pair_type, weekly_reports)
+            with privacy_audit_scope(
+                db=db,
+                pair_id=report.pair_id,
+                scope="pair",
+                run_type="monthly_report",
+            ):
+                report_content = await generate_monthly_report(pair_type, weekly_reports)
             report.content = report_content
             report.health_score = report_content.get("overall_health_score")
             report.status = ReportStatus.COMPLETED
@@ -130,6 +204,21 @@ async def _process_monthly_report(
             pair = await db.get(Pair, pair_id)
             if pair:
                 await process_crisis_from_report(db, report, pair)
+
+            await record_relationship_event(
+                db,
+                event_type="report.completed",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={
+                    "report_type": report.type.value,
+                    "health_score": report.health_score,
+                    "crisis_level": (report.content or {}).get("crisis_level"),
+                },
+                idempotency_key=f"report:{report.id}:completed",
+            )
+            await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
@@ -163,13 +252,16 @@ async def trigger_daily_report(
             raise HTTPException(status_code=400, detail="今天尚未打卡")
 
         result = await db.execute(
-            select(Report).where(
+            select(Report)
+            .where(
                 Report.user_id == user.id,
                 Report.report_date == today,
                 Report.type == ReportType.SOLO,
             )
+            .order_by(desc(Report.created_at))
+            .limit(1)
         )
-        existing = result.scalar_one_or_none()
+        existing = result.scalars().first()
         if existing:
             return existing
 
@@ -204,13 +296,16 @@ async def trigger_daily_report(
     if len(checkins) < 2:
         raise HTTPException(status_code=400, detail="需要双方都完成打卡后才能生成报告")
     result = await db.execute(
-        select(Report).where(
+        select(Report)
+        .where(
             Report.pair_id == pair_id,
             Report.report_date == today,
             Report.type == ReportType.DAILY,
         )
+        .order_by(desc(Report.created_at))
+        .limit(1)
     )
-    existing = result.scalar_one_or_none()
+    existing = result.scalars().first()
     if existing:
         if existing.status == ReportStatus.FAILED:
             await db.delete(existing)
@@ -265,13 +360,16 @@ async def trigger_weekly_report(
     pair = await _get_authorized_pair(db, pair_id, user, require_active=True)
 
     result = await db.execute(
-        select(Report).where(
+        select(Report)
+        .where(
             Report.pair_id == pair_id,
             Report.report_date >= week_ago,
             Report.type == ReportType.WEEKLY,
         )
+        .order_by(desc(Report.created_at))
+        .limit(1)
     )
-    existing = result.scalar_one_or_none()
+    existing = result.scalars().first()
     if existing:
         if existing.status == ReportStatus.FAILED:
             await db.delete(existing)
@@ -341,9 +439,10 @@ async def trigger_monthly_report(
             Report.report_date >= month_ago,
             Report.type == ReportType.MONTHLY,
         )
-        .order_by(Report.report_date)
+        .order_by(desc(Report.created_at))
+        .limit(1)
     )
-    existing = result.scalar_one_or_none()
+    existing = result.scalars().first()
     if existing:
         if existing.status == ReportStatus.FAILED:
             await db.delete(existing)
@@ -410,7 +509,31 @@ async def get_latest_report(
     query = query.order_by(Report.report_date.desc()).limit(1)
 
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    report = result.scalar_one_or_none()
+    if not report:
+        return None
+
+    safety = await build_safety_status(
+        db,
+        pair_id=report.pair_id,
+        user_id=report.user_id,
+    )
+    return ReportResponse(
+        id=report.id,
+        pair_id=report.pair_id,
+        user_id=report.user_id,
+        type=report.type.value if hasattr(report.type, "value") else str(report.type),
+        status=report.status.value
+        if hasattr(report.status, "value")
+        else str(report.status),
+        content=report.content,
+        health_score=report.health_score,
+        evidence_summary=safety.get("evidence_summary") or [],
+        limitation_note=safety.get("limitation_note"),
+        safety_handoff=safety.get("handoff_recommendation"),
+        report_date=report.report_date,
+        created_at=report.created_at,
+    )
 
 
 @router.get("/history", response_model=list[ReportResponse])

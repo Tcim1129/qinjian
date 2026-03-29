@@ -3,35 +3,41 @@
 import uuid
 from datetime import date, datetime
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.upload_access import to_client_upload_url
+
+
+class RequestModel(BaseModel):
+    model_config = {"extra": "forbid"}
 
 
 # ── 认证 ──
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(RequestModel):
     email: str
     nickname: str
     password: str
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(RequestModel):
     email: str
     password: str
 
 
-class WechatLoginRequest(BaseModel):
+class WechatLoginRequest(RequestModel):
     code: str
     nickname: str | None = None
     avatar_url: str | None = None
     unionid: str | None = None
 
 
-class PhoneSendCodeRequest(BaseModel):
+class PhoneSendCodeRequest(RequestModel):
     phone: str
 
 
-class PhoneLoginRequest(BaseModel):
+class PhoneLoginRequest(RequestModel):
     phone: str
     code: str
 
@@ -50,20 +56,30 @@ class UserResponse(BaseModel):
     phone: str | None = None
     nickname: str
     avatar_url: str | None = None
-    wechat_openid: str | None = None
-    wechat_unionid: str | None = None
     wechat_avatar: str | None = None
+    wechat_bound: bool = False
+    ai_assist_enabled: bool = True
+    privacy_mode: Literal["cloud", "local_first"] = "cloud"
+    preferred_entry: Literal["daily", "emergency", "reflection"] = "daily"
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
+    @field_validator("avatar_url", "wechat_avatar", mode="before")
+    @classmethod
+    def _resolve_user_upload_url(cls, value: str | None):
+        return to_client_upload_url(value)
 
-class UserUpdateRequest(BaseModel):
+
+class UserUpdateRequest(RequestModel):
     nickname: str | None = None
     avatar_url: str | None = None
+    ai_assist_enabled: bool | None = None
+    privacy_mode: Literal["cloud", "local_first"] | None = None
+    preferred_entry: Literal["daily", "emergency", "reflection"] | None = None
 
 
-class PasswordChangeRequest(BaseModel):
+class PasswordChangeRequest(RequestModel):
     current_password: str
     new_password: str
 
@@ -71,12 +87,12 @@ class PasswordChangeRequest(BaseModel):
 # ── 配对 ──
 
 
-class PairCreateRequest(BaseModel):
+class PairCreateRequest(RequestModel):
     type: str  # couple / spouse / bestfriend
 
 
-class PairJoinRequest(BaseModel):
-    invite_code: str
+class PairJoinRequest(RequestModel):
+    invite_code: str = Field(min_length=6, max_length=12)
 
 
 class PairResponse(BaseModel):
@@ -98,6 +114,11 @@ class PairResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("partner_avatar", mode="before")
+    @classmethod
+    def _resolve_partner_avatar(cls, value: str | None):
+        return to_client_upload_url(value)
+
 
 class PairSummaryResponse(BaseModel):
     is_paired: bool
@@ -106,14 +127,28 @@ class PairSummaryResponse(BaseModel):
     pending_count: int = 0
 
 
-class UpdatePartnerNicknameRequest(BaseModel):
-    custom_nickname: str
+class UpdatePartnerNicknameRequest(RequestModel):
+    custom_nickname: str = Field(min_length=1, max_length=50)
 
 
 # ── 打卡 ──
 
 
-class CheckinRequest(BaseModel):
+class ClientContextPayload(RequestModel):
+    source_type: Literal["text", "image", "voice", "mixed"]
+    intent: Literal["daily", "emergency", "crisis", "reflection"]
+    risk_level: Literal["none", "watch", "high"] = "none"
+    risk_hits: list[str] = Field(default_factory=list)
+    pii_summary: dict | None = None
+    privacy_mode: Literal["cloud", "local_first"] = "cloud"
+    upload_policy: Literal["full", "redacted_only", "local_only"] = "full"
+    redacted_text: str | None = None
+    client_tags: list[str] = Field(default_factory=list)
+    device_meta: dict | None = None
+    ai_assist_enabled: bool | None = None
+
+
+class CheckinRequest(RequestModel):
     pair_id: uuid.UUID | None = None
     content: str
     mood_tags: list[str] | None = None
@@ -125,6 +160,7 @@ class CheckinRequest(BaseModel):
     interaction_initiative: str | None = None  # "me"/"partner"/"equal"
     deep_conversation: bool | None = None
     task_completed: bool | None = None
+    client_context: ClientContextPayload | None = None
 
 
 class CheckinResponse(BaseModel):
@@ -141,10 +177,23 @@ class CheckinResponse(BaseModel):
     interaction_initiative: str | None = None
     deep_conversation: bool | None = None
     task_completed: bool | None = None
+    client_context: ClientContextPayload | None = None
+    analysis_source: Literal[
+        "rule", "client_precheck", "server_ai", "rule+server_ai"
+    ] | None = None
+    client_precheck: ClientContextPayload | None = None
+    server_analysis: dict | None = None
+    final_guidance: str | None = None
+    safety_gate: bool = False
     checkin_date: date
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("image_url", "voice_url", mode="before")
+    @classmethod
+    def _resolve_checkin_upload_url(cls, value: str | None):
+        return to_client_upload_url(value)
 
 
 # ── 报告 ──
@@ -167,7 +216,7 @@ class ReportResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class WeeklyAssessmentAnswerItem(BaseModel):
+class WeeklyAssessmentAnswerItem(RequestModel):
     dim: str
     score: int = Field(ge=0, le=100)
 
@@ -190,7 +239,7 @@ class WeeklyAssessmentPointResponse(BaseModel):
     change_summary: str | None = None
 
 
-class WeeklyAssessmentSubmitRequest(BaseModel):
+class WeeklyAssessmentSubmitRequest(RequestModel):
     answers: list[WeeklyAssessmentAnswerItem] = Field(default_factory=list)
     submitted_at: datetime | None = None
 
@@ -224,6 +273,66 @@ class SafetyStatusResponse(BaseModel):
     handoff_recommendation: str | None = None
 
 
+class PrivacyDeleteRequestResponse(BaseModel):
+    id: uuid.UUID
+    status: str
+    requested_at: datetime
+    scheduled_for: datetime
+    cancelled_at: datetime | None = None
+    executed_at: datetime | None = None
+    reviewed_by: uuid.UUID | None = None
+    review_note: str | None = None
+    can_cancel: bool = False
+
+
+class PrivacyStatusResponse(BaseModel):
+    sandbox_enabled: bool
+    log_masking: bool
+    llm_redaction: bool
+    private_upload_access: bool
+    audit_enabled: bool
+    audit_retention_days: int
+    upload_ticket_ttl_minutes: int
+    delete_grace_days: int
+    latest_delete_request: PrivacyDeleteRequestResponse | None = None
+
+
+class PrivacyAuditEntryResponse(BaseModel):
+    event_id: uuid.UUID
+    event_type: str
+    event_label: str
+    summary: str = ""
+    occurred_at: datetime
+    meta: dict | None = None
+
+
+class PrivacyDeleteReviewRequest(RequestModel):
+    note: str | None = Field(default=None, max_length=200)
+
+
+class AdminPrivacyAuditEntryResponse(PrivacyAuditEntryResponse):
+    user_id: uuid.UUID | None = None
+    pair_id: uuid.UUID | None = None
+    entity_type: str | None = None
+    entity_id: str | None = None
+    source: str | None = None
+
+
+class AdminPrivacyDeleteRequestResponse(PrivacyDeleteRequestResponse):
+    user_id: uuid.UUID
+    user_email: str | None = None
+    user_nickname: str | None = None
+
+
+class PrivacyRetentionSweepResponse(BaseModel):
+    dry_run: bool
+    expired_privacy_events: int
+    stale_temp_files: int
+    due_requests: int | None = None
+    executed: int | None = None
+    manual_review: int | None = None
+
+
 # ── 关系任务 ──
 
 
@@ -242,7 +351,7 @@ class TaskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TaskFeedbackRequest(BaseModel):
+class TaskFeedbackRequest(RequestModel):
     usefulness_score: int = Field(ge=1, le=5)
     friction_score: int = Field(ge=1, le=5)
     note: str | None = Field(default=None, max_length=200)
@@ -327,19 +436,19 @@ class CrisisHistoryResponse(BaseModel):
     history: list[CrisisHistoryItemSchema]
 
 
-class CrisisAcknowledgeRequest(BaseModel):
+class CrisisAcknowledgeRequest(RequestModel):
     """用户确认已查看预警"""
 
     pass
 
 
-class CrisisResolveRequest(BaseModel):
+class CrisisResolveRequest(RequestModel):
     """用户标记预警已解决"""
 
     note: str | None = None
 
 
-class CrisisEscalateRequest(BaseModel):
+class CrisisEscalateRequest(RequestModel):
     """升级至专业帮助"""
 
     reason: str | None = None
@@ -434,14 +543,17 @@ class RelationshipTimelineCurrentContextResponse(BaseModel):
 
 class RelationshipTimelineEventDetailResponse(BaseModel):
     event: RelationshipTimelineEventResponse
+    event_summary: str | None = None
     metrics: list[RelationshipTimelineMetricResponse] = Field(default_factory=list)
     evidence_cards: list[RelationshipTimelineEvidenceCardResponse] = Field(
         default_factory=list
     )
+    impact_modules: list[str] = Field(default_factory=list)
+    recommended_next_action: str | None = None
     current_context: RelationshipTimelineCurrentContextResponse | None = None
 
 
-class MessageSimulationRequest(BaseModel):
+class MessageSimulationRequest(RequestModel):
     draft: str
 
 
@@ -703,7 +815,7 @@ class PolicyLibraryItemResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PolicyLibraryCreateRequest(BaseModel):
+class PolicyLibraryCreateRequest(RequestModel):
     policy_id: str
     plan_type: str
     title: str
@@ -722,7 +834,7 @@ class PolicyLibraryCreateRequest(BaseModel):
     metadata_json: dict | None = None
 
 
-class PolicyLibraryUpdateRequest(BaseModel):
+class PolicyLibraryUpdateRequest(RequestModel):
     plan_type: str | None = None
     title: str | None = None
     summary: str | None = None
@@ -740,15 +852,15 @@ class PolicyLibraryUpdateRequest(BaseModel):
     metadata_json: dict | None = None
 
 
-class PolicyLibraryToggleRequest(BaseModel):
+class PolicyLibraryToggleRequest(RequestModel):
     status: Literal["active", "inactive"] | None = None
 
 
-class PolicyLibraryReorderRequest(BaseModel):
+class PolicyLibraryReorderRequest(RequestModel):
     policy_ids: list[str] = Field(default_factory=list)
 
 
-class PolicyLibraryRollbackRequest(BaseModel):
+class PolicyLibraryRollbackRequest(RequestModel):
     target_event_id: uuid.UUID
     note: str | None = None
 
@@ -998,10 +1110,15 @@ class AgentMessageResponse(BaseModel):
     payload: dict | None = None
 
 
-class AgentChatRequest(BaseModel):
+class AgentChatRequest(RequestModel):
     content: str
 
 
 class AgentChatResponse(BaseModel):
     reply: str
     action: str
+
+
+class AgentRealtimeTicketResponse(BaseModel):
+    ticket: str
+    expires_in: int

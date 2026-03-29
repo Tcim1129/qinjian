@@ -1,57 +1,40 @@
-# 亲健 - 国内镜像源配置
-# 解决中国大陆访问慢的问题
+# 国内镜像说明
 
-## 1. Docker 镜像源配置
+如果服务器位于中国大陆，拉取基础镜像和 Python 依赖时建议使用镜像源。
 
-创建或编辑 `/etc/docker/daemon.json`：
+## Docker
+
+`/etc/docker/daemon.json` 参考：
 
 ```json
 {
   "registry-mirrors": [
     "https://docker.mirrors.sjtug.sjtu.edu.cn",
     "https://docker.mirrors.ustc.edu.cn",
-    "https://hub-mirror.c.163.com",
-    "https://mirror.baidubce.com"
+    "https://hub-mirror.c.163.com"
   ]
 }
 ```
 
-然后重启 Docker：
+重启 Docker：
+
 ```bash
 sudo systemctl restart docker
 ```
 
-## 2. 项目中直接使用的国内镜像
+## 项目当前策略
 
-已在以下文件中替换：
+- `backend/Dockerfile` 已优先使用国内 apt / pip 源
+- `docker-compose.yml` 默认还是官方镜像名
+- 如果某个镜像源异常，部署脚本会回退到官方 `postgres:16-alpine` 和 `nginx:alpine`
 
-### docker-compose.yml
-- `postgres:16-alpine` → 通过 Docker 镜像源加速
-- `nginx:alpine` → 通过 Docker 镜像源加速
-
-### backend/Dockerfile
-- `python:3.12-slim` → 使用阿里云镜像
-- `apt-get` → 使用阿里云 Debian 源
-- `pip` → 使用清华 PyPI 镜像
-
-## 3. 手动部署时配置
-
-如果在服务器上手动部署，先执行：
+## 远端操作
 
 ```bash
-# 配置 Docker 镜像源
-sudo tee /etc/docker/daemon.json << 'EOF'
-{
-  "registry-mirrors": [
-    "https://docker.mirrors.sjtug.sjtu.edu.cn",
-    "https://docker.mirrors.ustc.edu.cn"
-  ]
-}
-EOF
-
-sudo systemctl restart docker
-
-# 然后正常部署
 cd /root/qinjian
-docker compose up -d
+docker compose up -d --build
 ```
+
+## 版权
+
+版权所有：心晴合伙人项目组 黄菁蓝、吴秀秀、叶笙尧、钟昊桐、郑梓滢

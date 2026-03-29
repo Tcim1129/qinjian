@@ -16,6 +16,8 @@ from app.models import (
     CrisisAlert,
     CrisisAlertStatus,
     CrisisLevel,
+    RelationshipProfileSnapshot,
+    InterventionPlan,
 )
 from app.schemas import (
     CrisisStatusResponse,
@@ -25,7 +27,13 @@ from app.schemas import (
     CrisisResolveRequest,
     CrisisEscalateRequest,
     InterventionSchema,
+    RepairProtocolResponse,
 )
+from app.services.relationship_intelligence import (
+    record_relationship_event,
+    refresh_profile_snapshot,
+)
+from app.services.repair_protocol import build_repair_protocol
 
 router = APIRouter(prefix="/crisis", tags=["危机预警"])
 
@@ -207,6 +215,69 @@ async def get_crisis_alerts(
 
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.get("/protocol/{pair_id}", response_model=RepairProtocolResponse)
+async def get_repair_protocol(
+    pair_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前关系状态下的冲突修复协议。"""
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
+
+    status_payload = await get_crisis_status(pair_id=pair_id, user=user, db=db)
+    crisis_level = status_payload.crisis_level or "none"
+
+    snapshot_result = await db.execute(
+        select(RelationshipProfileSnapshot)
+        .where(
+            RelationshipProfileSnapshot.pair_id == pair.id,
+            RelationshipProfileSnapshot.user_id.is_(None),
+            RelationshipProfileSnapshot.window_days == 7,
+        )
+        .order_by(
+            RelationshipProfileSnapshot.snapshot_date.desc(),
+            RelationshipProfileSnapshot.created_at.desc(),
+        )
+        .limit(1)
+    )
+    snapshot = snapshot_result.scalar_one_or_none()
+    if not snapshot:
+        snapshot = await refresh_profile_snapshot(db, pair_id=pair.id, window_days=7)
+
+    plan_result = await db.execute(
+        select(InterventionPlan)
+        .where(
+            InterventionPlan.pair_id == pair.id,
+            InterventionPlan.user_id.is_(None),
+            InterventionPlan.status == "active",
+        )
+        .order_by(InterventionPlan.created_at.desc())
+        .limit(1)
+    )
+    active_plan = plan_result.scalar_one_or_none()
+
+    protocol = build_repair_protocol(
+        pair=pair,
+        crisis_level=crisis_level,
+        active_plan=active_plan,
+        snapshot=snapshot,
+    )
+
+    await record_relationship_event(
+        db,
+        event_type="repair_protocol.requested",
+        pair_id=pair.id,
+        user_id=user.id,
+        entity_type="repair_protocol",
+        payload={
+            "level": crisis_level,
+            "protocol_type": protocol.get("protocol_type"),
+        },
+    )
+
+    return RepairProtocolResponse(**protocol)
 
 
 # ── 预警操作 ──

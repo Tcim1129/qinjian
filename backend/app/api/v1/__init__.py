@@ -13,6 +13,7 @@ from .longdistance import router as longdistance_router
 from .milestones import router as milestones_router
 from .community import router as community_router
 from .agent import router as agent_router
+from .ws import router as ws_router
 
 
 def _load_optional_router(module_name: str):
@@ -27,6 +28,7 @@ def _load_optional_router(module_name: str):
 
 insights_router = _load_optional_router("insights")
 admin_router = _load_optional_router("admin")
+privacy_router = _load_optional_router("privacy")
 
 api_router = APIRouter()
 
@@ -42,7 +44,10 @@ api_router.include_router(longdistance_router)
 api_router.include_router(milestones_router)
 api_router.include_router(community_router)
 api_router.include_router(agent_router)
+api_router.include_router(ws_router)
 if insights_router is not None:
     api_router.include_router(insights_router)
 if admin_router is not None:
     api_router.include_router(admin_router)
+if privacy_router is not None:
+    api_router.include_router(privacy_router)

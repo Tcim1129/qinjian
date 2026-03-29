@@ -25,11 +25,26 @@ from app.schemas import (
 )
 from app.core.config import settings
 from app.services.phone_code_store import PhoneCodeEntry, get_phone_code_store
+from app.services.product_prefs import normalize_product_prefs
+from app.services.privacy_sandbox import sanitize_log_value
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 logger = logging.getLogger(__name__)
 
 _login_attempts: dict[str, dict] = {}
+MIN_PASSWORD_LENGTH = 8
+INVALID_LOGIN_DETAIL = "邮箱或密码错误"
+DUMMY_PASSWORD_HASH = hash_password("qinjian.invalid-login-placeholder")
+
+
+def _serialize_user_response(user: User) -> UserResponse:
+    payload = UserResponse.model_validate(user).model_dump()
+    prefs = normalize_product_prefs(getattr(user, "product_prefs", None))
+    payload["wechat_bound"] = bool(user.wechat_openid)
+    payload["ai_assist_enabled"] = bool(prefs["ai_assist_enabled"])
+    payload["privacy_mode"] = str(prefs["privacy_mode"])
+    payload["preferred_entry"] = str(prefs["preferred_entry"])
+    return UserResponse(**payload)
 
 
 def _resolve_phone_code_store():
@@ -37,7 +52,18 @@ def _resolve_phone_code_store():
         return get_phone_code_store()
     except (RuntimeError, ValueError) as exc:
         logger.exception("Phone code store misconfigured")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="验证码服务暂时不可用，请稍后再试",
+        ) from exc
+
+
+def _normalize_email(email: str) -> str:
+    return str(email or "").strip().lower()
+
+
+def _raise_invalid_login_error() -> None:
+    raise HTTPException(status_code=401, detail=INVALID_LOGIN_DETAIL)
 
 
 def _normalize_phone(phone: str) -> str:
@@ -55,13 +81,20 @@ def _generate_phone_code() -> str:
 @router.post("/register", response_model=dict)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """注册新用户"""
+    normalized_email = _normalize_email(req.email)
+    if len(req.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"密码至少需要 {MIN_PASSWORD_LENGTH} 位",
+        )
+
     # 检查邮箱是否已存在
-    result = await db.execute(select(User).where(User.email == req.email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="该邮箱已注册")
 
     user = User(
-        email=req.email,
+        email=normalized_email,
         nickname=req.nickname,
         password_hash=hash_password(req.password),
     )
@@ -72,15 +105,18 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
+        "user": _serialize_user_response(user),
     }
 
 
 @router.post("/login", response_model=dict)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """用户登录"""
+    normalized_email = _normalize_email(req.email)
     now = datetime.now(timezone.utc)
-    attempt = _login_attempts.setdefault(req.email, {"count": 0, "locked_until": None})
+    attempt = _login_attempts.setdefault(
+        normalized_email, {"count": 0, "locked_until": None}
+    )
     if attempt["locked_until"] and now < attempt["locked_until"]:
         remaining = int((attempt["locked_until"] - now).total_seconds() / 60)
         raise HTTPException(
@@ -91,22 +127,23 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         attempt["count"] = 0
         attempt["locked_until"] = None
 
-    result = await db.execute(select(User).where(User.email == req.email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="该邮箱尚未注册，请先注册")
+        verify_password(req.password, DUMMY_PASSWORD_HASH)
+        _raise_invalid_login_error()
     if not verify_password(req.password, user.password_hash):
         attempt["count"] += 1
         if attempt["count"] >= 5:
             attempt["locked_until"] = now + timedelta(minutes=15)
-        raise HTTPException(status_code=401, detail="密码错误，请重新输入")
+        _raise_invalid_login_error()
 
-    _login_attempts.pop(req.email, None)
+    _login_attempts.pop(normalized_email, None)
     token = create_access_token(str(user.id))
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
+        "user": _serialize_user_response(user),
     }
 
 
@@ -173,7 +210,7 @@ async def wechat_login(req: WechatLoginRequest, db: AsyncSession = Depends(get_d
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
+        "user": _serialize_user_response(user),
     }
 
 
@@ -213,7 +250,10 @@ async def send_phone_code(req: PhoneSendCodeRequest):
     )
 
     if settings.DEBUG:
-        logger.info("Phone verification code generated for %s: %s", phone, code)
+        logger.info(
+            "Phone verification code generated for %s",
+            sanitize_log_value(phone, kind="phone"),
+        )
 
     payload = {"message": "验证码已发送"}
     if settings.DEBUG and settings.PHONE_CODE_DEBUG_RETURN:
@@ -263,14 +303,14 @@ async def phone_login(req: PhoneLoginRequest, db: AsyncSession = Depends(get_db)
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
+        "user": _serialize_user_response(user),
     }
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(user: User = Depends(get_current_user)):
     """获取当前登录用户信息"""
-    return user
+    return _serialize_user_response(user)
 
 
 @router.put("/me", response_model=UserResponse)
@@ -291,8 +331,22 @@ async def update_me(
     if req.avatar_url is not None:
         user.avatar_url = req.avatar_url.strip() or None
 
+    if (
+        req.ai_assist_enabled is not None
+        or req.privacy_mode is not None
+        or req.preferred_entry is not None
+    ):
+        prefs = normalize_product_prefs(user.product_prefs)
+        if req.ai_assist_enabled is not None:
+            prefs["ai_assist_enabled"] = req.ai_assist_enabled
+        if req.privacy_mode is not None:
+            prefs["privacy_mode"] = req.privacy_mode
+        if req.preferred_entry is not None:
+            prefs["preferred_entry"] = req.preferred_entry
+        user.product_prefs = prefs
+
     await db.flush()
-    return user
+    return _serialize_user_response(user)
 
 
 @router.post("/change-password", response_model=dict)
@@ -305,8 +359,11 @@ async def change_password(
     if not verify_password(req.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="当前密码错误")
 
-    if len(req.new_password) < 6:
-        raise HTTPException(status_code=400, detail="新密码至少需要6位")
+    if len(req.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"新密码至少需要 {MIN_PASSWORD_LENGTH} 位",
+        )
 
     if req.new_password == req.current_password:
         raise HTTPException(status_code=400, detail="新密码不能与当前密码相同")

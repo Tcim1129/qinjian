@@ -31,13 +31,27 @@ def http_json(
         body = json.dumps(payload).encode("utf-8")
 
     req = request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with request.urlopen(req, timeout=30) as resp:
-            content = resp.read().decode("utf-8")
-            return json.loads(content) if content else None
-    except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"{method} {url} -> HTTP {exc.code}: {detail}") from exc
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with request.urlopen(req, timeout=30) as resp:
+                content = resp.read().decode("utf-8")
+                return json.loads(content) if content else None
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(
+                f"{method} {url} -> HTTP {exc.code}: {detail}"
+            ) from exc
+        except error.URLError as exc:
+            last_error = exc
+        except TimeoutError as exc:
+            last_error = exc
+
+        if attempt < 2:
+            time.sleep(2 * (attempt + 1))
+
+    assert last_error is not None
+    raise RuntimeError(f"{method} {url} -> 网络请求失败: {last_error}") from last_error
 
 
 def poll_daily_report(
@@ -56,6 +70,24 @@ def poll_daily_report(
             return latest
         time.sleep(3)
     raise RuntimeError(f"日报轮询超时，最后状态: {latest}")
+
+
+def poll_today_status(
+    token: str, pair_id: str, timeout_seconds: int = 30
+) -> dict[str, Any]:
+    deadline = time.time() + timeout_seconds
+    latest = None
+    while time.time() < deadline:
+        latest = http_json(
+            "GET",
+            "/checkins/today",
+            token=token,
+            query={"pair_id": pair_id},
+        )
+        if latest and latest.get("my_done") and latest.get("both_done"):
+            return latest
+        time.sleep(1)
+    raise RuntimeError(f"今日打卡状态轮询超时，最后状态: {latest}")
 
 
 def main() -> int:
@@ -135,9 +167,7 @@ def main() -> int:
     http_json("POST", "/checkins/", token=token_a, payload=checkin_payload_a)
     http_json("POST", "/checkins/", token=token_b, payload=checkin_payload_b)
 
-    today_status = http_json(
-        "GET", "/checkins/today", token=token_a, query={"pair_id": pair_id}
-    )
+    today_status = poll_today_status(token_a, pair_id)
     if not today_status.get("both_done"):
         raise RuntimeError(f"双方打卡后状态异常: {today_status}")
 

@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: qinjian
       POSTGRES_USER: qinjian
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-qinjian_dev_123}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     # 生产环境不暴露PG端口到外网
     expose:
       - "5432"
@@ -25,8 +25,9 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgresql+psycopg://qinjian:${DB_PASSWORD:-qinjian_dev_123}@db:5432/qinjian
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      DATABASE_URL: postgresql+psycopg://qinjian:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/qinjian
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_BASE_URL: ${AI_BASE_URL:-}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
@@ -44,7 +45,7 @@ services:
     image: ${NGINX_IMAGE:-nginx:alpine}
     restart: always
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       - ./web:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

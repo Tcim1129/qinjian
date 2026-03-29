@@ -3,7 +3,7 @@
 import json
 import base64
 import os
-from app.ai import chat_completion, client
+from app.ai import chat_completion, create_chat_completion
 from app.core.config import settings
 
 
@@ -282,7 +282,7 @@ async def analyze_image(image_path: str, context: str = "") -> dict:
             },
         ]
 
-        response = await client.chat.completions.create(
+        response = await create_chat_completion(
             model=settings.AI_MULTIMODAL_MODEL,
             messages=messages,
             temperature=0.4,

@@ -1,8 +1,14 @@
 .env
+.env.local
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.db
+*.log
+backend.log
+qinjian.db
+nul
 .pytest_cache/
 .venv/
 venv/

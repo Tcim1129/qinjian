@@ -1,0 +1,684 @@
+/* ---------------------------------------------------
+   QINJIAN PREMIUM UI OVERRIDE v3
+   --------------------------------------------------- */
+:root {
+  --primary: #5B8DEE !important;
+  --secondary: #FF9A76 !important;
+  --accent: #7CE7C9 !important;
+  --rose: var(--primary) !important;
+  --rose-deep: #3D6EDB !important;
+  --rose-soft: rgba(91, 141, 238, 0.1) !important;
+  --coral: var(--secondary) !important;
+  --coral-deep: #E87A52 !important;
+  --coral-soft: rgba(255, 154, 118, 0.1) !important;
+  --peach: var(--accent) !important;
+  --peach-soft: rgba(124, 231, 201, 0.1) !important;
+  --ink: #1a1a2e !important;
+  --ink-soft: #4a4a6a !important;
+  --ink-faint: #8a8aa5 !important;
+  --line: rgba(91, 141, 238, 0.1) !important;
+  --line-strong: rgba(91, 141, 238, 0.2) !important;
+  --radius-xl: 32px !important;
+  --radius-lg: 24px !important;
+  --radius-md: 16px !important;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif !important;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif !important;
+}
+
+/* ====== 1. BODY & BACKGROUND ====== */
+body, .app-frame {
+  background: #F5F6FA !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+body[data-page="auth"] .topbar,
+body[data-page="auth"] .tab-bar {
+  display: none !important;
+}
+
+body[data-page="auth"] .site-shell {
+  grid-template-columns: 1fr !important;
+  gap: 0 !important;
+  padding: 16px !important;
+}
+
+body[data-page="auth"] .brand-pane {
+  display: none !important;
+}
+
+body[data-page="auth"] .app-frame {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+body[data-page="auth"] .app-frame::before {
+  display: none !important;
+}
+
+body[data-page="auth"] .app-canvas {
+  padding: 0 0 64px !important;
+}
+
+body[data-page="auth"] .page-hero {
+  padding: 0 0 18px !important;
+}
+
+.backdrop-orb { display: none !important; }
+.app-frame::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(91, 141, 238, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% -10%, rgba(255, 154, 118, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(124, 231, 201, 0.06) 0%, transparent 50%) !important;
+  pointer-events: none;
+  z-index: 0;
+}
+.site-shell, .app-canvas { position: relative; z-index: 1; }
+
+/* ====== 2. TOPBAR — Full Width Rounded Card ====== */
+.topbar {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-radius: 20px !important;
+  margin: 12px 16px 16px !important;
+  padding: 12px 20px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+.topbar-copy { margin: 0 !important; }
+.topbar-brandline {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.topbar-brandline__logo {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  object-fit: cover !important;
+  filter: none !important;
+}
+#topbar-title {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+  margin: 0 !important;
+}
+.topbar-subtitle, #topbar-caption { display: none !important; }
+
+/* ====== 3. BRAND SIDE PANE (desktop) — Minimal ====== */
+.brand-pane {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 20px 24px !important;
+}
+.brand-lockup {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+.brand-poster, .brand-poster * { display: none !important; }
+.brand-mark { border-radius: 14px !important; filter: none !important; }
+
+/* ====== 4. SOFT GLASS CARDS ====== */
+.panel,
+.hero-card,
+.support-card,
+.content-card,
+.expert-card,
+.pricing-card,
+.drawer,
+.challenge-item,
+.brand-card,
+.brand-quote {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04) !important;
+  padding: 20px !important;
+  border-radius: 20px !important;
+  margin-bottom: 12px !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+}
+.panel:hover, .hero-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 32px rgba(91, 141, 238, 0.10) !important;
+}
+.layout-grid { gap: 12px !important; }
+
+/* ====== 5. TYPOGRAPHY ====== */
+h1 { font-size: clamp(22px, 5vw, 30px) !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
+h2 { font-size: clamp(18px, 4vw, 24px) !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
+h3 { font-size: clamp(16px, 3.5vw, 22px) !important; font-weight: 700 !important; letter-spacing: -0.02em !important; }
+h4 { font-size: clamp(14px, 3vw, 18px) !important; font-weight: 600 !important; letter-spacing: -0.01em !important; }
+.eyebrow, .panel__eyebrow {
+  color: var(--primary) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  font-size: 12px !important;
+  text-transform: uppercase !important;
+}
+
+/* ====== 6. AUTH FORM ====== */
+.auth-panel--form {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  border-radius: 28px !important;
+  padding: 32px 28px !important;
+}
+
+/* ====== 7. INPUTS ====== */
+.input, .textarea, select.input {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border: 1.5px solid rgba(0, 0, 0, 0.06) !important;
+  border-radius: 14px !important;
+  padding: 14px 18px !important;
+  box-shadow: none !important;
+  transition: all 0.25s ease !important;
+  font-size: 15px !important;
+}
+.input:focus, .textarea:focus {
+  background: #fff !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(91, 141, 238, 0.12) !important;
+}
+select.input { appearance: auto !important; }
+
+/* ====== 8. BUTTONS ====== */
+.button, .pill-button {
+  border-radius: 999px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  white-space: nowrap !important;
+}
+.button--primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 6px 20px rgba(91, 141, 238, 0.25) !important;
+}
+.button--primary:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 10px 28px rgba(91, 141, 238, 0.35) !important;
+}
+.button--secondary, .button--ghost {
+  background: rgba(91, 141, 238, 0.08) !important;
+  color: var(--primary) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ====== 9. TAB BAR ====== */
+.tab-bar {
+  background: rgba(255, 255, 255, 0.90) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-radius: 100px !important;
+  bottom: 20px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: auto !important;
+  max-width: 95vw !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10) !important;
+  display: flex !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  overflow-x: auto !important;
+  scrollbar-width: none;
+  padding: 6px 12px !important;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-item {
+  color: var(--ink-soft) !important;
+  border-radius: 100px !important;
+  padding: 8px 16px !important;
+  gap: 4px !important;
+  font-size: 13px !important;
+  transition: all 0.25s ease;
+  white-space: nowrap !important;
+}
+.tab-item.tab-item--active {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(91, 141, 238, 0.25) !important;
+}
+
+/* ====== 10. TAGS / SEGMENTS ====== */
+.tag, .segmented__item, .select-card, .option-card {
+  background: rgba(255,255,255,0.6) !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  border-radius: 16px !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+}
+.tag.active, .segmented__item--active, .select-card--active, .option-card--active {
+  background: linear-gradient(135deg, rgba(91,141,238,0.12), rgba(255,154,118,0.12)) !important;
+  color: var(--primary) !important;
+  border-color: rgba(91,141,238,0.25) !important;
+  font-weight: 600 !important;
+}
+.segmented {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  padding: 0 !important;
+  margin: 0 0 16px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  align-items: center !important;
+}
+
+/* ====== 11. LAYOUT — MOBILE FIRST ====== */
+.app-frame {
+  margin: 0 auto !important;
+  max-width: 100% !important;
+  padding: 0 0 120px !important;
+}
+
+/* ====== 12. PROFILE & ALL PAGES — Prevent Vertical Squish ====== */
+/* Force profile's layout-grid to single column always */
+#page-profile .layout-grid,
+#page-user .layout-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+/* Profile columns inside panels should stack vertically on mobile */
+.profile-columns {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+@media (min-width: 600px) {
+  .profile-columns {
+    flex-direction: row !important;
+    gap: 20px !important;
+  }
+  .profile-columns > * {
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Profile page shells should not add a second card layer above the inner content blocks. */
+#page-profile .cockpit-shell {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Keep the heading and content blocks visually grouped without the outer frame. */
+#page-profile .cockpit-shell__head {
+  margin-bottom: 16px !important;
+}
+
+/* Handmade ledger items — horizontal key-value, never squeeze */
+.handmade-ledger, .ledger-strip {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+.handmade-ledger__item, .ledger-strip__item {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+.handmade-ledger__item > *, .ledger-strip__item > * {
+  min-width: 0 !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
+}
+/* Handmade sheet — table-like pairs, left-aligned */
+.handmade-sheet, .handmade-sheet__body {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+.handmade-sheet__row {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  align-items: baseline !important;
+}
+.handmade-sheet__label {
+  flex-shrink: 0 !important;
+  min-width: 56px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+.handmade-sheet__value {
+  flex: 1 !important;
+  min-width: 0 !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+}
+/* Profile action list — clean vertical list */
+.profile-action-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+.profile-action {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 16px !important;
+  border-radius: 16px !important;
+  background: rgba(255,255,255,0.5) !important;
+  border: 1px solid rgba(0,0,0,0.04) !important;
+  transition: background 0.2s ease !important;
+  text-align: left !important;
+  cursor: pointer;
+}
+.profile-action:hover { background: rgba(255,255,255,0.8) !important; }
+.profile-action > div {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+.profile-action strong, .profile-action p {
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+}
+/* Global text safety on all panels */
+.panel *, .hero-card *, .editorial-section * {
+  max-width: 100% !important;
+  overflow-wrap: break-word !important;
+}
+/* Stack items never squish text */
+.stack-item, .stack-list > * {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+.stack-item strong, .stack-item span, .stack-item p {
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  min-width: 0 !important;
+}
+
+/* ====== 13. DISCOVER LIBRARY CARDS — Icon Grid ====== */
+.discover-library {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 12px !important;
+  margin-top: 20px !important;
+}
+.discover-library__card {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 8px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+  border-radius: 20px !important;
+  padding: 20px 8px 16px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  cursor: pointer;
+  min-height: 100px !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.discover-library__card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 24px rgba(91, 141, 238, 0.12) !important;
+}
+/* Wide card spans 2 columns */
+.discover-library__card--wide {
+  grid-column: span 2 !important;
+}
+/* Badge (small label) */
+.discover-library__badge {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--primary) !important;
+  letter-spacing: 0.05em !important;
+  margin-bottom: 0 !important;
+}
+.discover-library__card h4 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--ink) !important;
+  margin: 0 !important;
+}
+/* Emoji icon circle before h4 */
+.discover-library__card::before {
+  content: none !important;
+  display: none !important;
+}
+.discover-library__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.discover-library__icon .icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+/* Each card gets its own local SVG icon background */
+.discover-library__card[data-jump-page="community"] .discover-library__icon       { background: linear-gradient(135deg, #A88BEB, #F8CEEC); }
+.discover-library__card[data-jump-page="health-test"] .discover-library__icon     { background: linear-gradient(135deg, #ff9a9e, #fecfef); }
+.discover-library__card[data-jump-page="attachment-test"] .discover-library__icon { background: linear-gradient(135deg, #a1c4fd, #c2e9fb); }
+.discover-library__card[data-jump-page="longdistance"] .discover-library__icon    { background: linear-gradient(135deg, #84fab0, #8fd3f4); }
+.discover-library__card[data-jump-page="challenges"] .discover-library__icon      { background: linear-gradient(135deg, #fccb90, #d57eeb); }
+.discover-library__card[data-jump-page="courses"] .discover-library__icon         { background: linear-gradient(135deg, #e0c3fc, #8ec5fc); }
+.discover-library__card[data-jump-page="experts"] .discover-library__icon         { background: linear-gradient(135deg, #fbc2eb, #a6c1ee); }
+.discover-library__card[data-jump-page="membership"] .discover-library__icon      { background: linear-gradient(135deg, #fa709a, #fee140); }
+
+/* ====== 14. DISCOVER RIBBON ====== */
+.discover-ribbon {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 10px !important;
+}
+.discover-ribbon__card {
+  background: rgba(255,255,255,0.85) !important;
+  border: 1px solid rgba(0,0,0,0.04) !important;
+  border-radius: 16px !important;
+  padding: 16px 12px !important;
+  text-align: center !important;
+  transition: transform 0.2s ease !important;
+}
+.discover-ribbon__card:hover { transform: translateY(-2px) !important; }
+
+/* ====== 15. TIMELINE ====== */
+.timeline-event {
+  border-left: 2px solid var(--line-strong) !important;
+  margin-left: 12px !important;
+  padding-left: 20px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ====== 16. ZEN MODE CHECKIN ====== */
+.layout-grid--checkin .input,
+.layout-grid--checkin .textarea {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1.5px solid var(--line-strong) !important;
+  border-radius: 0 !important;
+  padding: 10px 0 !important;
+  box-shadow: none !important;
+}
+.layout-grid--checkin .input:focus,
+.layout-grid--checkin .textarea:focus {
+  background: transparent !important;
+  border-bottom-color: var(--primary) !important;
+  box-shadow: none !important;
+}
+
+#checkin-client-ai-panel {
+  margin-top: 0;
+}
+
+/* ====== 17. FIELD COMPACT ====== */
+.field--compact {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  align-items: flex-start !important;
+}
+
+/* ====== 18. RESPONSIVE — SMALL PHONES ====== */
+@media (max-width: 400px) {
+  .topbar { margin: 8px 8px 12px !important; padding: 10px 14px !important; }
+  .tab-item { padding: 6px 10px !important; font-size: 11px !important; }
+  .button, .pill-button { padding: 10px 18px !important; font-size: 13px !important; }
+  .discover-library { grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important; }
+  .discover-library__card { padding: 14px 6px 12px !important; min-height: 80px !important; }
+  .discover-library__icon { width: 36px; height: 36px; }
+  .discover-library__icon .icon { width: 18px; height: 18px; }
+  .discover-library__card h4 { font-size: 12px !important; }
+}
+
+/* ====== 19. RESPONSIVE — TABLETS & DESKTOPS ====== */
+@media (min-width: 768px) {
+  .app-frame {
+    max-width: 800px !important;
+    padding: 0 32px 120px !important;
+  }
+  .layout-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 20px !important;
+  }
+  .layout-grid--checkin, .layout-grid--pair, .auth-layout,
+  #page-profile .layout-grid, #page-user .layout-grid {
+    grid-template-columns: 1fr !important;
+    max-width: 600px !important;
+    margin: 0 auto !important;
+  }
+  .tab-bar { min-width: 480px !important; }
+  .discover-library { grid-template-columns: repeat(4, 1fr) !important; }
+}
+
+@media (min-width: 1200px) {
+  .app-frame { max-width: 960px !important; }
+}
+
+/* ====== 16. HOME COVER — Integrated Metrics ====== */
+.home-cover__mast {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 24px !important;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.home-cover__identity {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px;
+}
+.home-cover__identity span {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.home-cover__identity strong {
+  font-size: 15px;
+  color: var(--ink-dark);
+}
+.home-cover__metrics {
+  display: flex !important;
+  gap: 6px !important;
+}
+.home-cover__tag {
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  background: rgba(0,0,0,0.04) !important;
+  color: var(--ink-soft) !important;
+  border-radius: 100px !important;
+  white-space: nowrap;
+}
+.home-cover__tag:first-child {
+  background: linear-gradient(135deg, var(--primary-soft), var(--secondary-soft)) !important;
+  color: white !important;
+  font-weight: 600;
+}
+
+#page-home .stage-surface {
+  padding: 0 0 24px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+#page-home .stage-surface--solo {
+  padding-top: 0 !important;
+}
+
+#page-home .stage-surface::after {
+  display: none !important;
+}
+
+#page-home .stage-surface__hero-grid {
+  gap: 28px !important;
+}
+
+#page-home .stage-surface__panel {
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+#page-home .stage-surface__panel::after {
+  display: none !important;
+}
+
+#page-home .stage-surface__panel-list {
+  gap: 8px !important;
+}
+
+#page-home .stage-surface__panel-item {
+  padding: 14px 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(44, 55, 60, 0.08) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}

@@ -1,6 +1,6 @@
 """配对系统接口"""
 
-import random
+import secrets
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, or_
@@ -18,6 +18,14 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/pairs", tags=["配对"])
+INVITE_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+INVITE_CODE_LENGTH = 10
+
+
+def _generate_invite_code() -> str:
+    return "".join(
+        secrets.choice(INVITE_CODE_ALPHABET) for _ in range(INVITE_CODE_LENGTH)
+    )
 
 
 def _build_pair_response(
@@ -38,8 +46,6 @@ def _build_pair_response(
                 "partner_id": partner.id,
                 "partner_nickname": partner.nickname,
                 "partner_avatar": partner.wechat_avatar or partner.avatar_url,
-                "partner_email": partner.email,
-                "partner_phone": partner.phone,
                 "custom_partner_nickname": custom_nickname,
             }
         )
@@ -53,12 +59,19 @@ async def create_pair(
     db: AsyncSession = Depends(get_db),
 ):
     """创建配对，生成邀请码（支持多配对）"""
+    invite_code = _generate_invite_code()
+    for _ in range(4):
+        existing = await db.execute(select(Pair.id).where(Pair.invite_code == invite_code))
+        if not existing.scalar_one_or_none():
+            break
+        invite_code = _generate_invite_code()
+    else:
+        raise HTTPException(status_code=503, detail="邀请码生成繁忙，请稍后重试")
+
     pair = Pair(
         user_a_id=user.id,
         type=PairType(req.type),
-        invite_code=str(
-            random.randint(100000, 999999)
-        ),  # 6位数字绑定码（计划书§4.1.1）
+        invite_code=invite_code,
     )
     db.add(pair)
     await db.flush()
@@ -72,9 +85,10 @@ async def join_pair(
     db: AsyncSession = Depends(get_db),
 ):
     """通过邀请码加入配对"""
+    normalized_invite_code = req.invite_code.strip().upper()
     result = await db.execute(
         select(Pair).where(
-            Pair.invite_code == req.invite_code.strip(),
+            Pair.invite_code == normalized_invite_code,
             Pair.status == PairStatus.PENDING,
         )
     )

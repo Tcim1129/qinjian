@@ -11,3 +11,14 @@ def test_openapi_includes_product_description_and_tag_metadata():
     tags = {tag["name"]: tag for tag in schema.get("tags", [])}
     assert tags["认证"]["description"] == "注册、登录、手机号验证码与账号资料维护。"
     assert tags["关系智能"]["description"] == "关系画像、时间轴、干预计划、策略审计与叙事对齐接口。"
+    assert "/api/v1/agent/asr/ws-ticket" in schema["paths"]
+
+
+def test_app_registers_realtime_asr_websocket_route():
+    websocket_paths = [
+        getattr(route, "path", "")
+        for route in app.routes
+        if "websocket" in route.__class__.__name__.lower()
+    ]
+
+    assert "/api/v1/agent/asr/realtime" in websocket_paths
