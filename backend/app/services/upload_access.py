@@ -24,10 +24,6 @@ def public_upload_access_enabled() -> bool:
     return bool(settings.UPLOAD_PUBLIC_ACCESS_ENABLED)
 
 
-def _resolve_upload_signing_key() -> str:
-    return settings.UPLOAD_SIGNING_KEY or settings.SECRET_KEY
-
-
 def normalize_upload_storage_path(value: str | None) -> str | None:
     if not value:
         return None
@@ -204,7 +200,7 @@ def build_upload_response_payload(storage_path: str, filename: str, size: int) -
 
 def _build_signature(upload_path: str, expires_at: int) -> str:
     digest = hmac.new(
-        _resolve_upload_signing_key().encode("utf-8"),
+        settings.SECRET_KEY.encode("utf-8"),
         f"{upload_path}:{expires_at}".encode("utf-8"),
         hashlib.sha256,
     ).digest()

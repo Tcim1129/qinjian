@@ -112,7 +112,7 @@ app.add_middleware(
 # CORS - 允许 Web 前端跨域 (收紧为仅允许明确的前端源)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_allowed_origins(),
+    allow_origins=[settings.FRONTEND_ORIGIN],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -4,7 +4,6 @@ import json
 import time
 from openai import AsyncOpenAI
 from app.core.config import settings
-from app.ai.asr import transcribe_file
 from app.services.privacy_sandbox import redact_message_payload
 from app.services.privacy_audit import (
     get_privacy_audit_context,
@@ -125,19 +124,22 @@ async def analyze_sentiment(text: str) -> dict:
 
 
 async def transcribe_audio(file_path: str) -> str:
-    """语音转文字，统一走 ASR provider 层。"""
+    """语音转文字 - 使用 OpenAI Whisper API"""
     audit_context = get_privacy_audit_context()
     started_at = time.perf_counter()
     try:
-        result = await transcribe_file(file_path)
+        with open(file_path, "rb") as audio_file:
+            response = await client.audio.transcriptions.create(
+                model="whisper-1", file=audio_file, language="zh", response_format="text"
+            )
     except Exception as exc:
         await log_privacy_transcription(
             audit_context.get("db"),
             scope=str(audit_context.get("scope") or "solo"),
             user_id=audit_context.get("user_id"),
             pair_id=audit_context.get("pair_id"),
-            provider="asr",
-            model=str(settings.ASR_PROVIDER or "unknown"),
+            provider="openai-compatible",
+            model="whisper-1",
             file_name=file_path,
             raw_output=str(exc),
             latency_ms=int((time.perf_counter() - started_at) * 1000),
@@ -151,11 +153,11 @@ async def transcribe_audio(file_path: str) -> str:
         scope=str(audit_context.get("scope") or "solo"),
         user_id=audit_context.get("user_id"),
         pair_id=audit_context.get("pair_id"),
-        provider=result.provider,
-        model=result.model,
+        provider="openai-compatible",
+        model="whisper-1",
         file_name=file_path,
-        raw_output=result.text,
+        raw_output=str(response),
         latency_ms=int((time.perf_counter() - started_at) * 1000),
         status="completed",
     )
-    return result.text
+    return response

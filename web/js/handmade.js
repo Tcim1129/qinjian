@@ -942,7 +942,7 @@ async function loadProfilePage() {
                 ${handmadeSheet('关系', pair ? '当前关系' : '关系状态', pair ? [
                     { label: '对象', value: getPartnerDisplayName(pair), meta: `创建于 ${formatDateOnly(pair.created_at)}` },
                     { label: '关系类型', value: TYPE_LABELS[pair.type] || pair.type, meta: pair.status === 'active' ? '当前已激活' : '还在等待加入' },
-                    { label: '邀请码', value: pair.status === 'pending' ? (pair.invite_code || '无') : '已隐藏', meta: pair.status === 'pending' ? '可以直接发给对方。' : '关系激活后不再展示邀请码。' },
+                    { label: '邀请码', value: pair.invite_code || '无', meta: '可以直接发给对方。' },
                     { label: '解绑状态', value: unbindStatus.has_request ? (unbindStatus.requested_by_me ? `你已发起，还剩 ${unbindStatus.days_remaining} 天` : '对方已发起解绑') : '当前没有进行中申请', meta: '边界感和关系管理都应在这里被看见。' },
                 ] : [
                     { label: '当前状态', value: '未绑定关系', meta: '你可以继续用单人模式，不必被流程推着走。' },
@@ -1545,7 +1545,7 @@ async function loadProfilePage() {
                         ${handmadeSheet('关系', pair ? '当前关系' : '关系状态', pair ? [
                             { label: '对象', value: getPartnerDisplayName(pair), meta: `创建于 ${formatDateOnly(pair.created_at)}` },
                             { label: '关系类型', value: TYPE_LABELS[pair.type] || pair.type, meta: pair.status === 'active' ? '当前已激活' : '还在等待加入' },
-                            { label: '邀请码', value: pair.status === 'pending' ? (pair.invite_code || '无') : '已隐藏', meta: pair.status === 'pending' ? '可以直接发给对方。' : '关系激活后不再展示邀请码。' },
+                            { label: '邀请码', value: pair.invite_code || '无', meta: '可以直接发给对方。' },
                             { label: '解绑状态', value: unbindStatus.has_request ? (unbindStatus.requested_by_me ? `你已发起，还剩 ${unbindStatus.days_remaining} 天` : '对方已发起解绑') : '当前没有进行中申请', meta: '边界感和关系管理都应该在这里被看见。' },
                         ] : [
                             { label: '当前状态', value: '未绑定关系', meta: '你可以继续用单人模式，不必被流程推着走。' },

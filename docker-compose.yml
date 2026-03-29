@@ -27,7 +27,6 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://qinjian:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/qinjian
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_BASE_URL: ${AI_BASE_URL:-}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}

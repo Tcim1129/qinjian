@@ -30,16 +30,6 @@ from app.models import (
     CommunityTip,
     UserNotification,
     CrisisAlert,
-    AgentChatSession,
-    AgentChatMessage,
-    RelationshipEvent,
-    UserInteractionEvent,
-    RelationshipProfileSnapshot,
-    InterventionPlan,
-    PlaybookRun,
-    PlaybookTransition,
-    InterventionPolicyLibrary,
-    PrivacyDeletionRequest,
 )
 
 config = context.config

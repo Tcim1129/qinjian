@@ -1117,8 +1117,3 @@ class AgentChatRequest(RequestModel):
 class AgentChatResponse(BaseModel):
     reply: str
     action: str
-
-
-class AgentRealtimeTicketResponse(BaseModel):
-    ticket: str
-    expires_in: int

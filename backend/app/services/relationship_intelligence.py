@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from statistics import mean
 
-from sqlalchemy import and_, desc, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -101,12 +101,11 @@ async def record_relationship_event(
 
     if idempotency_key:
         result = await db.execute(
-            select(RelationshipEvent)
-            .where(RelationshipEvent.idempotency_key == idempotency_key)
-            .order_by(desc(RelationshipEvent.created_at))
-            .limit(1)
+            select(RelationshipEvent).where(
+                RelationshipEvent.idempotency_key == idempotency_key
+            )
         )
-        existing = result.scalars().first()
+        existing = result.scalar_one_or_none()
         if existing:
             return existing
 
@@ -179,18 +178,15 @@ async def refresh_profile_snapshot(
         )
 
     result = await db.execute(
-        select(RelationshipProfileSnapshot)
-        .where(
+        select(RelationshipProfileSnapshot).where(
             RelationshipProfileSnapshot.pair_id == normalized_pair_id,
             RelationshipProfileSnapshot.user_id == normalized_user_id,
             RelationshipProfileSnapshot.window_days == window_days,
             RelationshipProfileSnapshot.snapshot_date == resolved_snapshot_date,
             RelationshipProfileSnapshot.version == version,
         )
-        .order_by(desc(RelationshipProfileSnapshot.created_at))
-        .limit(1)
     )
-    snapshot = result.scalars().first()
+    snapshot = result.scalar_one_or_none()
 
     if snapshot:
         snapshot.metrics_json = metrics
@@ -289,17 +285,14 @@ async def maybe_create_intervention_plan(
         return None
 
     result = await db.execute(
-        select(InterventionPlan)
-        .where(
+        select(InterventionPlan).where(
             InterventionPlan.pair_id == snapshot.pair_id,
             InterventionPlan.user_id == snapshot.user_id,
             InterventionPlan.plan_type == plan_type,
             InterventionPlan.status == "active",
         )
-        .order_by(desc(InterventionPlan.updated_at), desc(InterventionPlan.created_at))
-        .limit(1)
     )
-    existing = result.scalars().first()
+    existing = result.scalar_one_or_none()
     if existing:
         return existing
 

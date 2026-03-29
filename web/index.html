@@ -26,7 +26,7 @@
     </style>
     <link rel="stylesheet" href="css/style.css?v=20260326y">
     <link rel="stylesheet" href="css/handmade.css?v=20260326y">
-    <link rel="stylesheet" href="css/theme-override.css?v=20260329_auth_flat">
+    <link rel="stylesheet" href="css/theme-override.css?v=20260328_final_v2">
 </head>
 
 <body>
@@ -231,6 +231,9 @@
                                 <div>
                                     <p class="panel__eyebrow">欢迎使用</p>
                                     <h4>登录亲健</h4>
+                                </div>
+                                <div class="auth-chip-row">
+                                    <span class="status-chip status-chip--success">线上服务已连通</span>
                                 </div>
                             </div>
                             <div class="segmented">
@@ -466,9 +469,7 @@
                             <textarea id="agent-chat-input" class="input input--textarea"
                                 placeholder="例如：今天其实有点累，但晚饭时我们把误会说开了。"></textarea>
                         </label>
-                        <p id="agent-voice-status" class="panel-note hidden"></p>
                         <div class="hero-actions">
-                            <button id="agent-voice-btn" class="button button--secondary" type="button">开始语音输入</button>
                             <button id="agent-send-btn" class="button button--primary" type="button">发送给系统</button>
                             <button id="agent-replay-btn" class="button button--ghost" type="button">朗读上一条回复</button>
                         </div>
@@ -489,6 +490,8 @@
                                         type="button">关系洞察</button>
                                     <button class="discover-editorial__action" data-jump-page="timeline"
                                         type="button">时光回顾</button>
+                                    <button class="discover-editorial__action" data-jump-page="showcase"
+                                        type="button">展示页</button>
                                 </div>
                             </div>
                             <div class="discover-editorial__visual" aria-hidden="true">
@@ -527,106 +530,166 @@
                         </div>
 
                         <div class="discover-library">
-                            <button class="discover-library__card"
+                            <button class="discover-library__card discover-library__card--wide"
                                 data-jump-page="community" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <path
-                                            d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-                                            fill="none" stroke="currentColor" stroke-width="1.8"
-                                            stroke-linejoin="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">交流</span>
                                 <h4>关系社区</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="health-test" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <path d="m12 20.7-7.1-7A4.8 4.8 0 0 1 11.7 7L12 7.3l.3-.3a4.8 4.8 0 0 1 6.8 6.8z"
-                                            fill="none" stroke="currentColor" stroke-width="1.8"
-                                            stroke-linecap="round" stroke-linejoin="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">状态</span>
                                 <h4>关系体检</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="attachment-test" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <path d="M10 13a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11 6.3" fill="none"
-                                            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                                            stroke-linejoin="round" />
-                                        <path d="M14 11a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 1 0 5.7 5.7L13 17.7" fill="none"
-                                            stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
-                                            stroke-linejoin="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">理解</span>
                                 <h4>依恋模式</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="longdistance" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" />
-                                        <path d="m14.8 9.2-2.3 6.1-6.1 2.3 2.3-6.1z" fill="none"
-                                            stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">陪伴</span>
                                 <h4>异地协作</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="challenges" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" />
-                                        <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" />
-                                        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">行动</span>
                                 <h4>每日小行动</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="courses" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v18H5.5A2.5 2.5 0 0 0 3 23z" fill="none"
-                                            stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-                                        <path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v18h6.5A2.5 2.5 0 0 1 21 23z" fill="none"
-                                            stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">成长</span>
                                 <h4>关系课程</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="experts" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" />
-                                        <path d="M5 20a7 7 0 0 1 14 0" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" stroke-linecap="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">专业</span>
                                 <h4>专家咨询</h4>
                             </button>
                             <button class="discover-library__card" data-jump-page="membership" type="button">
-                                <span class="discover-library__icon" aria-hidden="true">
-                                    <svg class="icon" viewBox="0 0 24 24">
-                                        <path d="m12 3 2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2 8 12.7 4 8.8l5.6-.8z"
-                                            fill="none" stroke="currentColor" stroke-width="1.8"
-                                            stroke-linejoin="round" />
-                                    </svg>
-                                </span>
                                 <span class="discover-library__badge">权益</span>
                                 <h4>会员中心</h4>
                             </button>
+                            <button class="discover-library__card" data-jump-page="showcase" type="button">
+                                <span class="discover-library__badge">设计</span>
+                                <h4>视觉展示</h4>
+                            </button>
                         </div>
                     </section>
+                </section>
+
+                <section id="page-showcase" class="page">
+                    <section class="showcase-stage">
+                        <div class="showcase-stage__copy">
+                            <p class="showcase-stage__eyebrow">展示页</p>
+                            <h3>把亲健做成一页能记住的样子</h3>
+                            <p class="showcase-stage__lead">这一页偏向演示与展示：温柔、克制、有层次，像一本排版清楚的关系手册。</p>
+                            <div class="showcase-stage__actions">
+                                <button class="button button--primary" data-jump-page="discover" type="button">回到功能总览</button>
+                                <button class="button button--ghost" data-jump-page="home" type="button">查看首页布局</button>
+                            </div>
+                            <div class="showcase-stage__chips">
+                                <span>纸感背景</span>
+                                <span>暖色留白</span>
+                                <span>层级分明</span>
+                                <span>移动优先</span>
+                            </div>
+                        </div>
+                        <div class="showcase-stage__visual" aria-hidden="true">
+                            <article class="showcase-hero-card showcase-hero-card--main">
+                                <p>主路径</p>
+                                <strong>首页 / 打卡 / 简报 / 时间轴</strong>
+                                <span>一眼看懂今天该做什么</span>
+                            </article>
+                            <article class="showcase-hero-card showcase-hero-card--secondary">
+                                <p>视觉气质</p>
+                                <strong>像杂志，也像手账</strong>
+                            </article>
+                            <article class="showcase-hero-card showcase-hero-card--tertiary">
+                                <p>信息节奏</p>
+                                <strong>先给结论，再给细节</strong>
+                            </article>
+                        </div>
+                    </section>
+
+                    <div class="showcase-board">
+                        <article class="showcase-panel showcase-panel--wide">
+                            <p class="showcase-panel__eyebrow">页面节奏</p>
+                            <h4>四个主页面，四种阅读速度</h4>
+                            <div class="showcase-journey">
+                                <div class="showcase-journey__item">
+                                    <span>01</span>
+                                    <strong>首页总览</strong>
+                                    <p>先看关系状态，再看下一步动作。</p>
+                                </div>
+                                <div class="showcase-journey__item">
+                                    <span>02</span>
+                                    <strong>记录输入</strong>
+                                    <p>低摩擦输入，先把今天留下来。</p>
+                                </div>
+                                <div class="showcase-journey__item">
+                                    <span>03</span>
+                                    <strong>关系简报</strong>
+                                    <p>把体验压缩成可行动的建议。</p>
+                                </div>
+                                <div class="showcase-journey__item">
+                                    <span>04</span>
+                                    <strong>时间轴回看</strong>
+                                    <p>把成长铺成可回放的路径。</p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <div class="showcase-board__stack">
+                            <article class="showcase-panel">
+                                <p class="showcase-panel__eyebrow">视觉语言</p>
+                                <h4>纸感、暖光、细边线</h4>
+                                <div class="showcase-swatch-list">
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--paper"></span>
+                                        <div>
+                                            <strong>纸感米白</strong>
+                                            <p>让内容先呼吸，再进入细节。</p>
+                                        </div>
+                                    </div>
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--coral"></span>
+                                        <div>
+                                            <strong>晚霞珊瑚</strong>
+                                            <p>只在主按钮和重点处发亮。</p>
+                                        </div>
+                                    </div>
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--sage"></span>
+                                        <div>
+                                            <strong>青瓷薄荷</strong>
+                                            <p>给辅助信息一点安静的呼吸。</p>
+                                        </div>
+                                    </div>
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--ink"></span>
+                                        <div>
+                                            <strong>墨褐深色</strong>
+                                            <p>保持标题和正文的稳定感。</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="showcase-panel">
+                                <p class="showcase-panel__eyebrow">手机预览</p>
+                                <h4>像手账，也像一页便签</h4>
+                                <div class="showcase-phone">
+                                    <div class="showcase-phone__screen">
+                                        <div class="showcase-phone__top">亲健 · 关系总览</div>
+                                        <div class="showcase-phone__body">
+                                            <p class="showcase-phone__eyebrow">今日</p>
+                                            <h4>关系总览</h4>
+                                            <p>把今天的状态先看清，再决定下一步做什么。</p>
+                                            <div class="showcase-phone__pills">
+                                                <span>已记录</span>
+                                                <span>有简报</span>
+                                                <span>可回看</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
                 </section>
 
                 <section id="page-report" class="page">
@@ -993,9 +1056,6 @@
         <button class="tab-item" data-page="report" type="button"><svg class="icon">
                 <use href="#i-chart"></use>
             </svg><span>洞察</span></button>
-        <button class="tab-item" data-page="timeline" type="button"><svg class="icon">
-                <use href="#i-book"></use>
-            </svg><span>时间</span></button>
         <button class="tab-item" data-page="profile" type="button"><svg class="icon">
                 <use href="#i-user"></use>
             </svg><span>我的</span></button>
@@ -1008,6 +1068,9 @@
         </div>
     </div>
 
+    <script>
+        window.QJ_CONFIG = window.QJ_CONFIG || {};
+    </script>
     <script src="js/config.example.js?v=20260315c"></script>
     <script src="js/config.local.js?v=20260315c"></script>
     <script src="js/demo-fixtures.js?v=20260328_final_js"></script>

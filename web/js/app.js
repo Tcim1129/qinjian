@@ -30,8 +30,6 @@ const state = {
     agentSessionId: null,
     agentMessages: [],
     lastAgentReply: '',
-    agentAsrActive: false,
-    agentAsrFinalizing: false,
     lastMessageSimulation: null,
     lastNarrativeAlignment: null,
     lastRelationshipTimeline: null,
@@ -59,16 +57,6 @@ const state = {
     demoScenario: null,
     contestMode: false,
     contestSnapshot: null,
-};
-const agentVoiceRuntime = {
-    socket: null,
-    stream: null,
-    audioContext: null,
-    sourceNode: null,
-    processorNode: null,
-    sinkNode: null,
-    finalDelivered: false,
-    stopping: false,
 };
 
 const FIRST_LOGIN_PAIR_PROMPT_KEY = 'qj_pair_prompt_seen';
@@ -308,9 +296,7 @@ function ensureLoginContext(message = '请先登录') {
 
 function getPartnerDisplayName(pair) {
     if (!pair) return '关系对象';
-    return pair.custom_partner_nickname
-        || pair.partner_nickname
-        || (pair.status === 'pending' ? '等待对方加入' : '已连接对象');
+    return pair.custom_partner_nickname || pair.partner_nickname || pair.partner_email || pair.partner_phone || '关系对象';
 }
 
 function getContextualPlaybookCard() {
@@ -457,18 +443,15 @@ function renderRelationManagementList(pairs, currentPairId) {
         const relationLabel = TYPE_LABELS[pair.type] || pair.type;
         const partnerName = pair.status === 'active'
             ? getPartnerDisplayName(pair)
-            : (pair.partner_nickname || '等待对方加入');
+            : (pair.partner_nickname || pair.partner_email || pair.partner_phone || '等待对方加入');
         const actionHint = isCurrent ? '当前关系' : (pair.status === 'active' ? '进入管理' : '查看邀请');
-        const relationMeta = pair.status === 'active'
-            ? (isCurrent ? '当前查看关系' : '点击切换为当前关系')
-            : `邀请码：${escapeHtml(pair.invite_code || '未生成')} · 点击查看等待加入状态`;
         return `
             <button class="stack-item stack-item--action" type="button" onclick="openRelationWorkspace('${pair.id}')" aria-label="切换关系 ${escapeHtml(partnerName)}">
                 <div>${svgIcon(isCurrent ? 'i-heart' : 'i-link')}</div>
                 <div class="stack-item__content">
                     <strong>${escapeHtml(relationLabel)} · ${escapeHtml(partnerName)}</strong>
                     <div class="stack-item__meta">${relationStatusLabel(pair)} · 创建于 ${escapeHtml(formatDateOnly(pair.created_at))}</div>
-                    <div class="stack-item__meta">${relationMeta}</div>
+            <div class="stack-item__meta">邀请码：${escapeHtml(pair.invite_code || '未生成')} · ${isCurrent ? '当前查看关系' : (pair.status === 'active' ? '点击切换为当前关系' : '点击查看等待加入状态')}</div>
                     ${pair.custom_partner_nickname ? `<div class="stack-item__meta stack-item__meta--accent">备注名：${escapeHtml(pair.custom_partner_nickname)}</div>` : ''}
                 </div>
                 <div class="stack-item__aside"><span class="stack-item__hint">${actionHint}</span>${svgIcon('i-arrow-right', 'icon-sm')}</div>
@@ -525,50 +508,19 @@ function resolveThemeState(pageId) {
         timeline: 'proof',
         profile: 'archive',
         milestones: 'proof',
+        showcase: 'brief',
     };
     return themeByPage[pageId] || 'paper';
 }
 
-function trackInteractionEvent(eventType, payload = {}, options = {}) {
-    if (!window.api?.logInteractionEvents) {
-        return;
-    }
-
-    const { source = 'web', targetType = null, targetId = null, pairId = undefined } = payload;
-    const event = {
-        source,
-        event_type: eventType,
-        page: state.currentPage || document.body?.dataset?.page || null,
-        path: `${window.location.pathname || '/'}${window.location.search || ''}`,
-        session_id: window.api.getClientSessionId?.() || null,
-        pair_id: pairId === undefined ? (state.currentPair?.id || null) : pairId,
-        target_type: targetType,
-        target_id: targetId,
-        payload: Object.fromEntries(
-            Object.entries(payload).filter(([key, value]) => !['source', 'targetType', 'targetId', 'pairId'].includes(key) && value !== undefined)
-        ),
-        occurred_at: new Date().toISOString(),
-    };
-
-    void window.api.logInteractionEvents([event], options);
-}
-
 async function showPage(pageId) {
-    if (pageId !== 'checkin' && (state.agentAsrActive || state.agentAsrFinalizing)) {
-        await stopAgentVoiceInput({ silent: true, discard: true });
-    }
     $$('.page').forEach((page) => page.classList.remove('active'));
     $(`#page-${pageId}`)?.classList.add('active');
     state.currentPage = pageId;
-    window.__QJ_TRACKING_PAGE = pageId;
     document.body.dataset.page = pageId;
     document.body.dataset.themeState = resolveThemeState(pageId);
     syncTopbar();
     syncTabSelection(pageId);
-    trackInteractionEvent('page.view', {
-        previous_page: document.body.dataset.previousPage || null,
-    });
-    document.body.dataset.previousPage = pageId;
 
     switch (pageId) {
         case 'pair':
@@ -751,48 +703,6 @@ function syncAuthForm() {
     $('#auth-submit').textContent = isEmail
         ? (isRegister ? '创建并进入' : '进入系统')
         : '验证码进入';
-}
-
-function updateAuthServiceStatus(status = {}) {
-    const chip = $('#auth-service-status');
-    const note = $('#auth-service-note');
-    if (!chip || !note) return;
-
-    const reachable = Boolean(status.reachable);
-    const checked = Boolean(status.checked);
-    const localPreview = window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-    chip.classList.remove('status-chip--success', 'status-chip--warning', 'status-chip--neutral');
-
-    if (!checked) {
-        chip.textContent = '正在检查服务';
-        chip.classList.add('status-chip--neutral');
-        note.textContent = '正在确认当前页面能不能连上后端，确认后再提示你登录。';
-        return;
-    }
-
-    if (reachable) {
-        chip.textContent = '服务已连接';
-        chip.classList.add('status-chip--success');
-        note.textContent = '后端已经连通，可以直接登录、注册、发验证码和写入记录。';
-        return;
-    }
-
-    chip.textContent = '当前仅界面预览';
-    chip.classList.add('status-chip--warning');
-    note.textContent = localPreview
-        ? '你现在打开的是静态界面。想真正登录，请先启动后端；如果只是先看界面，可以直接进入样例。'
-        : '当前还没有连上后端服务。可以先看样例，或稍后再试。';
-}
-
-async function refreshAuthServiceStatus(force = false) {
-    updateAuthServiceStatus({ checked: false, reachable: false });
-    try {
-        const status = await api.checkBackendConnection(force);
-        updateAuthServiceStatus(status);
-    } catch (error) {
-        updateAuthServiceStatus({ checked: true, reachable: false });
-    }
 }
 
 function validatePhone(phone) {
@@ -1293,14 +1203,13 @@ function syncCheckinModeUI() {
     voiceButton.classList.toggle('segmented__item--active', state.checkinMode === 'voice');
     form.classList.toggle('hidden', state.checkinMode !== 'form');
     panel.classList.toggle('hidden', state.checkinMode !== 'voice');
-    syncAgentVoiceUI();
 }
 
 function renderAgentMessages() {
     const container = $('#agent-chat-list');
     if (!container) return;
     if (!state.agentMessages.length) {
-        container.innerHTML = '<div class="empty-state">从一句"今天其实有点累"开始也可以。</div>';
+        container.innerHTML = '<div class="empty-state">从一句“今天其实有点累”开始也可以。</div>';
         return;
     }
     container.innerHTML = state.agentMessages.map((item) => `
@@ -1308,300 +1217,6 @@ function renderAgentMessages() {
         <div>${item.role === 'user' ? svgIcon('i-user') : svgIcon('i-heart')}</div>
         <div><strong>${item.role === 'user' ? '我' : '亲健 AI'}</strong><div class="stack-item__meta">${escapeHtml(item.content || '')}</div></div>
       </article>`).join('');
-}
-
-function syncAgentVoiceUI(message = '') {
-    const button = $('#agent-voice-btn');
-    const status = $('#agent-voice-status');
-    if (button) {
-        button.disabled = !api.isLoggedIn() || state.checkinMode !== 'voice' || state.agentAsrFinalizing;
-        button.textContent = state.agentAsrActive
-            ? '结束语音输入'
-            : (state.agentAsrFinalizing ? '整理最后一句...' : '开始语音输入');
-    }
-    if (!status) return;
-    const text = message || (
-        state.agentAsrActive
-            ? '麦克风已开启，正在实时转写。'
-            : (state.agentAsrFinalizing ? '正在整理最后一句，请稍候。' : '')
-    );
-    status.textContent = text;
-    status.classList.toggle('hidden', !text || state.checkinMode !== 'voice');
-}
-
-function downsampleFloat32Buffer(buffer, inputRate, outputRate = 16000) {
-    if (!buffer?.length) return new Float32Array();
-    if (inputRate === outputRate) return buffer.slice(0);
-    const ratio = inputRate / outputRate;
-    const newLength = Math.max(1, Math.round(buffer.length / ratio));
-    const result = new Float32Array(newLength);
-    let offset = 0;
-    for (let index = 0; index < newLength; index += 1) {
-        const nextOffset = Math.min(buffer.length, Math.round((index + 1) * ratio));
-        let sum = 0;
-        let count = 0;
-        for (let cursor = offset; cursor < nextOffset; cursor += 1) {
-            sum += buffer[cursor];
-            count += 1;
-        }
-        result[index] = count ? (sum / count) : 0;
-        offset = nextOffset;
-    }
-    return result;
-}
-
-function float32ToPCM16Bytes(buffer) {
-    const arrayBuffer = new ArrayBuffer(buffer.length * 2);
-    const view = new DataView(arrayBuffer);
-    for (let index = 0; index < buffer.length; index += 1) {
-        const sample = Math.max(-1, Math.min(1, buffer[index] || 0));
-        view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-    }
-    return new Uint8Array(arrayBuffer);
-}
-
-function uint8ArrayToBase64(bytes) {
-    if (!bytes?.length) return '';
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let index = 0; index < bytes.length; index += chunkSize) {
-        const chunk = bytes.subarray(index, index + chunkSize);
-        binary += String.fromCharCode(...chunk);
-    }
-    return window.btoa(binary);
-}
-
-function cleanupAgentVoiceInput() {
-    if (agentVoiceRuntime.processorNode) {
-        agentVoiceRuntime.processorNode.onaudioprocess = null;
-        agentVoiceRuntime.processorNode.disconnect();
-        agentVoiceRuntime.processorNode = null;
-    }
-    if (agentVoiceRuntime.sourceNode) {
-        agentVoiceRuntime.sourceNode.disconnect();
-        agentVoiceRuntime.sourceNode = null;
-    }
-    if (agentVoiceRuntime.sinkNode) {
-        agentVoiceRuntime.sinkNode.disconnect();
-        agentVoiceRuntime.sinkNode = null;
-    }
-    if (agentVoiceRuntime.stream) {
-        agentVoiceRuntime.stream.getTracks().forEach((track) => track.stop());
-        agentVoiceRuntime.stream = null;
-    }
-    if (agentVoiceRuntime.audioContext) {
-        agentVoiceRuntime.audioContext.close().catch(() => null);
-        agentVoiceRuntime.audioContext = null;
-    }
-    if (agentVoiceRuntime.socket) {
-        try {
-            agentVoiceRuntime.socket.close();
-        } catch (error) {
-            // noop
-        }
-        agentVoiceRuntime.socket = null;
-    }
-
-    state.agentAsrActive = false;
-    state.agentAsrFinalizing = false;
-    syncAgentVoiceUI();
-}
-
-async function stopAgentVoiceInput(options = {}) {
-    const { silent = false, discard = false } = options;
-    if (!state.agentAsrActive && !state.agentAsrFinalizing) {
-        return;
-    }
-
-    const socket = agentVoiceRuntime.socket;
-    agentVoiceRuntime.stopping = true;
-
-    if (agentVoiceRuntime.processorNode) {
-        agentVoiceRuntime.processorNode.onaudioprocess = null;
-        agentVoiceRuntime.processorNode.disconnect();
-        agentVoiceRuntime.processorNode = null;
-    }
-    if (agentVoiceRuntime.sourceNode) {
-        agentVoiceRuntime.sourceNode.disconnect();
-        agentVoiceRuntime.sourceNode = null;
-    }
-    if (agentVoiceRuntime.sinkNode) {
-        agentVoiceRuntime.sinkNode.disconnect();
-        agentVoiceRuntime.sinkNode = null;
-    }
-    if (agentVoiceRuntime.stream) {
-        agentVoiceRuntime.stream.getTracks().forEach((track) => track.stop());
-        agentVoiceRuntime.stream = null;
-    }
-    if (agentVoiceRuntime.audioContext) {
-        agentVoiceRuntime.audioContext.close().catch(() => null);
-        agentVoiceRuntime.audioContext = null;
-    }
-
-    state.agentAsrActive = false;
-    state.agentAsrFinalizing = Boolean(socket && socket.readyState === WebSocket.OPEN);
-    syncAgentVoiceUI();
-
-    if (discard) {
-        cleanupAgentVoiceInput();
-        return;
-    }
-
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'session.stop' }));
-        return;
-    }
-
-    cleanupAgentVoiceInput();
-    if (!silent) {
-        showToast('语音输入已结束');
-    }
-}
-
-async function toggleAgentVoiceInput() {
-    if (state.agentAsrActive) {
-        await stopAgentVoiceInput();
-        return;
-    }
-    if (state.agentAsrFinalizing) {
-        showToast('正在整理最后一句，请稍候');
-        return;
-    }
-
-    if (!ensureLoginContext()) {
-        return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia || !(window.AudioContext || window.webkitAudioContext) || !window.WebSocket) {
-        showToast('当前浏览器不支持实时语音输入');
-        return;
-    }
-
-    const input = $('#agent-chat-input');
-    if (!input) {
-        showToast('当前页面未找到输入框');
-        return;
-    }
-
-    try {
-        await ensureAgentSession();
-        const socketUrl = await api.buildRealtimeAsrSocketUrl();
-        const realtimeAsrProvider = String(window.QJ_CONFIG?.realtimeAsrProvider || '').trim().toLowerCase();
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                channelCount: 1,
-                echoCancellation: true,
-                noiseSuppression: true,
-            },
-        });
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-        const audioContext = new AudioContextCtor();
-        await audioContext.resume?.();
-        const sourceNode = audioContext.createMediaStreamSource(stream);
-        const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
-        const sinkNode = audioContext.createGain();
-        sinkNode.gain.value = 0;
-
-        const socket = new WebSocket(socketUrl);
-        agentVoiceRuntime.socket = socket;
-        agentVoiceRuntime.stream = stream;
-        agentVoiceRuntime.audioContext = audioContext;
-        agentVoiceRuntime.sourceNode = sourceNode;
-        agentVoiceRuntime.processorNode = processorNode;
-        agentVoiceRuntime.sinkNode = sinkNode;
-        agentVoiceRuntime.finalDelivered = false;
-        agentVoiceRuntime.stopping = false;
-
-        sourceNode.connect(processorNode);
-        processorNode.connect(sinkNode);
-        sinkNode.connect(audioContext.destination);
-
-        processorNode.onaudioprocess = (event) => {
-            if (!state.agentAsrActive || agentVoiceRuntime.stopping) {
-                return;
-            }
-            if (!agentVoiceRuntime.socket || agentVoiceRuntime.socket.readyState !== WebSocket.OPEN) {
-                return;
-            }
-            const samples = event.inputBuffer.getChannelData(0);
-            const downsampled = downsampleFloat32Buffer(samples, audioContext.sampleRate, 16000);
-            const pcmBytes = float32ToPCM16Bytes(downsampled);
-            const audio = uint8ArrayToBase64(pcmBytes);
-            if (!audio) {
-                return;
-            }
-            agentVoiceRuntime.socket.send(JSON.stringify({ type: 'audio.chunk', audio }));
-        };
-
-        socket.addEventListener('open', () => {
-            state.agentAsrActive = true;
-            state.agentAsrFinalizing = false;
-            syncAgentVoiceUI('麦克风已开启，正在实时转写。');
-            const startPayload = {
-                type: 'session.start',
-                format: 'pcm',
-                sample_rate: 16000,
-                language: 'zh',
-                session_id: api.getClientSessionId?.() || null,
-                page: state.currentPage || 'checkin',
-                pair_id: state.currentPair?.id || null,
-            };
-            if (realtimeAsrProvider) {
-                startPayload.provider = realtimeAsrProvider;
-            }
-            socket.send(JSON.stringify(startPayload));
-        });
-
-        socket.addEventListener('message', async (event) => {
-            let payload;
-            try {
-                payload = JSON.parse(event.data);
-            } catch (error) {
-                return;
-            }
-
-            if (payload.type === 'partial') {
-                input.value = payload.text || '';
-                return;
-            }
-
-            if (payload.type === 'final') {
-                agentVoiceRuntime.finalDelivered = true;
-                input.value = payload.text || '';
-                state.agentAsrFinalizing = false;
-                syncAgentVoiceUI();
-                cleanupAgentVoiceInput();
-                if ((payload.text || '').trim()) {
-                    await sendAgentChat();
-                }
-                return;
-            }
-
-            if (payload.type === 'error') {
-                const message = payload.message || '实时识别失败';
-                agentVoiceRuntime.stopping = true;
-                cleanupAgentVoiceInput();
-                showToast(message);
-            }
-        });
-
-        socket.addEventListener('close', () => {
-            const shouldNotify = !agentVoiceRuntime.finalDelivered && !agentVoiceRuntime.stopping;
-            cleanupAgentVoiceInput();
-            if (shouldNotify) {
-                showToast('语音输入已中断，请重试');
-            }
-        });
-
-        socket.addEventListener('error', () => {
-            agentVoiceRuntime.stopping = true;
-            cleanupAgentVoiceInput();
-            showToast('实时语音连接失败');
-        });
-    } catch (error) {
-        agentVoiceRuntime.stopping = true;
-        cleanupAgentVoiceInput();
-        showToast(error.message || '无法开启语音输入');
-    }
 }
 
 async function ensureAgentSession() {
@@ -4275,7 +3890,6 @@ function bindStaticEvents() {
         }
     });
     $('#checkin-content')?.addEventListener('input', scheduleCheckinPrecheck);
-    $('#agent-voice-btn')?.addEventListener('click', toggleAgentVoiceInput);
     $('#agent-send-btn')?.addEventListener('click', sendAgentChat);
     $('#agent-replay-btn')?.addEventListener('click', replayAgentReply);
     $('#image-upload-input')?.addEventListener('change', (event) => {
@@ -8890,6 +8504,7 @@ function syncTopbar() {
         home: '关系总览',
         checkin: '留下今天的关系记录',
         discover: '功能总览',
+        showcase: '展示页',
         report: '关系简报',
         timeline: '关系时间轴',
         profile: '我的关系空间',
@@ -8908,8 +8523,9 @@ function syncTopbar() {
         pair: '先把彼此放进同一个空间，再开始共同记录。',
         'pair-waiting': '邀请码已经准备好，差最后一步。',
         home: '先看输入状态、当前路径和下一步动作。',
-        checkin: '表单和智能陪伴，都服务于更真实的一句心里话。',
+    checkin: '表单和智能陪伴，都服务于更真实的一句心里话。',
         discover: '先看系统主链，再进入简报、证据回放和干预动作。',
+        showcase: '像看一页精选样张，先感受气质，再进入功能。',
         report: '把复杂情绪和互动模式，翻译成一份好读的简报。',
         timeline: '把最近这段关系如何一步步走到现在，铺成一张可回放、可筛选的事件轨道。',
         profile: '把账户、关系和边界感，收进一个安静空间。',
@@ -8930,6 +8546,7 @@ function syncTopbar() {
         home: '首页',
         checkin: '记录',
         discover: '总览',
+        showcase: '展示',
         report: '简报',
         timeline: '时间轴',
         profile: '我的',
@@ -8950,7 +8567,7 @@ function syncTopbar() {
 
     const ritualButton = document.querySelector('.pill-button[data-jump-page="checkin"]');
     if (ritualButton) {
-        const hiddenPages = new Set(['auth', 'pair', 'pair-waiting']);
+        const hiddenPages = new Set(['auth', 'pair', 'pair-waiting', 'showcase']);
         ritualButton.classList.toggle('hidden', hiddenPages.has(state.currentPage));
     }
 }
