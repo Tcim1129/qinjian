@@ -529,6 +529,30 @@ function resolveThemeState(pageId) {
     return themeByPage[pageId] || 'paper';
 }
 
+function trackInteractionEvent(eventType, payload = {}, options = {}) {
+    if (!window.api?.logInteractionEvents) {
+        return;
+    }
+
+    const { source = 'web', targetType = null, targetId = null, pairId = undefined } = payload;
+    const event = {
+        source,
+        event_type: eventType,
+        page: state.currentPage || document.body?.dataset?.page || null,
+        path: `${window.location.pathname || '/'}${window.location.search || ''}`,
+        session_id: window.api.getClientSessionId?.() || null,
+        pair_id: pairId === undefined ? (state.currentPair?.id || null) : pairId,
+        target_type: targetType,
+        target_id: targetId,
+        payload: Object.fromEntries(
+            Object.entries(payload).filter(([key, value]) => !['source', 'targetType', 'targetId', 'pairId'].includes(key) && value !== undefined)
+        ),
+        occurred_at: new Date().toISOString(),
+    };
+
+    void window.api.logInteractionEvents([event], options);
+}
+
 async function showPage(pageId) {
     if (pageId !== 'checkin' && (state.agentAsrActive || state.agentAsrFinalizing)) {
         await stopAgentVoiceInput({ silent: true, discard: true });
@@ -536,10 +560,15 @@ async function showPage(pageId) {
     $$('.page').forEach((page) => page.classList.remove('active'));
     $(`#page-${pageId}`)?.classList.add('active');
     state.currentPage = pageId;
+    window.__QJ_TRACKING_PAGE = pageId;
     document.body.dataset.page = pageId;
     document.body.dataset.themeState = resolveThemeState(pageId);
     syncTopbar();
     syncTabSelection(pageId);
+    trackInteractionEvent('page.view', {
+        previous_page: document.body.dataset.previousPage || null,
+    });
+    document.body.dataset.previousPage = pageId;
 
     switch (pageId) {
         case 'pair':
@@ -1512,6 +1541,9 @@ async function toggleAgentVoiceInput() {
                 format: 'pcm',
                 sample_rate: 16000,
                 language: 'zh',
+                session_id: api.getClientSessionId?.() || null,
+                page: state.currentPage || 'checkin',
+                pair_id: state.currentPair?.id || null,
             };
             if (realtimeAsrProvider) {
                 startPayload.provider = realtimeAsrProvider;

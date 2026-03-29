@@ -14,6 +14,7 @@ from .milestones import router as milestones_router
 from .community import router as community_router
 from .agent import router as agent_router
 from .ws import router as ws_router
+from .interactions import router as interactions_router
 
 
 def _load_optional_router(module_name: str):
@@ -45,6 +46,7 @@ api_router.include_router(milestones_router)
 api_router.include_router(community_router)
 api_router.include_router(agent_router)
 api_router.include_router(ws_router)
+api_router.include_router(interactions_router)
 if insights_router is not None:
     api_router.include_router(insights_router)
 if admin_router is not None:

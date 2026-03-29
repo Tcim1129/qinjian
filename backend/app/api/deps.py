@@ -11,6 +11,7 @@ from app.core.security import decode_access_token
 from app.models import User, Pair, PairStatus
 
 security_scheme = HTTPBearer()
+optional_security_scheme = HTTPBearer(auto_error=False)
 
 
 def _parse_uuid_or_raise(
@@ -33,9 +34,29 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    user = await _resolve_user_from_credentials(credentials, db)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证令牌")
+    return user
+
+
+async def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    return await _resolve_user_from_credentials(credentials, db)
+
+
+async def _resolve_user_from_credentials(
+    credentials: HTTPAuthorizationCredentials | None,
+    db: AsyncSession,
+) -> User | None:
+    if credentials is None or not credentials.credentials:
+        return None
+
     user_id = decode_access_token(credentials.credentials)
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证令牌")
+        return None
     normalized_user_id = _parse_uuid_or_raise(
         user_id,
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,8 +64,6 @@ async def get_current_user(
     )
     result = await db.execute(select(User).where(User.id == normalized_user_id))
     user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
     return user
 
 

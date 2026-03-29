@@ -9,7 +9,9 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from app.ai.asr import create_realtime_asr_client
+from app.core.database import async_session
 from app.core.security import decode_realtime_ws_ticket
+from app.services.interaction_events import record_user_interaction_event
 
 router = APIRouter(prefix="/agent", tags=["智能陪伴"])
 logger = logging.getLogger(__name__)
@@ -37,7 +39,40 @@ def _extract_event_text(payload: dict) -> str:
     return ""
 
 
-async def _relay_asr_events(websocket: WebSocket, asr_client) -> None:
+async def _record_voice_event(
+    user_id: str,
+    *,
+    event_type: str,
+    session_id: str | None = None,
+    pair_id: str | None = None,
+    page: str | None = None,
+    payload: dict | None = None,
+) -> None:
+    try:
+        async with async_session() as db:
+            await record_user_interaction_event(
+                db,
+                user_id=user_id,
+                pair_id=pair_id,
+                session_id=session_id,
+                source="voice",
+                event_type=event_type,
+                page=page,
+                path="/api/v1/agent/asr/realtime",
+                payload=payload,
+            )
+            await db.commit()
+    except Exception:
+        logger.exception("failed to record voice interaction event")
+
+
+async def _relay_asr_events(
+    websocket: WebSocket,
+    asr_client,
+    *,
+    user_id: str,
+    voice_context: dict,
+) -> None:
     while True:
         event = await asr_client.recv_event()
         event_type = str(event.get("type") or "").strip().lower()
@@ -49,10 +84,27 @@ async def _relay_asr_events(websocket: WebSocket, asr_client) -> None:
             continue
 
         if event_type in FINAL_EVENT_TYPES:
-            await websocket.send_json({"type": "final", "text": _extract_event_text(event)})
+            final_text = _extract_event_text(event)
+            await websocket.send_json({"type": "final", "text": final_text})
+            await _record_voice_event(
+                user_id,
+                event_type="voice.transcription.completed",
+                session_id=voice_context.get("session_id"),
+                pair_id=voice_context.get("pair_id"),
+                page=voice_context.get("page"),
+                payload={"transcript_chars": len(final_text or "")},
+            )
             return
 
         if event_type == "error":
+            await _record_voice_event(
+                user_id,
+                event_type="voice.transcription.failed",
+                session_id=voice_context.get("session_id"),
+                pair_id=voice_context.get("pair_id"),
+                page=voice_context.get("page"),
+                payload={"message": str(event.get("message") or "实时识别失败")},
+            )
             await websocket.send_json(
                 {
                     "type": "error",
@@ -77,6 +129,14 @@ async def agent_realtime_asr(websocket: WebSocket):
 
     asr_client = None
     relay_task: asyncio.Task | None = None
+    voice_context = {
+        "session_id": None,
+        "pair_id": None,
+        "page": "checkin",
+        "provider": None,
+        "model": None,
+        "language": "zh",
+    }
 
     try:
         while True:
@@ -89,18 +149,56 @@ async def agent_realtime_asr(websocket: WebSocket):
                     continue
 
                 try:
+                    voice_context["session_id"] = str(payload.get("session_id") or "").strip() or None
+                    voice_context["pair_id"] = str(payload.get("pair_id") or "").strip() or None
+                    voice_context["page"] = str(payload.get("page") or "checkin").strip() or "checkin"
+                    voice_context["provider"] = str(payload.get("provider") or "").strip() or None
+                    voice_context["model"] = str(payload.get("model") or "").strip() or None
+                    voice_context["language"] = str(payload.get("language") or "zh").strip() or "zh"
                     asr_client = create_realtime_asr_client(
-                        provider=str(payload.get("provider") or "").strip() or None,
-                        model=str(payload.get("model") or "").strip() or None,
-                        language=str(payload.get("language") or "zh").strip() or "zh",
+                        provider=voice_context["provider"],
+                        model=voice_context["model"],
+                        language=voice_context["language"],
                         sample_rate=int(payload.get("sample_rate") or 16000),
                         input_audio_format=str(payload.get("format") or "pcm").strip() or "pcm",
                     )
                     await asr_client.connect()
                     await asr_client.start_session()
-                    relay_task = asyncio.create_task(_relay_asr_events(websocket, asr_client))
+                    relay_task = asyncio.create_task(
+                        _relay_asr_events(
+                            websocket,
+                            asr_client,
+                            user_id=user_id,
+                            voice_context=voice_context,
+                        )
+                    )
+                    await _record_voice_event(
+                        user_id,
+                        event_type="voice.session.started",
+                        session_id=voice_context["session_id"],
+                        pair_id=voice_context["pair_id"],
+                        page=voice_context["page"],
+                        payload={
+                            "provider": voice_context["provider"],
+                            "model": voice_context["model"],
+                            "language": voice_context["language"],
+                            "sample_rate": int(payload.get("sample_rate") or 16000),
+                            "format": str(payload.get("format") or "pcm").strip() or "pcm",
+                        },
+                    )
                 except Exception:
                     logger.exception("failed to start realtime asr session for user %s", user_id)
+                    await _record_voice_event(
+                        user_id,
+                        event_type="voice.session.start_failed",
+                        session_id=voice_context["session_id"],
+                        pair_id=voice_context["pair_id"],
+                        page=voice_context["page"],
+                        payload={
+                            "provider": voice_context["provider"],
+                            "model": voice_context["model"],
+                        },
+                    )
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -122,14 +220,35 @@ async def agent_realtime_asr(websocket: WebSocket):
             if message_type == "session.stop":
                 if asr_client is not None:
                     await asr_client.stop_session()
+                    await _record_voice_event(
+                        user_id,
+                        event_type="voice.session.stop_requested",
+                        session_id=voice_context["session_id"],
+                        pair_id=voice_context["pair_id"],
+                        page=voice_context["page"],
+                    )
                 continue
 
             await websocket.send_json({"type": "error", "message": "不支持的实时语音消息类型"})
 
     except WebSocketDisconnect:
+        await _record_voice_event(
+            user_id,
+            event_type="voice.session.disconnected",
+            session_id=voice_context["session_id"],
+            pair_id=voice_context["pair_id"],
+            page=voice_context["page"],
+        )
         return
     except Exception:
         logger.exception("realtime asr websocket crashed for user %s", user_id)
+        await _record_voice_event(
+            user_id,
+            event_type="voice.session.crashed",
+            session_id=voice_context["session_id"],
+            pair_id=voice_context["pair_id"],
+            page=voice_context["page"],
+        )
         with contextlib.suppress(Exception):
             await websocket.send_json(
                 {"type": "error", "message": "实时语音连接已中断，请稍后重试"}

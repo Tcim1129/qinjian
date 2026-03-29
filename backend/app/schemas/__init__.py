@@ -1122,3 +1122,51 @@ class AgentChatResponse(BaseModel):
 class AgentRealtimeTicketResponse(BaseModel):
     ticket: str
     expires_in: int
+
+
+# ── 交互日志 ──
+
+
+class InteractionEventItem(RequestModel):
+    source: Literal["web", "api", "voice", "system"] = "web"
+    event_type: str = Field(min_length=2, max_length=80)
+    page: str | None = Field(default=None, max_length=80)
+    path: str | None = Field(default=None, max_length=255)
+    session_id: str | None = Field(default=None, max_length=80)
+    pair_id: uuid.UUID | None = None
+    target_type: str | None = Field(default=None, max_length=50)
+    target_id: str | None = Field(default=None, max_length=80)
+    payload: dict | None = None
+    occurred_at: datetime | None = None
+
+
+class InteractionEventBatchRequest(RequestModel):
+    events: list[InteractionEventItem] = Field(
+        default_factory=list,
+        min_length=1,
+        max_length=50,
+    )
+
+
+class InteractionEventBatchResponse(BaseModel):
+    accepted: int
+
+
+class InteractionEventResponse(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    pair_id: uuid.UUID | None = None
+    session_id: str | None = None
+    source: str
+    event_type: str
+    page: str | None = None
+    path: str | None = None
+    http_method: str | None = None
+    http_status: int | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+    payload: dict | None = None
+    occurred_at: datetime
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

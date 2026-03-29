@@ -1,9 +1,12 @@
 """亲健 API 应用入口"""
 
+import json
+import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -11,8 +14,10 @@ from sqlalchemy.engine import make_url
 
 from app.api.v1 import api_router
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import Base, async_session, engine
+from app.core.security import decode_access_token
 from app.services.phone_code_store import close_phone_code_store
+from app.services.interaction_events import parse_uuid, record_user_interaction_event
 from app.services.upload_access import public_upload_access_enabled
 
 APP_DESCRIPTION = """
@@ -33,6 +38,7 @@ OPENAPI_TAGS = [
     {"name": "里程碑", "description": "关系里程碑、成长节点与回顾能力。"},
     {"name": "社群", "description": "社群内容与互动入口。"},
     {"name": "智能陪伴", "description": "Agent 会话、聊天引导与发消息前预演。"},
+    {"name": "交互日志", "description": "用户页面浏览、关键操作与 API 交互事件采集。"},
     {
         "name": "关系智能",
         "description": "关系画像、时间轴、干预计划、策略审计与叙事对齐接口。",
@@ -43,6 +49,13 @@ OPENAPI_TAGS = [
 
 
 UPLOAD_ROOT = os.path.abspath(settings.UPLOAD_DIR)
+TRACKED_API_PREFIX = "/api/v1"
+TRACKED_API_EXCLUDED_PATHS = {
+    "/api/health",
+    "/api/v1/interactions/events",
+}
+MAX_TRACKED_BODY_BYTES = 32768
+logger = logging.getLogger(__name__)
 
 
 def _ensure_upload_dirs() -> None:
@@ -63,6 +76,71 @@ def _is_using_weak_database_secret() -> bool:
 
 def _is_secret_key_strong_enough(secret_key: str) -> bool:
     return len(secret_key.encode("utf-8")) >= 32
+
+
+def _should_track_api_request(request: Request) -> bool:
+    if request.scope.get("type") != "http":
+        return False
+    if request.method.upper() == "OPTIONS":
+        return False
+    if request.url.path in TRACKED_API_EXCLUDED_PATHS:
+        return False
+    return request.url.path.startswith(TRACKED_API_PREFIX)
+
+
+def _extract_bearer_token(request: Request) -> str:
+    auth_header = str(request.headers.get("authorization") or "").strip()
+    if not auth_header.lower().startswith("bearer "):
+        return ""
+    return auth_header.split(" ", 1)[1].strip()
+
+
+def _safe_json_tracking_body(raw_body: bytes, content_type: str) -> dict | None:
+    if not raw_body:
+        return None
+    if "application/json" not in str(content_type or "").lower():
+        return None
+    if len(raw_body) > MAX_TRACKED_BODY_BYTES:
+        return {"body_too_large": True, "body_bytes": len(raw_body)}
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _extract_tracking_payload(
+    request: Request,
+    *,
+    body_payload: dict | None,
+    status_code: int,
+    elapsed_ms: float,
+) -> tuple[dict, str | None]:
+    pair_id = request.query_params.get("pair_id")
+    if not pair_id and body_payload:
+        pair_id = body_payload.get("pair_id")
+
+    content_length = request.headers.get("content-length")
+    query_keys = sorted({str(key) for key in request.query_params.keys()})
+    payload: dict[str, object] = {
+        "query_keys": query_keys[:20],
+        "latency_ms": round(elapsed_ms, 2),
+        "status_code": status_code,
+        "page_path": str(request.headers.get("x-qj-page-path") or "").strip() or None,
+        "content_type": str(request.headers.get("content-type") or "").split(";")[0] or None,
+        "content_length": int(content_length) if str(content_length or "").isdigit() else None,
+    }
+    if body_payload:
+        for key in ("mode", "report_type", "source_type", "intent", "privacy_mode"):
+            value = body_payload.get(key)
+            if value not in (None, ""):
+                payload[key] = value
+        if "content" in body_payload:
+            payload["content_chars"] = len(str(body_payload.get("content") or ""))
+        if "events" in body_payload and isinstance(body_payload["events"], list):
+            payload["batched_events"] = len(body_payload["events"])
+
+    return payload, pair_id
 
 
 _ensure_upload_dirs()
@@ -121,6 +199,62 @@ app.add_middleware(
 # 静态文件：仅在显式开启兼容模式时公开暴露上传目录
 if public_upload_access_enabled():
     app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
+
+
+@app.middleware("http")
+async def capture_user_api_interactions(request: Request, call_next):
+    if not _should_track_api_request(request):
+        return await call_next(request)
+
+    raw_body = b""
+    tracked_request = request
+    content_type = str(request.headers.get("content-type") or "")
+    if "application/json" in content_type.lower():
+        raw_body = await request.body()
+
+        async def receive():
+            return {
+                "type": "http.request",
+                "body": raw_body,
+                "more_body": False,
+            }
+
+        tracked_request = Request(request.scope, receive)
+
+    started_at = time.perf_counter()
+    response = await call_next(tracked_request)
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+
+    body_payload = _safe_json_tracking_body(raw_body, content_type)
+    payload, pair_id = _extract_tracking_payload(
+        tracked_request,
+        body_payload=body_payload,
+        status_code=response.status_code,
+        elapsed_ms=elapsed_ms,
+    )
+    user_id = parse_uuid(decode_access_token(_extract_bearer_token(tracked_request)))
+
+    try:
+        async with async_session() as db:
+            await record_user_interaction_event(
+                db,
+                user_id=user_id,
+                pair_id=pair_id,
+                session_id=tracked_request.headers.get("x-qj-session-id"),
+                source="api",
+                event_type="api.request",
+                page=tracked_request.headers.get("x-qj-page"),
+                path=tracked_request.url.path,
+                http_method=tracked_request.method.upper(),
+                http_status=response.status_code,
+                payload=payload,
+            )
+            await db.commit()
+    except Exception:
+        logger.exception("failed to capture api interaction event")
+
+    return response
+
 
 # API 路由
 app.include_router(api_router, prefix="/api/v1")

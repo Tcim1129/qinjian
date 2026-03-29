@@ -57,6 +57,31 @@ const backendStatus = {
 window.API_ROOT = API_ROOT;
 
 const TOKEN_KEY = 'qj_token';
+const CLIENT_SESSION_KEY = 'qj_client_session_id';
+
+function getClientSessionId() {
+    let sessionId = sessionStorage.getItem(CLIENT_SESSION_KEY);
+    if (sessionId) {
+        return sessionId;
+    }
+
+    if (window.crypto?.randomUUID) {
+        sessionId = window.crypto.randomUUID();
+    } else {
+        sessionId = `qj-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    }
+
+    sessionStorage.setItem(CLIENT_SESSION_KEY, sessionId);
+    return sessionId;
+}
+
+function currentTrackingPage() {
+    return document.body?.dataset?.page || window.__QJ_TRACKING_PAGE || '';
+}
+
+function currentTrackingPath() {
+    return `${window.location.pathname || '/'}${window.location.search || ''}`;
+}
 
 function publishBackendStatus(patch = {}) {
     Object.assign(backendStatus, patch, {
@@ -142,6 +167,20 @@ class ApiClient {
         this.token = readStoredToken();
     }
 
+    getClientSessionId() {
+        return getClientSessionId();
+    }
+
+    attachTrackingHeaders(headers = {}) {
+        headers['X-QJ-Session-ID'] = this.getClientSessionId();
+        const page = currentTrackingPage();
+        if (page) {
+            headers['X-QJ-Page'] = page;
+        }
+        headers['X-QJ-Page-Path'] = currentTrackingPath();
+        return headers;
+    }
+
     async ensureBackendReady(force = false) {
         const apiRoot = await resolveApiRoot(force);
         return { ...backendStatus, apiRoot };
@@ -164,6 +203,7 @@ class ApiClient {
 
         const headers = {};
         const options = { method, headers };
+        this.attachTrackingHeaders(headers);
 
         if (this.token) {
             headers.Authorization = `Bearer ${this.token}`;
@@ -251,6 +291,7 @@ class ApiClient {
 
         const headers = {};
         const options = { method, headers };
+        this.attachTrackingHeaders(headers);
 
         if (this.token) {
             headers.Authorization = `Bearer ${this.token}`;
@@ -308,7 +349,7 @@ class ApiClient {
         try {
             response = await fetch(`${connection.apiRoot}/upload/${type}`, {
                 method: 'POST',
-                headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+                headers: this.attachTrackingHeaders(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
                 body: formData,
             });
             publishBackendStatus({
@@ -738,6 +779,40 @@ class ApiClient {
         const ticketPayload = await this.requestRealtimeAsrTicket();
         socketUrl.searchParams.set('ticket', ticketPayload.ticket);
         return socketUrl.toString();
+    }
+
+    async logInteractionEvents(events = [], options = {}) {
+        const normalizedEvents = Array.isArray(events)
+            ? events.filter((item) => item && item.event_type)
+            : [];
+        if (!normalizedEvents.length) {
+            return { accepted: 0 };
+        }
+
+        const connection = await this.ensureBackendReady().catch(() => null);
+        if (!connection?.reachable) {
+            return { accepted: 0 };
+        }
+
+        const headers = this.attachTrackingHeaders({ 'Content-Type': 'application/json' });
+        if (this.token) {
+            headers.Authorization = `Bearer ${this.token}`;
+        }
+
+        try {
+            const response = await fetch(`${connection.apiRoot}/interactions/events`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ events: normalizedEvents }),
+                keepalive: Boolean(options.keepalive),
+            });
+            if (!response.ok) {
+                return { accepted: 0 };
+            }
+            return await response.json();
+        } catch (error) {
+            return { accepted: 0 };
+        }
     }
 
     async simulateRelationshipMessage(pairId, draft) {
