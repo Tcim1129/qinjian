@@ -6684,6 +6684,8 @@ function renderMessageSimulationResult(payload) {
 }
 
 function renderRelationshipTimelineRibbon(timeline, options = {}) {
+    return "";
+
     const isSolo = Boolean(options.solo);
     const events = Array.isArray(timeline?.events) ? timeline.events.slice(0, 3) : [];
     const latestEventAt = timeline?.latest_event_at ? formatDate(timeline.latest_event_at) : '刚刚';

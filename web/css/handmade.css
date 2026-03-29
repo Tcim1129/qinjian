@@ -409,7 +409,7 @@ body[data-page]:not([data-page="auth"]):not([data-page="pair"]):not([data-page="
 
 .cockpit-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+    grid-template-columns: 1fr;
     gap: 18px;
 }
 

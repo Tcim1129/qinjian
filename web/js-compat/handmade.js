@@ -1443,9 +1443,7 @@ async function loadProfilePage() {
                     </div>
                     ${isDemoMode() ? '<section class="safety-panel safety-panel--compact"><div class="safety-panel__head"><div><p class="panel__eyebrow">查看模式</p><h4>样例模式不会改真实数据</h4></div></div><p class="safety-panel__summary">当前页面只展示结构和内容，不开放改名、解绑或策略调整等修改操作。</p></section>' : ""}
                 </div>
-                <div class="cockpit-grid__side">
-                    ${isDemoMode() ? '<section class="cockpit-shell cockpit-shell--actions"><div class="cockpit-shell__head"><div><p class="panel__eyebrow">策略概览</p><h4>策略面板（查看）</h4></div></div><p>样例模式下只展示策略内容，不触发新增、编辑、启停或回滚。</p><div class="cockpit-action-row"><button class="button button--ghost" type="button" onclick="exitDemoMode()">退出样例</button></div></section>' : state.isAdmin ? renderPolicyWorkbenchLauncher(state.adminPolicies || []) : renderPolicyWorkbenchErrorNotice(state.policyWorkbenchError || "当前账号没有管理员权限，策略面板不会显示写入口。")}
-                </div>
+
             </div>
         </section>
     `);
