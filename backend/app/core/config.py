@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     QWEN_ASR_API_KEY: str = ""
     QWEN_ASR_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_ASR_FILE_MODEL: str = "qwen3-asr-flash"
-    QWEN_ASR_REALTIME_MODEL: str = "qwen3-asr-flash-realtime-2026-02-10"
+    QWEN_ASR_REALTIME_MODEL: str = "qwen3-asr-realtime"
     XFYUN_RTASR_APP_ID: str = ""
     XFYUN_RTASR_API_KEY: str = ""
     XFYUN_RTASR_API_SECRET: str = ""
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # 多模态模型（图片+文本分析）
     AI_MULTIMODAL_MODEL: str = "moonshot/kimi-k2.5"
     # 文本模型（情感分析，性价比高）
-    AI_TEXT_MODEL: str = "deepseek-ai/DeepSeek-V3.2"
+    AI_TEXT_MODEL: str = "deepseek-ai/DeepSeek-V3"
 
     # 文件上传
     UPLOAD_DIR: str = "./uploads"
@@ -99,9 +99,7 @@ class Settings(BaseSettings):
 
         parsed_origin = urlparse(frontend_origin)
         if parsed_origin.hostname in {"localhost", "127.0.0.1"}:
-            loopback_alias = (
-                "127.0.0.1" if parsed_origin.hostname == "localhost" else "localhost"
-            )
+            loopback_alias = "127.0.0.1" if parsed_origin.hostname == "localhost" else "localhost"
             alias_host = loopback_alias
             if parsed_origin.port:
                 alias_host = f"{alias_host}:{parsed_origin.port}"

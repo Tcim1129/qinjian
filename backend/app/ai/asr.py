@@ -17,8 +17,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlencode, urlparse
 
-import dashscope
-from dashscope.audio.qwen_asr import QwenTranscription
 from openai import AsyncOpenAI
 from websockets.asyncio.client import connect as ws_connect
 from websockets.exceptions import ConnectionClosed
@@ -42,16 +40,12 @@ def _normalized_provider() -> str:
 
 
 def _normalized_realtime_provider(provider: str | None = None) -> str:
-    value = (
-        str(
-            provider
-            or settings.REALTIME_ASR_PROVIDER
-            or settings.ASR_PROVIDER
-            or "qwen3"
-        )
-        .strip()
-        .lower()
-    )
+    value = str(
+        provider
+        or settings.REALTIME_ASR_PROVIDER
+        or settings.ASR_PROVIDER
+        or "qwen3"
+    ).strip().lower()
     return value or "qwen3"
 
 
@@ -278,74 +272,11 @@ async def _transcribe_with_qwen(
     *,
     content_type: str | None = None,
 ) -> ASRTranscriptionResult:
-    """使用 DashScope Qwen3-ASR-Flash 模型进行语音转录"""
     _validate_sync_transcription_constraints(file_path)
-
-    model = settings.QWEN_ASR_FILE_MODEL or "qwen3-asr-flash"
-
-    # 对于 qwen3-asr-flash 使用 DashScope MultiModalConversation API
-    if model.startswith("qwen3-asr-flash") or model.startswith("qwen3-asr"):
-        # 读取音频文件并转为 base64
-        media_type = _guess_media_type(file_path, content_type)
-        data_uri = _read_audio_data_uri(file_path, media_type)
-
-        # 配置 dashscope
-        dashscope.api_key = _resolve_qwen_api_key()
-        base_url = (settings.QWEN_ASR_BASE_URL or "").strip()
-        if base_url and "dashscope" in base_url:
-            # 使用北京地域
-            dashscope.base_http_api_url = "https://dashscope.aliyuncs.com/api/v1"
-        else:
-            dashscope.base_http_api_url = (
-                base_url if base_url else "https://dashscope.aliyuncs.com/api/v1"
-            )
-
-        messages = [{"role": "user", "content": [{"audio": data_uri}]}]
-
-        # 在线程池中执行同步调用
-        def call_dashscope():
-            from dashscope import MultiModalConversation
-
-            return MultiModalConversation.call(
-                model=model,
-                messages=messages,
-                result_format="message",
-                asr_options={"language": "zh", "enable_itn": False},
-            )
-
-        response = await asyncio.to_thread(call_dashscope)
-
-        # 解析响应
-        if hasattr(response, "output") and response.output:
-            choices = response.output.get("choices", [])
-            if choices:
-                message = choices[0].get("message", {})
-                content = message.get("content", [])
-                if content and isinstance(content, list):
-                    text = content[0].get("text", "")
-                else:
-                    text = str(content)
-                return ASRTranscriptionResult(
-                    text=text.strip(),
-                    provider="qwen3",
-                    model=model,
-                )
-        # 兜底：尝试直接访问 response 属性
-        try:
-            text = response.output.choices[0].message.content[0].text
-            return ASRTranscriptionResult(
-                text=text.strip(),
-                provider="qwen3",
-                model=model,
-            )
-        except (AttributeError, IndexError):
-            raise RuntimeError(f"DashScope ASR 响应格式异常: {response}")
-
-    # 对于其他模型（如 qwen-audio-turbo）使用 OpenAI 兼容模式
     data_uri = _read_audio_data_uri(file_path, content_type)
     client = _get_qwen_chat_client()
     response = await client.chat.completions.create(
-        model=model,
+        model=settings.QWEN_ASR_FILE_MODEL,
         temperature=0,
         messages=[
             {
@@ -371,7 +302,7 @@ async def _transcribe_with_qwen(
     return ASRTranscriptionResult(
         text=text,
         provider="qwen3",
-        model=model,
+        model=settings.QWEN_ASR_FILE_MODEL,
     )
 
 
@@ -543,7 +474,7 @@ class XFYunRealtimeASRClient:
         audio_bytes = base64.b64decode(audio_base64)
         chunk_size = 1280 if self.audio_encode == "pcm_s16le" else len(audio_bytes)
         for index in range(0, len(audio_bytes), chunk_size):
-            await self._ws.send(audio_bytes[index : index + chunk_size])
+            await self._ws.send(audio_bytes[index:index + chunk_size])
             if index + chunk_size < len(audio_bytes):
                 await asyncio.sleep(0.04)
 
@@ -581,16 +512,10 @@ class XFYunRealtimeASRClient:
     def _normalize_event(self, payload: dict) -> dict | None:
         msg_type = str(payload.get("msg_type") or "").strip().lower()
         payload_data = payload.get("data") or {}
-        action = (
-            str(
-                payload.get("action")
-                or (
-                    payload_data.get("action") if isinstance(payload_data, dict) else ""
-                )
-            )
-            .strip()
-            .lower()
-        )
+        action = str(
+            payload.get("action")
+            or (payload_data.get("action") if isinstance(payload_data, dict) else "")
+        ).strip().lower()
         code = str(payload.get("code") or "0").strip()
         if msg_type == "action" and action == "started":
             if isinstance(payload_data, dict):
@@ -611,9 +536,7 @@ class XFYunRealtimeASRClient:
             return {
                 "type": "error",
                 "code": code or "provider_error",
-                "message": str(
-                    data.get("desc") or payload.get("desc") or "讯飞实时识别失败"
-                ),
+                "message": str(data.get("desc") or payload.get("desc") or "讯飞实时识别失败"),
             }
 
         text = self._extract_text(data)
@@ -641,11 +564,7 @@ class XFYunRealtimeASRClient:
                 "segment_id": segment_id,
             }
         if is_final:
-            return {
-                "type": "session.finished",
-                "transcript": "",
-                "segment_id": segment_id,
-            }
+            return {"type": "session.finished", "transcript": "", "segment_id": segment_id}
         return None
 
     @staticmethod

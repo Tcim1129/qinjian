@@ -502,39 +502,6 @@ class RelationshipEvent(Base):
     user: Mapped["User"] = relationship()
 
 
-class UserInteractionEvent(Base):
-    __tablename__ = "user_interaction_events"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id"), nullable=True, index=True
-    )
-    pair_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("pairs.id"), nullable=True, index=True
-    )
-    session_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
-    source: Mapped[str] = mapped_column(String(20), default="web", index=True)
-    event_type: Mapped[str] = mapped_column(String(80), index=True)
-    page: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
-    path: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    http_method: Mapped[str | None] = mapped_column(String(12), nullable=True)
-    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    target_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    target_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    occurred_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
-    )
-
-    user: Mapped["User"] = relationship()
-    pair: Mapped["Pair"] = relationship()
-
-
 class RelationshipProfileSnapshot(Base):
     __tablename__ = "relationship_profile_snapshots"
 
