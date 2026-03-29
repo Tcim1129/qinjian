@@ -1890,7 +1890,7 @@ async function generateReport() {
 }
 async function loadProfilePage() {
   if (!api.isLoggedIn()) {
-    safeSetHtml("#profile-summary", `<p class="eyebrow">PROFILE</p><h3>请先登录</h3><p>登录后这里会显示你的账号信息和当前关系状态。</p>`);
+    safeSetHtml("#profile-summary", `<p class="eyebrow">个人资料</p><h3>请先登录</h3><p>登录后这里会显示你的账号信息和当前关系状态。</p>`);
     safeSetHtml("#profile-account-panel", '<div class="empty-state">登录后可查看账户资料。</div>');
     safeSetHtml("#profile-pair-panel", '<div class="empty-state">登录后可查看当前关系状态。</div>');
     safeSetHtml("#profile-relations-panel", '<div class="empty-state">登录后可查看全部关系列表和多关系切换入口。</div>');

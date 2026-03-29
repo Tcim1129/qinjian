@@ -4544,7 +4544,7 @@ body[data-theme-state="cover"]::before {
 }
 
 .home-cover::after {
-    content: "QINJIAN";
+    content: "亲见";
     position: absolute;
     right: -8px;
     bottom: -20px;
