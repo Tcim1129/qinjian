@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 _login_attempts: dict[str, dict] = {}
 MIN_PASSWORD_LENGTH = 8
+INVALID_LOGIN_DETAIL = "邮箱或密码错误"
+DUMMY_PASSWORD_HASH = hash_password("qinjian.invalid-login-placeholder")
 
 
 def _serialize_user_response(user: User) -> UserResponse:
@@ -50,7 +52,18 @@ def _resolve_phone_code_store():
         return get_phone_code_store()
     except (RuntimeError, ValueError) as exc:
         logger.exception("Phone code store misconfigured")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="验证码服务暂时不可用，请稍后再试",
+        ) from exc
+
+
+def _normalize_email(email: str) -> str:
+    return str(email or "").strip().lower()
+
+
+def _raise_invalid_login_error() -> None:
+    raise HTTPException(status_code=401, detail=INVALID_LOGIN_DETAIL)
 
 
 def _normalize_phone(phone: str) -> str:
@@ -68,6 +81,7 @@ def _generate_phone_code() -> str:
 @router.post("/register", response_model=dict)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """注册新用户"""
+    normalized_email = _normalize_email(req.email)
     if len(req.password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(
             status_code=400,
@@ -75,12 +89,12 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
         )
 
     # 检查邮箱是否已存在
-    result = await db.execute(select(User).where(User.email == req.email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="该邮箱已注册")
 
     user = User(
-        email=req.email,
+        email=normalized_email,
         nickname=req.nickname,
         password_hash=hash_password(req.password),
     )
@@ -98,8 +112,11 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=dict)
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """用户登录"""
+    normalized_email = _normalize_email(req.email)
     now = datetime.now(timezone.utc)
-    attempt = _login_attempts.setdefault(req.email, {"count": 0, "locked_until": None})
+    attempt = _login_attempts.setdefault(
+        normalized_email, {"count": 0, "locked_until": None}
+    )
     if attempt["locked_until"] and now < attempt["locked_until"]:
         remaining = int((attempt["locked_until"] - now).total_seconds() / 60)
         raise HTTPException(
@@ -110,17 +127,18 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         attempt["count"] = 0
         attempt["locked_until"] = None
 
-    result = await db.execute(select(User).where(User.email == req.email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="该邮箱尚未注册，请先注册")
+        verify_password(req.password, DUMMY_PASSWORD_HASH)
+        _raise_invalid_login_error()
     if not verify_password(req.password, user.password_hash):
         attempt["count"] += 1
         if attempt["count"] >= 5:
             attempt["locked_until"] = now + timedelta(minutes=15)
-        raise HTTPException(status_code=401, detail="密码错误，请重新输入")
+        _raise_invalid_login_error()
 
-    _login_attempts.pop(req.email, None)
+    _login_attempts.pop(normalized_email, None)
     token = create_access_token(str(user.id))
     return {
         "access_token": token,

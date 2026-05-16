@@ -15,7 +15,6 @@ from app.services.relationship_intelligence import (
     refresh_profile_and_plan,
 )
 from app.services.privacy_audit import privacy_audit_scope
-from app.services.product_prefs import resolve_privacy_mode
 
 from .shared import (
     get_latest_completed_report,
@@ -99,7 +98,6 @@ async def get_latest_narrative_alignment(
         pair_id=pair.id,
         scope="pair",
         run_type="narrative_alignment",
-        privacy_mode=resolve_privacy_mode(getattr(user, "product_prefs", None)),
     ):
         alignment = await generate_narrative_alignment(
             context=context,

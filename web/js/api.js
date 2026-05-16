@@ -1,137 +1,16 @@
-function normalizeApiRoot(root) {
-    const trimmed = String(root || '').replace(/\/+$/, '');
-    if (!trimmed) return '/api/v1';
-    if (trimmed.endsWith('/api')) return `${trimmed}/v1`;
-    return trimmed;
-}
-
-function isLoopbackHost(hostname = '') {
-    const value = String(hostname || '').replace(/^\[|\]$/g, '');
-    return value === 'localhost' || value === '127.0.0.1' || value === '::1';
-}
-
-function buildApiRootCandidates() {
-    const candidates = [];
-    const explicitRoot = window.QJ_CONFIG?.apiRoot;
-
-    if (explicitRoot) {
-        candidates.push(normalizeApiRoot(explicitRoot));
-    } else {
-        if (window.location.protocol !== 'file:') {
-            candidates.push(normalizeApiRoot(`${window.location.origin}/api/v1`));
-        }
-
-        if (window.location.protocol === 'file:' || isLoopbackHost(window.location.hostname)) {
-            candidates.push('http://127.0.0.1:8000/api/v1');
-            candidates.push('http://localhost:8000/api/v1');
-        }
-
-        if (!candidates.length) {
-            candidates.push('/api/v1');
-        }
+const API_ROOT = (() => {
+    if (window.QJ_CONFIG?.apiRoot) {
+        return window.QJ_CONFIG.apiRoot.replace(/\/$/, '');
     }
 
-    return [...new Set(candidates)];
-}
+    if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
+        return 'http://127.0.0.1:8000/api/v1';
+    }
 
-function buildHealthUrl(apiRoot) {
-    return normalizeApiRoot(apiRoot).replace(/\/api\/v1$/, '/api/health');
-}
-
-function toWebSocketUrl(url) {
-    const value = String(url || '').trim();
-    if (!value) return '';
-    if (value.startsWith('https://')) return `wss://${value.slice(8)}`;
-    if (value.startsWith('http://')) return `ws://${value.slice(7)}`;
-    return value;
-}
-
-let API_ROOT = buildApiRootCandidates()[0] || '/api/v1';
-let apiRootResolution = null;
-const backendStatus = {
-    checked: false,
-    reachable: false,
-    apiRoot: API_ROOT,
-    message: '尚未检测',
-};
-window.API_ROOT = API_ROOT;
+    return '/api/v1';
+})();
 
 const TOKEN_KEY = 'qj_token';
-const DEMO_MODE_HEADER = 'X-QJ-Demo-Mode';
-
-function isDemoReadOnlyMode() {
-    return new URLSearchParams(window.location.search).get('demo') === '1';
-}
-
-function applyRuntimeHeaders(headers) {
-    if (isDemoReadOnlyMode()) {
-        headers[DEMO_MODE_HEADER] = '1';
-    }
-    return headers;
-}
-
-function publishBackendStatus(patch = {}) {
-    Object.assign(backendStatus, patch, {
-        checked_at: new Date().toISOString(),
-    });
-    window.dispatchEvent(new CustomEvent('qj:backend-status', {
-        detail: { ...backendStatus },
-    }));
-}
-
-async function probeApiRoot(apiRoot, timeoutMs = 2600) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-        const response = await fetch(buildHealthUrl(apiRoot), {
-            method: 'GET',
-            cache: 'no-store',
-            signal: controller.signal,
-        });
-        return response.ok;
-    } catch (error) {
-        return false;
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-async function resolveApiRoot(force = false) {
-    if (!force && apiRootResolution) {
-        return apiRootResolution;
-    }
-
-    apiRootResolution = (async () => {
-        const candidates = buildApiRootCandidates();
-
-        for (const candidate of candidates) {
-            if (await probeApiRoot(candidate)) {
-                API_ROOT = normalizeApiRoot(candidate);
-                window.API_ROOT = API_ROOT;
-                publishBackendStatus({
-                    checked: true,
-                    reachable: true,
-                    apiRoot: API_ROOT,
-                    message: '服务可用',
-                });
-                return API_ROOT;
-            }
-        }
-
-        API_ROOT = normalizeApiRoot(candidates[0] || API_ROOT);
-        window.API_ROOT = API_ROOT;
-        publishBackendStatus({
-            checked: true,
-            reachable: false,
-            apiRoot: API_ROOT,
-            message: '未检测到可用后端',
-        });
-        return API_ROOT;
-    })();
-
-    return apiRootResolution;
-}
 
 function readStoredToken() {
     const sessionToken = sessionStorage.getItem(TOKEN_KEY);
@@ -154,27 +33,8 @@ class ApiClient {
         this.token = readStoredToken();
     }
 
-    async ensureBackendReady(force = false) {
-        const apiRoot = await resolveApiRoot(force);
-        return { ...backendStatus, apiRoot };
-    }
-
-    async checkBackendConnection(force = false) {
-        const status = await this.ensureBackendReady(force);
-        return { ...status };
-    }
-
-    connectionStatus() {
-        return { ...backendStatus };
-    }
-
     async requestWithTimeout(method, path, body = null, timeoutMs = 12000) {
-        const connection = await this.ensureBackendReady();
-        if (!connection.reachable) {
-            throw new Error('当前还没有连上后端服务，请先启动服务或先进入样例。');
-        }
-
-        const headers = applyRuntimeHeaders({});
+        const headers = {};
         const options = { method, headers };
 
         if (this.token) {
@@ -192,20 +52,8 @@ class ApiClient {
 
         let response;
         try {
-            response = await fetch(`${connection.apiRoot}${path}`, options);
-            publishBackendStatus({
-                checked: true,
-                reachable: true,
-                apiRoot: connection.apiRoot,
-                message: '服务可用',
-            });
+            response = await fetch(`${API_ROOT}${path}`, options);
         } catch (error) {
-            publishBackendStatus({
-                checked: true,
-                reachable: false,
-                apiRoot: connection.apiRoot,
-                message: '请求失败',
-            });
             if (error?.name === 'AbortError') {
                 throw new Error('请求超时');
             }
@@ -251,16 +99,12 @@ class ApiClient {
     }
 
     async request(method, path, body = null) {
-        if (isDemoReadOnlyMode() && method !== 'GET') {
+        const isDemoReadOnly = new URLSearchParams(window.location.search).get('demo') === '1';
+        if (isDemoReadOnly && method !== 'GET') {
             throw new Error('Demo Mode is read-only.');
         }
 
-        const connection = await this.ensureBackendReady();
-        if (!connection.reachable) {
-            throw new Error('当前还没有连上后端服务，请先启动服务或先进入样例。');
-        }
-
-        const headers = applyRuntimeHeaders({});
+        const headers = {};
         const options = { method, headers };
 
         if (this.token) {
@@ -274,20 +118,8 @@ class ApiClient {
 
         let response;
         try {
-            response = await fetch(`${connection.apiRoot}${path}`, options);
-            publishBackendStatus({
-                checked: true,
-                reachable: true,
-                apiRoot: connection.apiRoot,
-                message: '服务可用',
-            });
+            response = await fetch(`${API_ROOT}${path}`, options);
         } catch (error) {
-            publishBackendStatus({
-                checked: true,
-                reachable: false,
-                apiRoot: connection.apiRoot,
-                message: '请求失败',
-            });
             throw new Error('无法连接后端服务');
         }
 
@@ -307,34 +139,17 @@ class ApiClient {
     }
 
     async uploadFile(type, file) {
-        const connection = await this.ensureBackendReady();
-        if (!connection.reachable) {
-            throw new Error('当前还没有连上后端服务，请先启动服务后再上传。');
-        }
-
         const formData = new FormData();
         formData.append('file', file);
 
         let response;
         try {
-            response = await fetch(`${connection.apiRoot}/upload/${type}`, {
+            response = await fetch(`${API_ROOT}/upload/${type}`, {
                 method: 'POST',
-                headers: applyRuntimeHeaders(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+                headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
                 body: formData,
             });
-            publishBackendStatus({
-                checked: true,
-                reachable: true,
-                apiRoot: connection.apiRoot,
-                message: '服务可用',
-            });
         } catch (error) {
-            publishBackendStatus({
-                checked: true,
-                reachable: false,
-                apiRoot: connection.apiRoot,
-                message: '上传失败',
-            });
             throw new Error('上传失败，请检查网络连接');
         }
 
@@ -428,21 +243,8 @@ class ApiClient {
         return this.request('GET', pairId ? `/checkins/today?pair_id=${pairId}` : '/checkins/today?mode=solo');
     }
 
-    async getCheckinHistory(pairId, options = 14) {
-        const params = new URLSearchParams();
-        if (pairId) {
-            params.set('pair_id', pairId);
-        } else {
-            params.set('mode', 'solo');
-        }
-        if (typeof options === 'number') {
-            params.set('limit', String(options));
-        } else {
-            params.set('limit', String(options.limit || 14));
-            if (options.startDate) params.set('start_date', options.startDate);
-            if (options.endDate) params.set('end_date', options.endDate);
-        }
-        return this.request('GET', `/checkins/history?${params.toString()}`);
+    async getCheckinHistory(pairId, limit = 14) {
+        return this.request('GET', pairId ? `/checkins/history?pair_id=${pairId}&limit=${limit}` : `/checkins/history?mode=solo&limit=${limit}`);
     }
 
     async getCheckinStreak(pairId) {
@@ -461,16 +263,6 @@ class ApiClient {
         return this.request('POST', `/reports/generate-monthly?pair_id=${pairId}`);
     }
 
-    async generateReport(pairId, reportType = 'daily') {
-        if (reportType === 'weekly') {
-            return this.generateWeeklyReport(pairId);
-        }
-        if (reportType === 'monthly') {
-            return this.generateMonthlyReport(pairId);
-        }
-        return this.generateDailyReport(pairId);
-    }
-
     async getLatestReport(pairId, reportType = 'daily') {
         return this.request('GET', pairId ? `/reports/latest?pair_id=${pairId}&report_type=${reportType}` : `/reports/latest?mode=solo&report_type=${reportType}`);
     }
@@ -487,22 +279,8 @@ class ApiClient {
         return this.getLatestReport(pairId, reportType);
     }
 
-    async getReportHistory(pairId, reportType = 'daily', limit = 7, options = {}) {
-        if (typeof limit === 'object') {
-            options = limit;
-            limit = options.limit || 7;
-        }
-        const params = new URLSearchParams();
-        if (pairId) {
-            params.set('pair_id', pairId);
-        } else {
-            params.set('mode', 'solo');
-        }
-        params.set('report_type', reportType);
-        params.set('limit', String(limit));
-        if (options.startDate) params.set('start_date', options.startDate);
-        if (options.endDate) params.set('end_date', options.endDate);
-        return this.request('GET', `/reports/history?${params.toString()}`);
+    async getReportHistory(pairId, reportType = 'daily', limit = 7) {
+        return this.request('GET', pairId ? `/reports/history?pair_id=${pairId}&report_type=${reportType}&limit=${limit}` : `/reports/history?mode=solo&report_type=${reportType}&limit=${limit}`);
     }
 
     async getHealthTrend(pairId, days = 14) {
@@ -755,24 +533,6 @@ class ApiClient {
         return this.request('POST', `/agent/sessions/${sessionId}/chat`, { content });
     }
 
-    async buildRealtimeAsrSocketUrl() {
-        const connection = await this.ensureBackendReady();
-        if (!connection.reachable) {
-            throw new Error('当前还没有连上后端服务，请先启动服务。');
-        }
-        if (!this.token) {
-            throw new Error('请先登录');
-        }
-
-        const absoluteApiRoot = connection.apiRoot.startsWith('http')
-            ? connection.apiRoot
-            : `${window.location.origin}${connection.apiRoot.startsWith('/') ? '' : '/'}${connection.apiRoot}`;
-        const wsApiRoot = toWebSocketUrl(absoluteApiRoot);
-        const socketUrl = new URL(`${wsApiRoot}/agent/asr/realtime`);
-        socketUrl.searchParams.set('token', this.token);
-        return socketUrl.toString();
-    }
-
     async simulateRelationshipMessage(pairId, draft) {
         return this.request('POST', `/agent/simulate-message?pair_id=${pairId}`, { draft });
     }
@@ -850,13 +610,7 @@ class ApiClient {
     async runAdminPrivacyRetentionSweep(dryRun = true) {
         return this.request('POST', `/admin/privacy/retention/sweep?dry_run=${dryRun ? 'true' : 'false'}`);
     }
-
-    async getAdminPrivacyBenchmarks(limit = 5) {
-        return this.request('GET', `/admin/privacy/benchmarks?limit=${encodeURIComponent(String(limit))}`);
-    }
-
-    async runAdminPrivacyBenchmark() {
-        return this.request('POST', '/admin/privacy/benchmarks/run');
-    }
 }
+
+window.API_ROOT = API_ROOT;
 window.api = new ApiClient();

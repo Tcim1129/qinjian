@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # 应用
-    APP_NAME: str = "亲见 API"
+    APP_NAME: str = "亲健 API"
     APP_TIMEZONE: str = "Asia/Shanghai"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     AI_TIMEOUT_SECONDS: int = 60
     ASR_PROVIDER: str = "qwen3"
     REALTIME_ASR_PROVIDER: str = "qwen3"
+    REALTIME_ASR_TICKET_EXPIRE_SECONDS: int = 120
     REALTIME_ASR_STOP_TIMEOUT_SECONDS: int = 12
     PRIVACY_SANDBOX_ENABLED: bool = True
     PRIVACY_MASK_LOGS: bool = True
@@ -71,7 +72,7 @@ class Settings(BaseSettings):
     # 多模态模型（图片+文本分析）
     AI_MULTIMODAL_MODEL: str = "moonshot/kimi-k2.5"
     # 文本模型（情感分析，性价比高）
-    AI_TEXT_MODEL: str = "deepseek-ai/DeepSeek-V3"
+    AI_TEXT_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3.2"
 
     # 文件上传
     UPLOAD_DIR: str = "./uploads"

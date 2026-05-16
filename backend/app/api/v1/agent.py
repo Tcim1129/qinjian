@@ -1,18 +1,14 @@
 """AI 智能伴侣 Agent 接口（陪伴、聊天、数据提取式打卡）"""
 
-import asyncio
 import json
 import logging
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from datetime import date
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.time import current_local_date
 from app.api.deps import get_current_user, validate_pair_access
-from app.ai.asr import create_realtime_asr_client
-from app.core.security import decode_access_token
 from app.models import (
     User,
     Pair,
@@ -26,26 +22,27 @@ from app.schemas import (
     AgentMessageResponse,
     AgentChatRequest,
     AgentChatResponse,
+    AgentRealtimeTicketResponse,
     MessageSimulationRequest,
     MessageSimulationResponse,
 )
 from app.ai import create_chat_completion
 from app.ai.message_simulator import simulate_message_preview
 from app.core.config import settings
+from app.core.security import create_realtime_ws_ticket
 from app.services.relationship_intelligence import (
     record_relationship_event,
     refresh_profile_and_plan,
     refresh_profile_snapshot,
 )
 from app.services.privacy_audit import privacy_audit_scope
-from app.services.product_prefs import resolve_privacy_mode
 from app.services.safety_summary import build_safety_status
 
 router = APIRouter(prefix="/agent", tags=["智能陪伴"])
 logger = logging.getLogger(__name__)
 
 # 这里设定 System Prompt
-SYSTEM_PROMPT = """你是一个情感智能伴侣（亲见AI）。你的任务是通过与用户的自然对话，提供情绪支持、感情建议，并“隐式”地引导他们完成每日的情感打卡。
+SYSTEM_PROMPT = """你是一个情感智能伴侣（亲健AI）。你的任务是通过与用户的自然对话，提供情绪支持、感情建议，并“隐式”地引导他们完成每日的情感打卡。
 你不能直接说“请填写表单”或者“请打卡”。相反，你需要在自然的聊天中，通过共情和引导提问，引出以下信息：
 1. 他们今天的心情指数（1-10分，不要直接问几分，而是从对方描述中感知或轻巧地确认）
 2. 他们今天与伴侣（或自己）的互动频率和深入程度
@@ -92,6 +89,17 @@ tools = [
 ]
 
 
+@router.post("/asr/ws-ticket", response_model=AgentRealtimeTicketResponse)
+async def create_agent_asr_ws_ticket(
+    user: User = Depends(get_current_user),
+):
+    """签发短时实时 ASR WebSocket 票据，避免把长期 JWT 放进 URL。"""
+    return AgentRealtimeTicketResponse(
+        ticket=create_realtime_ws_ticket(str(user.id)),
+        expires_in=max(30, settings.REALTIME_ASR_TICKET_EXPIRE_SECONDS),
+    )
+
+
 def _simulation_fallback_context(pair: Pair, user: User) -> dict:
     is_user_a = str(pair.user_a_id) == str(user.id)
     partner_name = (
@@ -120,7 +128,7 @@ async def create_or_get_session(
     if pair_id:
         await validate_pair_access(pair_id, user, db, require_active=True)
 
-    today = current_local_date()
+    today = date.today()
 
     # 查找是否有今天的未归档会话
     stmt = select(AgentChatSession).where(
@@ -189,7 +197,6 @@ async def chat_with_agent(
     session = await db.get(AgentChatSession, session_id)
     if not session or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="会话不存在")
-    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
 
     # 1. 记录用户的消息
     user_msg = AgentChatMessage(session_id=session.id, role="user", content=req.content)
@@ -237,7 +244,6 @@ async def chat_with_agent(
             pair_id=session.pair_id,
             scope="pair" if session.pair_id else "solo",
             run_type="agent_chat",
-            privacy_mode=privacy_mode,
         ):
             response = await create_chat_completion(
                 model=settings.AI_TEXT_MODEL,
@@ -332,7 +338,6 @@ async def chat_with_agent(
                     pair_id=session.pair_id,
                     scope="pair" if session.pair_id else "solo",
                     run_type="agent_chat_followup",
-                    privacy_mode=privacy_mode,
                 ):
                     second_response = await create_chat_completion(
                         model=settings.AI_TEXT_MODEL,
@@ -377,7 +382,6 @@ async def simulate_message(
     """在消息发出前做一轮关系语境下的风险预演。"""
     if not req.draft.strip():
         raise HTTPException(status_code=400, detail="请先输入准备发送的内容")
-    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
 
     pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
@@ -433,7 +437,6 @@ async def simulate_message(
         pair_id=pair.id,
         scope="pair",
         run_type="message_simulation",
-        privacy_mode=privacy_mode,
     ):
         simulation = await simulate_message_preview(req.draft, context)
     safety_status = await build_safety_status(db, pair_id=pair.id)
@@ -477,259 +480,3 @@ async def simulate_message(
         limitation_note=safety_status.get("limitation_note"),
         safety_handoff=safety_handoff,
     )
-
-
-async def _authenticate_realtime_asr_websocket(
-    websocket: WebSocket,
-    db: AsyncSession,
-) -> User | None:
-    token = (
-        websocket.query_params.get("token")
-        or websocket.headers.get("authorization", "").removeprefix("Bearer ").strip()
-    )
-    if not token:
-        await websocket.send_json(
-            {"type": "error", "code": "unauthorized", "message": "缺少认证令牌"}
-        )
-        await websocket.close(code=4401)
-        return None
-
-    user_id = decode_access_token(token)
-    if not user_id:
-        await websocket.send_json(
-            {"type": "error", "code": "unauthorized", "message": "登录已失效，请重新登录"}
-        )
-        await websocket.close(code=4401)
-        return None
-
-    try:
-        user_uuid = uuid.UUID(str(user_id))
-    except (TypeError, ValueError):
-        await websocket.send_json(
-            {"type": "error", "code": "unauthorized", "message": "登录信息无效，请重新登录"}
-        )
-        await websocket.close(code=4401)
-        return None
-
-    result = await db.execute(select(User).where(User.id == user_uuid))
-    user = result.scalar_one_or_none()
-    if not user:
-        await websocket.send_json(
-            {"type": "error", "code": "unauthorized", "message": "用户不存在"}
-        )
-        await websocket.close(code=4401)
-        return None
-    return user
-
-
-async def _pump_realtime_asr_events(
-    provider,
-    websocket: WebSocket,
-) -> None:
-    partial_text = ""
-    final_sent = False
-    segment_texts: dict[int, str] = {}
-    try:
-        while True:
-            event = await provider.recv_event()
-            event_type = str(event.get("type") or "").strip()
-            if event_type == "conversation.item.input_audio_transcription.text":
-                text = (
-                    event.get("text")
-                    or event.get("stash")
-                    or event.get("transcript")
-                    or partial_text
-                )
-                segment_id = event.get("segment_id")
-                if text and isinstance(segment_id, int):
-                    segment_texts[segment_id] = str(text)
-                    text = "".join(
-                        segment_texts[index] for index in sorted(segment_texts)
-                    )
-                if text:
-                    partial_text = str(text)
-                    await websocket.send_json({"type": "partial", "text": partial_text})
-                continue
-
-            if event_type == "conversation.item.input_audio_transcription.completed":
-                text = event.get("transcript") or event.get("text") or partial_text
-                segment_id = event.get("segment_id")
-                if text and isinstance(segment_id, int):
-                    segment_texts[segment_id] = str(text)
-                    text = "".join(
-                        segment_texts[index] for index in sorted(segment_texts)
-                    )
-                if text:
-                    partial_text = str(text)
-                    final_sent = True
-                    await websocket.send_json({"type": "final", "text": partial_text})
-                continue
-
-            if event_type == "session.finished":
-                text = event.get("transcript") or partial_text
-                segment_id = event.get("segment_id")
-                if text and isinstance(segment_id, int):
-                    segment_texts[segment_id] = str(text)
-                    text = "".join(
-                        segment_texts[index] for index in sorted(segment_texts)
-                    )
-                if text and not final_sent:
-                    await websocket.send_json({"type": "final", "text": str(text)})
-                break
-
-            if event_type == "error":
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "code": str(event.get("code") or "provider_error"),
-                        "message": str(event.get("message") or "实时识别失败"),
-                    }
-                )
-                break
-    except asyncio.CancelledError:
-        raise
-    except WebSocketDisconnect:
-        return
-    except Exception:
-        logger.exception("realtime asr provider pump failed")
-        try:
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "provider_error",
-                    "message": "实时识别服务中断，请稍后重试",
-                }
-            )
-        except Exception:
-            pass
-
-
-@router.websocket("/asr/realtime")
-async def realtime_asr(
-    websocket: WebSocket,
-    db: AsyncSession = Depends(get_db),
-):
-    """统一实时语音识别入口，由后端代理到配置的 realtime ASR provider。"""
-    await websocket.accept()
-    user = await _authenticate_realtime_asr_websocket(websocket, db)
-    if not user:
-        return
-
-    provider = None
-    provider_task: asyncio.Task | None = None
-
-    try:
-        while True:
-            payload = await websocket.receive_json()
-            event_type = str(payload.get("type") or "").strip()
-
-            if event_type == "session.start":
-                if provider is not None:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "code": "session_exists",
-                            "message": "当前连接已存在一个识别会话",
-                        }
-                    )
-                    continue
-
-                provider = create_realtime_asr_client(
-                    provider=str(payload.get("provider") or settings.REALTIME_ASR_PROVIDER),
-                    model=str(payload.get("model") or settings.QWEN_ASR_REALTIME_MODEL),
-                    language=str(payload.get("language") or "zh"),
-                    sample_rate=int(payload.get("sample_rate") or 16000),
-                    input_audio_format=str(payload.get("format") or "pcm"),
-                )
-                await provider.connect()
-                await provider.start_session()
-                provider_task = asyncio.create_task(
-                    _pump_realtime_asr_events(provider, websocket)
-                )
-                continue
-
-            if event_type == "audio.chunk":
-                if provider is None:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "code": "session_missing",
-                            "message": "请先发送 session.start",
-                        }
-                    )
-                    continue
-
-                audio = str(payload.get("audio") or "").strip()
-                if not audio:
-                    continue
-                await provider.send_audio_chunk(audio)
-                continue
-
-            if event_type == "session.stop":
-                if provider is None:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "code": "session_missing",
-                            "message": "请先发送 session.start",
-                        }
-                    )
-                    continue
-
-                await provider.stop_session()
-                if provider_task is not None:
-                    try:
-                        await asyncio.wait_for(
-                            provider_task,
-                            timeout=settings.REALTIME_ASR_STOP_TIMEOUT_SECONDS,
-                        )
-                    except asyncio.TimeoutError:
-                        provider_task.cancel()
-                        try:
-                            await provider_task
-                        except asyncio.CancelledError:
-                            pass
-                        await websocket.send_json(
-                            {
-                                "type": "error",
-                                "code": "provider_timeout",
-                                "message": "实时识别收尾超时，已终止当前会话",
-                            }
-                        )
-                    finally:
-                        provider_task = None
-                await provider.close()
-                provider = None
-                continue
-
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "unsupported_event",
-                    "message": f"不支持的事件类型：{event_type or 'unknown'}",
-                }
-            )
-
-    except WebSocketDisconnect:
-        logger.info("realtime asr websocket disconnected user=%s", user.id)
-    except Exception:
-        logger.exception("realtime asr websocket failed")
-        try:
-            await websocket.send_json(
-                {"type": "error", "code": "server_error", "message": "实时识别服务异常"}
-            )
-        except Exception:
-            pass
-    finally:
-        if provider_task is not None and not provider_task.done():
-            provider_task.cancel()
-            try:
-                await provider_task
-            except asyncio.CancelledError:
-                pass
-        if provider is not None:
-            await provider.close()
-        try:
-            await websocket.close()
-        except Exception:
-            pass

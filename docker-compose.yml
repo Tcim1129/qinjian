@@ -55,7 +55,7 @@ services:
     image: ${NGINX_IMAGE:-nginx:alpine}
     restart: always
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       - ./web:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

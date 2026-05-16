@@ -18,6 +18,7 @@ import paramiko
 HOST = os.getenv("QJ_REMOTE_HOST", "")
 USERNAME = os.getenv("QJ_REMOTE_USER", "root")
 PASSWORD = os.getenv("QJ_REMOTE_PASSWORD", "")
+FRONTEND_ORIGIN = os.getenv("QJ_FRONTEND_ORIGIN", os.getenv("FRONTEND_ORIGIN", "")).rstrip("/")
 REMOTE_ROOT = "/root/qinjian"
 LOCAL_ROOT = Path(__file__).resolve().parent
 
@@ -32,14 +33,30 @@ IGNORE_PATTERNS = [
     "__pycache__",
     "*.pyc",
     "*.pyo",
+    "*.db",
+    "*.log",
+    "*.bak",
+    "*.orig",
+    "*.tmp",
     ".DS_Store",
+    ".env.local",
     ".env",
     "venv",
     ".venv",
     "node_modules",
     "site-packages",
     "uploads",
+    "backend.log",
+    "nul",
 ]
+
+KEEP_REMOTE_PATHS = {
+    ".env",
+    "backend",
+    "web",
+    "docker-compose.yml",
+    "nginx.conf",
+}
 
 
 def should_ignore(path: Path) -> bool:
@@ -83,6 +100,11 @@ def connect_client(host: str, username: str, password: str) -> paramiko.SSHClien
         timeout=30,
     )
     return client
+
+
+def resolve_frontend_origin(host: str) -> str:
+    origin = FRONTEND_ORIGIN or f"http://{host}"
+    return origin.rstrip("/")
 
 
 def run_remote(
@@ -137,7 +159,7 @@ def create_remote_env_if_missing(sftp: paramiko.SFTPClient, remote_root: str) ->
     db_password = secrets.token_hex(16)
     ai_api_key = os.getenv("AI_API_KEY", os.getenv("SILICONFLOW_API_KEY", ""))
     ai_base_url = os.getenv("AI_BASE_URL", "https://api.siliconflow.cn/v1")
-    frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost")
+    frontend_origin = resolve_frontend_origin("localhost")
     env_content = (
         "\n".join(
             [
@@ -160,6 +182,53 @@ def create_remote_env_if_missing(sftp: paramiko.SFTPClient, remote_root: str) ->
         remote_file.write(env_content)
 
     return True
+
+
+def prune_remote_root(client: paramiko.SSHClient, remote_root: str) -> tuple[int, str, str]:
+    command = f"""python3 - <<'PY'
+from pathlib import Path
+import shutil
+
+root = Path({remote_root!r})
+keep = {sorted(KEEP_REMOTE_PATHS)!r}
+removed = []
+
+for child in list(root.iterdir()):
+    if child.name in keep:
+        continue
+    removed.append(child.name)
+    if child.is_dir() and not child.is_symlink():
+        shutil.rmtree(child)
+    else:
+        child.unlink()
+
+print('removed=' + ','.join(sorted(removed)) if removed else 'removed=')
+PY"""
+    return run_remote(client, command, timeout=300)
+
+
+def prune_remote_artifacts(client: paramiko.SSHClient, remote_root: str) -> tuple[int, str, str]:
+    command = f"""python3 - <<'PY'
+from pathlib import Path
+import shutil
+
+root = Path({remote_root!r})
+removed = []
+
+for pattern in ('*.bak', '*.orig', '*.tmp', '*.pyc'):
+    for child in root.rglob(pattern):
+        if child.is_file() or child.is_symlink():
+            removed.append(str(child.relative_to(root)))
+            child.unlink()
+
+for child in root.rglob('__pycache__'):
+    if child.is_dir():
+        removed.append(str(child.relative_to(root)))
+        shutil.rmtree(child)
+
+print('removed=' + ','.join(sorted(set(removed))) if removed else 'removed=')
+PY"""
+    return run_remote(client, command, timeout=300)
 
 
 def create_upload_bundle() -> Path:
@@ -212,13 +281,13 @@ def sync_bundle_on_remote(
     return run_remote(client, command, timeout=1200)
 
 
-def wait_for_http(host: str, path: str, timeout_seconds: int = 120) -> tuple[bool, str]:
+def wait_for_http(base_url: str, path: str, timeout_seconds: int = 120) -> tuple[bool, str]:
     import urllib.error
     import urllib.request
 
     deadline = time.time() + timeout_seconds
     last_error = ""
-    url = f"http://{host}:8080{path}"
+    url = f"{base_url.rstrip('/')}{path}"
 
     while time.time() < deadline:
         try:
@@ -239,6 +308,8 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
         )
         return 2
 
+    frontend_origin = resolve_frontend_origin(host)
+
     print(f"连接服务器 {host} ...")
     client = connect_client(host, username, password)
     sftp = client.open_sftp()
@@ -247,9 +318,18 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
         print("检查服务器部署目录和环境文件...")
         ensure_remote_dirs(sftp, remote_root)
         env_created = create_remote_env_if_missing(sftp, remote_root)
+        env_code, env_output, env_error = set_remote_env_value(
+            client, remote_root, "FRONTEND_ORIGIN", frontend_origin
+        )
+        if env_output.strip():
+            print(env_output.strip())
+        if env_code != 0:
+            print(env_error.strip() or "更新 FRONTEND_ORIGIN 失败")
+            return 3
         if env_created:
             print("服务器缺少 .env，已自动生成基础生产配置。")
             print("当前未检测到本机 SILICONFLOW_API_KEY，AI 功能可能暂不可用。")
+        print(f"已设置前端来源: {frontend_origin}")
 
         print("打包当前工作区并上传...")
         bundle_path = create_upload_bundle()
@@ -266,6 +346,22 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
             print(output.strip())
         if exit_code != 0:
             print(error.strip() or "同步远端目录失败")
+            return 4
+
+        print("清理远端旧内容...")
+        exit_code, output, error = prune_remote_root(client, remote_root)
+        if output.strip():
+            print(output.strip())
+        if exit_code != 0:
+            print(error.strip() or "清理远端旧内容失败")
+            return 4
+
+        print("清理远端临时/备份文件...")
+        exit_code, output, error = prune_remote_artifacts(client, remote_root)
+        if output.strip():
+            print(output.strip())
+        if exit_code != 0:
+            print(error.strip() or "清理远端临时/备份文件失败")
             return 4
 
         print("启动最新容器...")
@@ -366,7 +462,7 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
             print(logs_output.strip() or logs_error.strip())
 
         print("等待线上健康检查...")
-        ok, result = wait_for_http(host, "/api/health")
+        ok, result = wait_for_http(frontend_origin, "/api/health")
         if not ok:
             print("健康检查失败:")
             print(result)
@@ -374,8 +470,8 @@ def deploy(host: str, username: str, password: str, remote_root: str) -> int:
 
         print("健康检查成功:")
         print(result)
-        print(f"Web: http://{host}:8080")
-        print(f"API: http://{host}:8080/api/health")
+        print(f"Web: {frontend_origin}")
+        print(f"API: {frontend_origin}/api/health")
         return 0
     finally:
         sftp.close()

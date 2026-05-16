@@ -46,8 +46,6 @@ def _build_pair_response(
                 "partner_id": partner.id,
                 "partner_nickname": partner.nickname,
                 "partner_avatar": partner.wechat_avatar or partner.avatar_url,
-                "partner_email": partner.email,
-                "partner_phone": partner.phone,
                 "custom_partner_nickname": custom_nickname,
             }
         )

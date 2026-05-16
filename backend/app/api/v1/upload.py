@@ -1,6 +1,7 @@
 import os
 import uuid
 import mimetypes
+import logging
 import aiofiles
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -20,6 +21,7 @@ from app.services.upload_access import (
 )
 
 router = APIRouter(prefix="/upload", tags=["文件上传"])
+logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 ALLOWED_VOICE_TYPES = {
@@ -236,7 +238,7 @@ async def transcribe_voice(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """上传语音文件并转录为文字。"""
+    """上传语音文件并转录为文字 - 使用 Whisper API"""
     # 验证文件类型
     if file.content_type not in ALLOWED_VOICE_TYPES:
         raise HTTPException(
@@ -268,7 +270,7 @@ async def transcribe_voice(
                     )
                 await f.write(chunk)
 
-        # 调用统一 ASR Provider 转录
+        # 调用 Whisper 转录
         with privacy_audit_scope(
             db=db,
             user_id=user.id,
@@ -293,12 +295,16 @@ async def transcribe_voice(
 
         return {"text": text, "size": total_size}
 
-    except ValueError as e:
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("voice transcription failed")
+        raise HTTPException(
+            status_code=503,
+            detail="语音转录服务暂时不可用，请稍后再试",
+        ) from exc
+    finally:
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        # 确保清理临时文件
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"转录失败：{str(e)}")

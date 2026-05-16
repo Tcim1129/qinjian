@@ -4,48 +4,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>亲健 · 先看见，再靠近</title>
-    <meta name="description" content="亲健把关系记录、提醒、时间线和简报放进更贴近中文表达的日常空间里，帮助你先看见，再决定怎么靠近。">
-    <meta name="theme-color" content="#d76848">
+    <title>亲健 · 用心经营每一段关系</title>
+    <meta name="description" content="亲健，为你提供记录、洞察和陪伴，让每一段关系都能健康成长。">
+    <meta name="theme-color" content="#d65b7a">
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f4c6a8'/%3E%3Cstop offset='100%25' stop-color='%23d68463'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='%23fff7f2'/%3E%3Cpath d='M32 50 17.8 35.9a9.6 9.6 0 0 1 13.6-13.6L32 22.9l.6-.6a9.6 9.6 0 1 1 13.6 13.6Z' fill='url(%23g)'/%3E%3C/svg%3E">
-    <script>
-      document.documentElement.dataset.demoBootstrap = /(?:^|[?&])demo=1(?:&|$)/.test(location.search) ? '1' : '0';
-      document.addEventListener('DOMContentLoaded', () => {
-        if (document.documentElement.dataset.demoBootstrap !== '1') return;
-        document.body.dataset.page = document.body.dataset.page || 'home';
-        document.getElementById('page-auth')?.classList.remove('active');
-        document.getElementById('page-home')?.classList.add('active');
-      });
-    </script>
     <style>
-      :root {
-        --font-sans-fallback: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
-        --font-serif-fallback: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
-      }
+        :root {
+            --font-sans-fallback: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+            --font-serif-fallback: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+        }
 
-      /* Critical shell guard: keep only the active page visible even if a stylesheet fails to parse. */
-      .page {
-        display: none;
-      }
+        /* Critical shell guard: keep only the active page visible even if a stylesheet fails to parse. */
+        .page {
+            display: none;
+        }
 
-      .page.active {
-        display: block;
-      }
-
-      html[data-demo-bootstrap="1"] #page-auth,
-      html[data-demo-bootstrap="1"] #page-pair,
-      html[data-demo-bootstrap="1"] #page-pair-waiting {
-        display: none !important;
-      }
-
-      html[data-demo-bootstrap="1"] #page-home {
-        display: grid !important;
-      }
+        .page.active {
+            display: block;
+        }
     </style>
-    <link rel="stylesheet" href="css/style.css?v=20260327d">
-    <link rel="stylesheet" href="css/handmade.css?v=20260327d">
-    <link rel="stylesheet" href="css/theme-override.css?v=20260411-checkin">
+    <link rel="stylesheet" href="css/style.css?v=20260326y">
+    <link rel="stylesheet" href="css/handmade.css?v=20260326y">
+    <link rel="stylesheet" href="css/theme-override.css?v=20260328_final_v2">
 </head>
 
 <body>
@@ -198,21 +179,9 @@
                 <div class="brand-mark brand-mark--logo">
                     <img src="assets/brand-logo.jpg" alt="亲健 logo">
                 </div>
-                <div>
-                    <p class="eyebrow">QinJian</p>
+                <div class="brand-text-minimal">
                     <h1>亲健</h1>
-                    <p class="brand-copy">关系记录与提醒</p>
                 </div>
-            </div>
-            <div class="brand-poster" aria-hidden="true">
-                <div class="brand-poster__paper brand-poster__paper--a"></div>
-                <div class="brand-poster__paper brand-poster__paper--b"></div>
-                <div class="brand-poster__paper brand-poster__paper--c"></div>
-                <div class="brand-poster__seal">
-                    <img src="assets/brand-logo.jpg" alt="">
-                    <span>关系档案</span>
-                </div>
-                <p class="brand-poster__caption">RECORD · BRIEF · EVIDENCE</p>
             </div>
         </aside>
 
@@ -222,11 +191,9 @@
                     <div class="topbar-brandline">
                         <img class="topbar-brandline__logo" src="assets/brand-logo.jpg" alt="亲健 logo">
                         <div class="topbar-copy__stack">
-                            <p id="topbar-caption" class="eyebrow">亲健</p>
-                            <h2 id="topbar-title">关系记录与提醒</h2>
+                            <h2 id="topbar-title">关系总览</h2>
                         </div>
                     </div>
-                    <p id="topbar-subtitle" class="topbar-subtitle">先看见，再靠近。</p>
                 </div>
                 <div class="topbar-actions">
                     <button class="pill-button" data-jump-page="checkin" type="button">今日记录</button>
@@ -251,49 +218,23 @@
                 <div id="toast" class="toast"></div>
 
                 <section id="page-auth" class="page active">
-                    <div class="auth-stage">
-                        <div class="auth-stage__intro">
-                            <div>
-                                <p class="eyebrow">亲健</p>
-                                <h3>先看见，再开口。</h3>
-                                <p class="auth-stage__lead">把今天发生了什么、你们卡在哪里、下一句更适合怎么说，收进一个更贴近中文表达的关系空间里。</p>
-                            </div>
-                            <div class="auth-thread-list" aria-label="亲健入口说明">
-                                <article class="auth-thread-item">
-                                    <span>01</span>
-                                    <div>
-                                        <strong>先留住刚发生的事</strong>
-                                        <p>一句话、一段语音、一次冷场，都可以先被好好记下来。</p>
-                                    </div>
-                                </article>
-                                <article class="auth-thread-item">
-                                    <span>02</span>
-                                    <div>
-                                        <strong>再看这段关系现在卡在哪里</strong>
-                                        <p>不讲空话，不堆术语，而是直接告诉你最近更需要注意什么。</p>
-                                    </div>
-                                </article>
-                                <article class="auth-thread-item">
-                                    <span>03</span>
-                                    <div>
-                                        <strong>最后给出更容易开口的下一步</strong>
-                                        <p>适合情侣、伴侣、夫妻和亲密搭子，也适合先一个人慢慢整理。</p>
-                                    </div>
-                                </article>
-                            </div>
-                            <div class="auth-service-strip">
-                                <span id="auth-service-status" class="status-chip status-chip--neutral">正在检查服务</span>
-                                <p id="auth-service-note">如果你只是先看界面，可以直接进入样例；真正登录时，系统会先检查后端是否可用。</p>
-                            </div>
+                    <div class="page-hero">
+                        <div>
+                            <p class="eyebrow">登录</p>
+                            <h3>登录或注册</h3>
                         </div>
+                    </div>
 
-                        <div class="auth-entry">
-                            <div class="auth-entry__head">
+                    <div class="auth-layout auth-layout--single">
+                        <div class="panel auth-panel auth-panel--form">
+                            <div class="auth-panel__header">
                                 <div>
-                                    <p class="panel__eyebrow">账号入口</p>
-                                    <h4>登录或注册</h4>
+                                    <p class="panel__eyebrow">欢迎使用</p>
+                                    <h4>登录亲健</h4>
                                 </div>
-                                <p>支持邮箱和手机号。先把人进来，再把关系慢慢连起来。</p>
+                                <div class="auth-chip-row">
+                                    <span class="status-chip status-chip--success">线上服务已连通</span>
+                                </div>
                             </div>
                             <div class="segmented">
                                 <button id="auth-mode-login" class="segmented__item segmented__item--active"
@@ -308,36 +249,39 @@
                             <form id="auth-form" class="form-stack">
                                 <label id="auth-nickname-wrap" class="field hidden">
                                     <span>昵称</span>
-                                    <input id="auth-nickname" class="input" type="text" autocomplete="nickname" placeholder="你希望对方怎么称呼你">
+                                    <input id="auth-nickname" class="input" type="text" autocomplete="nickname"
+                                        placeholder="你希望对方怎么称呼你">
                                 </label>
                                 <label id="auth-email-wrap" class="field">
                                     <span>邮箱</span>
-                                    <input id="auth-email" class="input" type="email" autocomplete="email" placeholder="请输入邮箱"
-                                        required>
+                                    <input id="auth-email" class="input" type="email" autocomplete="email"
+                                        placeholder="请输入邮箱" required>
                                 </label>
                                 <label id="auth-phone-wrap" class="field hidden">
                                     <span>手机号</span>
-                                    <input id="auth-phone" class="input" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="11" placeholder="请输入 11 位手机号">
+                                    <input id="auth-phone" class="input" type="tel" inputmode="numeric"
+                                        autocomplete="tel-national" maxlength="11" placeholder="请输入 11 位手机号">
                                 </label>
                                 <label id="auth-password-wrap" class="field">
                                     <span>密码</span>
-                                    <input id="auth-password" class="input" type="password" autocomplete="current-password" placeholder="密码"
-                                        minlength="6" required>
+                                    <input id="auth-password" class="input" type="password"
+                                        autocomplete="current-password" placeholder="密码" minlength="6" required>
                                 </label>
                                 <div id="auth-phone-code-wrap" class="field hidden">
                                     <span>验证码</span>
                                     <div class="auth-inline-row">
-                                        <input id="auth-phone-code" class="input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位验证码">
-                                        <button id="auth-send-code" class="button button--ghost auth-send-code" type="button">获取验证码</button>
+                                        <input id="auth-phone-code" class="input" type="text" inputmode="numeric"
+                                            autocomplete="one-time-code" maxlength="6" placeholder="6 位验证码">
+                                        <button id="auth-send-code" class="button button--ghost auth-send-code"
+                                            type="button">获取验证码</button>
                                     </div>
                                 </div>
                                 <p id="auth-phone-note" class="muted-copy hidden">手机号未注册时，验证码登录会自动创建账号。</p>
                                 <button id="auth-submit" class="button button--primary button--block"
                                     type="submit">进入系统</button>
                                 <a id="auth-demo-entry" class="button button--ghost button--block auth-demo-link"
-                                    href="?demo=1">先看样例</a>
+                                    href="?demo=1">查看样例</a>
                             </form>
-                            <p class="auth-entry__footnote">这里不会再用“服务已连通”这种假状态糊弄你。能不能连上后端，会实时告诉你。</p>
                         </div>
                     </div>
                 </section>
@@ -345,12 +289,12 @@
                 <section id="page-pair" class="page">
                     <div class="page-hero">
                         <div>
-                            <p class="eyebrow">关系</p>
-                            <h3>建立关系，或者先单人体验</h3>
-                            <p>首次登录建议先绑定关系；如果你想先看看产品主链路，也可以先跳过，用单人模式体验打卡和智能陪伴。</p>
+                            <p class="eyebrow">关系绑定</p>
+                            <h3>开启你们的关系之旅</h3>
+                            <p>与另一半建立连接，共同记录和成长；也可以先独自体验，感受亲健的温暖陪伴。</p>
                         </div>
                         <div class="hero-actions">
-                            <button id="pair-skip-btn" class="button button--ghost" type="button">先单人体验</button>
+                            <button id="pair-skip-btn" class="button button--ghost" type="button">先独自体验</button>
                         </div>
                     </div>
                     <div class="layout-grid layout-grid--pair">
@@ -388,11 +332,11 @@
                                     <h4>输入邀请码</h4>
                                 </div>
                             </div>
-                              <label class="field">
+                            <label class="field">
                                 <span>6-12 位邀请码</span>
                                 <input id="pair-join-code" class="input input--code" type="text" maxlength="12"
-                                      placeholder="例如 A3H7K8M9Q2">
-                              </label>
+                                    placeholder="例如 A3H7K8M9Q2">
+                            </label>
                             <button id="pair-join-btn" class="button button--secondary button--block"
                                 type="button">加入关系</button>
                         </div>
@@ -401,7 +345,7 @@
 
                 <section id="page-pair-waiting" class="page">
                     <div class="hero-card hero-card--waiting">
-                            <p class="eyebrow">等待加入</p>
+                        <p class="eyebrow">等待加入</p>
                         <h3>关系已创建，等待对方加入</h3>
                         <div id="waiting-invite-code" class="invite-code">000000</div>
                         <p>把这个邀请码发给对方，对方输入后会自动进入你们的共享空间。</p>
@@ -412,248 +356,74 @@
                     </div>
                 </section>
 
-                <section id="page-home" class="page page--editorial-home">
-                    <div id="home-overview" class="page-canvas">
-                        <section class="qj-archive-home">
-                            <div class="qj-archive-home__hero">
-                                <div class="qj-archive-home__copy">
-                                    <p class="qj-archive-home__kicker">关系档案馆 · 当前总览</p>
-                                    <h3 class="qj-archive-home__title">先别急着争输赢，先把今天到底为什么难受看清楚</h3>
-                                    <p class="qj-archive-home__lead">这版首页不再像一个数据后台，而更像一本正在被整理的关系档案册。先看结论，再看脉络，再决定下一步怎么靠近。</p>
-                                    <div class="qj-archive-home__actions hero-actions">
-                                        <button class="button button--primary" type="button" onclick="openCheckinMode('form')">开始今日记录</button>
-                                        <button class="button button--ghost" type="button" onclick="showPage('timeline')">进入时间轴</button>
-                                    </div>
-                                    <div class="qj-archive-home__glance">
-                                        <article>
-                                            <span>现在看什么</span>
-                                            <strong>先把原话和情绪留住</strong>
-                                        </article>
-                                        <article>
-                                            <span>下一步</span>
-                                            <strong>等脉络完整后再决定怎么开口</strong>
-                                        </article>
-                                    </div>
-                                </div>
-                                <aside class="qj-archive-home__aside">
-                                    <article class="qj-score-card">
-                                        <div class="qj-score-card__head">
-                                            <span>关系温度</span>
-                                            <strong>76</strong>
-                                        </div>
-                                        <div class="qj-score-card__meter">
-                                            <div class="qj-score-card__meter-fill" style="width:76%;"></div>
-                                        </div>
-                                        <div class="qj-score-card__meta">
-                                            <span>第 3/7 天</span>
-                                            <span>轻度波动</span>
-                                        </div>
-                                    </article>
-                                    <article class="qj-next-card">
-                                        <p>今天最该做</p>
-                                        <strong>先写下一句真正刺到你的原话</strong>
-                                        <small>结论越晚下，理解通常越准确。</small>
-                                    </article>
-                                    <article class="qj-relation-chip">
-                                        <span>当前关系</span>
-                                        <strong>情侣 · 小满</strong>
-                                    </article>
-                                </aside>
-                            </div>
-                        </section>
+                <section id="page-home" class="page">
+                    <div class="page-head page-head--split hidden" id="home-page-head">
+                        <div>
+                            <p class="eyebrow">今日</p>
+                            <h3 id="home-greeting">欢迎进入关系总览</h3>
+                        </div>
                     </div>
-                    <div id="home-metrics" class="page-inline-meta">
-                        <section class="qj-archive-strip">
-                            <article class="qj-archive-strip__item">
-                                <span>连续记录</span>
-                                <strong>6 天</strong>
-                                <p>连续输入会让建议更稳定。</p>
-                            </article>
-                            <article class="qj-archive-strip__item">
-                                <span>我的状态</span>
-                                <strong>已记录</strong>
-                                <p>今天这半边已经被留住。</p>
-                            </article>
-                            <article class="qj-archive-strip__item">
-                                <span>对方状态</span>
-                                <strong>待同步</strong>
-                                <p>还差对方这半边脉络。</p>
-                            </article>
-                            <article class="qj-archive-strip__item">
-                                <span>风险区间</span>
-                                <strong>轻度波动</strong>
-                                <p>先看边界提醒，再决定怎么推进。</p>
-                            </article>
-                        </section>
+                    <div id="home-overview" class="hero-card hero-card--summary"></div>
+                    <div class="stats-grid" id="home-metrics" style="display: none;"></div>
+                    <div class="layout-grid">
+                        <div class="panel" id="home-status-panel"></div>
+                        <div class="panel" id="home-report-panel"></div>
+                        <div class="panel" id="home-tree-panel"></div>
+                        <div class="panel" id="home-crisis-panel"></div>
+                        <div class="panel" id="home-milestones-panel"></div>
+                        <div class="panel" id="home-tasks-panel"></div>
                     </div>
-                    <div id="home-milestones-panel" class="page-canvas">
-                        <section class="qj-ledger">
-                            <div class="qj-ledger__main">
-                                <article class="qj-ledger-card qj-ledger-card--timeline">
-                                    <div class="qj-ledger-card__head">
-                                        <div>
-                                            <p class="qj-ledger-card__eyebrow">最近脉络</p>
-                                            <h4>误会不是突然发生的</h4>
-                                        </div>
-                                        <button class="button button--ghost" type="button" onclick="showPage('timeline')">进入时间轴</button>
-                                    </div>
-                                    <div class="qj-ledger-timeline">
-                                        <article class="qj-ledger-timeline__item">
-                                            <span>昨天</span>
-                                            <div>
-                                                <strong>你先解释，她先沉默</strong>
-                                                <p>这不是态度问题，更像节奏没有接上。</p>
-                                            </div>
-                                        </article>
-                                        <article class="qj-ledger-timeline__item">
-                                            <span>今天</span>
-                                            <div>
-                                                <strong>原话还没被完整记录</strong>
-                                                <p>先把那一句留住，比立刻判断谁对谁错更重要。</p>
-                                            </div>
-                                        </article>
-                                        <article class="qj-ledger-timeline__item">
-                                            <span>下一步</span>
-                                            <div>
-                                                <strong>先缓和，再表达事实</strong>
-                                                <p>更容易被接住的话，通常都不是第一反应。</p>
-                                            </div>
-                                        </article>
-                                    </div>
-                                </article>
-                                <article class="qj-ledger-card qj-ledger-card--evidence">
-                                    <div class="qj-ledger-card__head">
-                                        <div>
-                                            <p class="qj-ledger-card__eyebrow">证据摘录</p>
-                                            <h4>系统为什么这样判断</h4>
-                                        </div>
-                                    </div>
-                                    <div class="qj-evidence-stack">
-                                        <article class="qj-evidence-card">
-                                            <p class="qj-evidence-card__quote">“你根本没懂我为什么会难受。”</p>
-                                            <small>原话保留了情绪重心，比事后总结更能帮助判断。</small>
-                                        </article>
-                                        <article class="qj-evidence-card qj-evidence-card--soft">
-                                            <p class="qj-evidence-card__quote">“先别急着证明自己是对的。”</p>
-                                            <small>这一步是在帮你把关系从对抗，重新拉回理解。</small>
-                                        </article>
-                                    </div>
-                                </article>
-                            </div>
-                            <aside class="qj-ledger__side">
-                                <article class="qj-ledger-card qj-ledger-card--action">
-                                    <div class="qj-ledger-card__head">
-                                        <div>
-                                            <p class="qj-ledger-card__eyebrow">建议动作</p>
-                                            <h4>先做一件真的能缓和局面的事</h4>
-                                        </div>
-                                    </div>
-                                    <div class="qj-action-stack">
-                                        <article class="qj-action-card qj-action-card--accent">
-                                            <span>优先级 A</span>
-                                            <strong>先写下今天最真实的一句</strong>
-                                            <p>不用写很多，先留一句原话和那一瞬间的感受。</p>
-                                        </article>
-                                        <article class="qj-action-card">
-                                            <span>优先级 B</span>
-                                            <strong>补充上下文和语气</strong>
-                                            <p>中文关系场景里，停顿、顺序和口气都很重要。</p>
-                                        </article>
-                                    </div>
-                                </article>
-                                <article class="qj-ledger-card">
-                                    <div class="qj-ledger-card__head">
-                                        <div>
-                                            <p class="qj-ledger-card__eyebrow">输入状态</p>
-                                            <h4>今天的两边有没有都被看到</h4>
-                                        </div>
-                                    </div>
-                                    <div class="qj-status-rows">
-                                        <article>
-                                            <span>我的记录</span>
-                                            <strong>已开始</strong>
-                                            <p>先让自己这半边被看见。</p>
-                                        </article>
-                                        <article>
-                                            <span>对方记录</span>
-                                            <strong>等待中</strong>
-                                            <p>还没到一起看结论的时候。</p>
-                                        </article>
-                                    </div>
-                                </article>
-                                <article class="qj-ledger-card qj-ledger-card--soft">
-                                    <div class="qj-ledger-card__head">
-                                        <div>
-                                            <p class="qj-ledger-card__eyebrow">支持边界</p>
-                                            <h4>轻度波动</h4>
-                                        </div>
-                                    </div>
-                                    <p class="qj-support-note">系统给的是关系支持和整理建议，不会替代专业判断，也不会制造不必要的焦虑。</p>
-                                    <div class="hero-actions">
-                                        <button class="button button--ghost" type="button" onclick="openCrisisDetail()">查看支持建议</button>
-                                        <button class="button button--secondary" type="button" onclick="showPage('report')">进入简报页</button>
-                                    </div>
-                                </article>
-                            </aside>
-                        </section>
-                    </div>
-                    <div id="home-status-panel" class="handmade-page-hidden" aria-hidden="true"></div>
-                    <div id="home-report-panel" class="handmade-page-hidden" aria-hidden="true"></div>
-                    <div id="home-tree-panel" class="handmade-page-hidden" aria-hidden="true"></div>
-                    <div id="home-crisis-panel" class="handmade-page-hidden" aria-hidden="true"></div>
-                    <div id="home-tasks-panel" class="handmade-page-hidden" aria-hidden="true"></div>
                 </section>
 
                 <section id="page-checkin" class="page">
                     <div class="page-head">
-                        <p class="eyebrow">关系记录</p>
-                        <h3>把刚发生的事先留住</h3>
+                        <p class="eyebrow">每日记录</p>
+                        <h3>记录此刻，珍藏美好</h3>
+                        <p>用心记录每一天，让亲健帮你珍藏这段关系中的点滴温暖。</p>
                     </div>
                     <div class="segmented segmented--report">
-                        <button id="checkin-mode-form" class="segmented__item segmented__item--active" type="button">手写记录</button>
-                        <button id="checkin-mode-voice" class="segmented__item" type="button">陪伴整理</button>
+                        <button id="checkin-mode-form" class="segmented__item segmented__item--active"
+                            type="button">表单打卡</button>
+                        <button id="checkin-mode-voice" class="segmented__item" type="button">智能陪伴打卡</button>
                     </div>
                     <form id="checkin-form" class="layout-grid layout-grid--checkin">
                         <div class="panel panel--soft">
                             <label class="field">
-                                <span>今天先留一句原话</span>
+                                <span>今天发生了什么</span>
                                 <textarea id="checkin-content" class="input input--textarea"
-                                    placeholder="例如：她说“你根本没懂我为什么会难受”，我第一反应是先解释。"></textarea>
+                                    placeholder="写下你此刻的感受、冲突、沟通、期待或值得纪念的时刻"></textarea>
                             </label>
                             <div class="field">
-                                <span>情绪</span>
+                                <span>情绪标签</span>
                                 <div id="mood-tags" class="tag-cloud"></div>
                             </div>
                         </div>
-                        <div class="panel panel--detail">
-                            <details class="checkin-details">
-                                <summary>补一点背景</summary>
-                                <div class="field">
-                                    <span>心情</span>
-                                    <div id="mood-score-options" class="option-grid option-grid--compact"></div>
-                                </div>
-                                <label class="field">
-                                    <span>互动</span>
-                                    <input id="interaction-frequency" class="input" type="number" min="0" max="10"
-                                        placeholder="0 到 10">
-                                </label>
-                                <div class="field">
-                                    <span>主动</span>
-                                    <div id="initiative-options" class="option-grid option-grid--compact"></div>
-                                </div>
-                                <div class="field">
-                                    <span>深聊</span>
-                                    <div id="deep-conversation-options" class="option-grid option-grid--two"></div>
-                                </div>
-                                <div class="field">
-                                    <span>约定</span>
-                                    <div id="task-completed-options" class="option-grid option-grid--two"></div>
-                                </div>
-                            </details>
+                        <div class="panel">
+                            <div class="field">
+                                <span>心情评分</span>
+                                <div id="mood-score-options" class="option-grid option-grid--compact"></div>
+                            </div>
+                            <label class="field">
+                                <span>互动频率</span>
+                                <input id="interaction-frequency" class="input" type="number" min="0" max="10"
+                                    placeholder="0 到 10">
+                            </label>
+                            <div class="field">
+                                <span>谁更主动</span>
+                                <div id="initiative-options" class="option-grid option-grid--compact"></div>
+                            </div>
+                            <div class="field">
+                                <span>今天有深度交流吗</span>
+                                <div id="deep-conversation-options" class="option-grid option-grid--two"></div>
+                            </div>
+                            <div class="field">
+                                <span>今日任务完成了吗</span>
+                                <div id="task-completed-options" class="option-grid option-grid--two"></div>
+                            </div>
                         </div>
                         <div class="panel">
                             <div class="field">
-                                <span>附件</span>
+                                <span>多媒体附件</span>
                                 <div class="upload-row">
                                     <button id="image-upload-trigger" class="button button--ghost" type="button"><svg
                                             class="icon icon-sm">
@@ -672,106 +442,293 @@
                             <div id="checkin-client-ai-panel" class="client-ai-panel">
                                 <div class="client-ai-panel__head">
                                     <div>
-                                        <p class="panel__eyebrow">本地先替你看一眼</p>
-                                        <h4>预检</h4>
+                                        <p class="panel__eyebrow">本地即时判断</p>
+                                        <h4>本地即时判断已待命</h4>
                                     </div>
                                     <span id="checkin-client-ai-status" class="status-chip">云端保护兜底</span>
                                 </div>
-                                <p id="checkin-client-ai-summary" class="panel-note">先判断提醒和保护方式。</p>
+                                <p id="checkin-client-ai-summary" class="panel-note">
+                                    输入内容后，系统会先在本地判断要不要提醒你、如何保护内容，再决定上传策略。</p>
                                 <div id="checkin-client-ai-meta" class="evidence-strip"></div>
                                 <div id="checkin-client-ai-why" class="stack-list"></div>
                             </div>
                             <button id="checkin-submit-btn" class="button button--primary button--block"
-                                type="submit">提交</button>
+                                type="submit">提交今日打卡</button>
                         </div>
                     </form>
                     <div id="checkin-agent-panel" class="panel hidden">
                         <div class="panel__header">
                             <div>
-                            <p class="panel__eyebrow">语音陪伴</p>
+                                <p class="panel__eyebrow">语音陪伴</p>
                                 <h4>对话整理今天的记录</h4>
                             </div>
                         </div>
                         <div id="agent-chat-list" class="stack-list"></div>
                         <label class="field">
                             <span>先说一句心里话</span>
-                            <textarea id="agent-chat-input" class="input input--textarea" placeholder="例如：今天其实有点累，但晚饭时我们把误会说开了。"></textarea>
+                            <textarea id="agent-chat-input" class="input input--textarea"
+                                placeholder="例如：今天其实有点累，但晚饭时我们把误会说开了。"></textarea>
                         </label>
-                        <p id="agent-voice-status" class="muted-copy hidden">麦克风已准备好，正在实时转写。</p>
                         <div class="hero-actions">
-                            <button id="agent-voice-btn" class="button button--ghost" type="button">开始语音输入</button>
                             <button id="agent-send-btn" class="button button--primary" type="button">发送给系统</button>
                             <button id="agent-replay-btn" class="button button--ghost" type="button">朗读上一条回复</button>
                         </div>
                     </div>
-                    <section class="checkin-calendar-panel" aria-labelledby="checkin-calendar-title">
-                        <div class="checkin-calendar-panel__head">
-                            <div>
-                                <p class="panel__eyebrow">回看</p>
-                                <h4 id="checkin-calendar-title">按日期看记录</h4>
-                            </div>
-                            <div class="checkin-calendar-panel__actions">
-                                <button class="button button--ghost" type="button" data-checkin-calendar-nav="prev">上个月</button>
-                                <span id="checkin-calendar-month" class="checkin-calendar-panel__month">本月</span>
-                                <button class="button button--ghost" type="button" data-checkin-calendar-nav="next">下个月</button>
-                            </div>
-                        </div>
-                        <div id="checkin-calendar-grid" class="checkin-calendar-grid" aria-label="记录日历"></div>
-                        <div id="checkin-calendar-detail" class="checkin-calendar-detail"></div>
-                    </section>
                 </section>
 
                 <section id="page-discover" class="page">
-                    <section class="mono-atlas">
-                        <div class="mono-atlas__head">
-                            <p class="mono-atlas__eyebrow">目录</p>
-                            <h3>只留三条主线。</h3>
+                    <section class="discover-editorial">
+                        <div class="discover-editorial__hero">
+                            <div class="discover-editorial__copy">
+                                <p class="discover-editorial__eyebrow">功能总览</p>
+                                <h3>把关系里的日常，认真记下来</h3>
+                                <p class="discover-editorial__lead">从今天的记录、回顾和提醒开始，把每一段关系慢慢照顾好。</p>
+                                <div class="discover-editorial__actions">
+                                    <button class="discover-editorial__action" data-jump-page="checkin"
+                                        type="button">今日打卡</button>
+                                    <button class="discover-editorial__action" data-jump-page="report"
+                                        type="button">关系洞察</button>
+                                    <button class="discover-editorial__action" data-jump-page="timeline"
+                                        type="button">时光回顾</button>
+                                    <button class="discover-editorial__action" data-jump-page="showcase"
+                                        type="button">展示页</button>
+                                </div>
+                            </div>
+                            <div class="discover-editorial__visual" aria-hidden="true">
+                                <div class="discover-editorial__seal">
+                                    <img src="assets/brand-logo.jpg" alt="">
+                                    <span>亲见</span>
+                                </div>
+                                <div class="discover-editorial__sheet discover-editorial__sheet--a">
+                                    <span>输入</span>
+                                    <strong>记录</strong>
+                                </div>
+                                <div class="discover-editorial__sheet discover-editorial__sheet--b">
+                                    <span>整理</span>
+                                    <strong>简报</strong>
+                                </div>
+                                <div class="discover-editorial__sheet discover-editorial__sheet--c">
+                                    <span>回看</span>
+                                    <strong>线索</strong>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mono-atlas__list">
-                            <button class="mono-atlas__entry" data-jump-page="checkin" type="button">
-                                <span>记录</span>
-                                <strong>写下今天这一句</strong>
-                                <i aria-hidden="true"></i>
+
+                        <div class="discover-ribbon">
+                            <button class="discover-ribbon__card" data-jump-page="checkin" type="button">
+                                <span>从这里开始</span>
+                                <strong>记下今天</strong>
                             </button>
-                            <button class="mono-atlas__entry" data-jump-page="report" type="button">
-                                <span>简报</span>
-                                <strong>读懂这一期主结论</strong>
-                                <i aria-hidden="true"></i>
+                            <button class="discover-ribbon__card" data-jump-page="report" type="button">
+                                <span>看看现在</span>
+                                <strong>关系简报</strong>
                             </button>
-                            <button class="mono-atlas__entry" data-jump-page="timeline" type="button">
-                                <span>时间轴</span>
-                                <strong>回看它怎么变成现在</strong>
-                                <i aria-hidden="true"></i>
+                            <button class="discover-ribbon__card" data-jump-page="timeline" type="button">
+                                <span>回望来路</span>
+                                <strong>时间轴回看</strong>
+                            </button>
+                        </div>
+
+                        <div class="discover-library">
+                            <button class="discover-library__card discover-library__card--wide"
+                                data-jump-page="community" type="button">
+                                <span class="discover-library__badge">交流</span>
+                                <h4>关系社区</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="health-test" type="button">
+                                <span class="discover-library__badge">状态</span>
+                                <h4>关系体检</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="attachment-test" type="button">
+                                <span class="discover-library__badge">理解</span>
+                                <h4>依恋模式</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="longdistance" type="button">
+                                <span class="discover-library__badge">陪伴</span>
+                                <h4>异地协作</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="challenges" type="button">
+                                <span class="discover-library__badge">行动</span>
+                                <h4>每日小行动</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="courses" type="button">
+                                <span class="discover-library__badge">成长</span>
+                                <h4>关系课程</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="experts" type="button">
+                                <span class="discover-library__badge">专业</span>
+                                <h4>专家咨询</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="membership" type="button">
+                                <span class="discover-library__badge">权益</span>
+                                <h4>会员中心</h4>
+                            </button>
+                            <button class="discover-library__card" data-jump-page="showcase" type="button">
+                                <span class="discover-library__badge">设计</span>
+                                <h4>视觉展示</h4>
                             </button>
                         </div>
                     </section>
                 </section>
 
-                <section id="page-report" class="page report-page">
-                    <div id="report-main" class="report-stage"></div>
-                    <section class="report-footer-shelf">
-                        <div class="report-footer-shelf__toolbar">
-                            <div class="report-period-tabs report-period-tabs--footer" aria-label="简报范围">
-                                <button class="segmented__item segmented__item--active" data-report-type="daily"
-                                    type="button">日报</button>
-                                <button class="segmented__item" data-report-type="weekly" type="button">周报</button>
-                                <button class="segmented__item" data-report-type="monthly" type="button">月报</button>
+                <section id="page-showcase" class="page">
+                    <section class="showcase-stage">
+                        <div class="showcase-stage__copy">
+                            <p class="showcase-stage__eyebrow">展示页</p>
+                            <h3>把亲健做成一页能记住的样子</h3>
+                            <p class="showcase-stage__lead">这一页偏向演示与展示：温柔、克制、有层次，像一本排版清楚的关系手册。</p>
+                            <div class="showcase-stage__actions">
+                                <button class="button button--primary" data-jump-page="discover" type="button">回到功能总览</button>
+                                <button class="button button--ghost" data-jump-page="home" type="button">查看首页布局</button>
                             </div>
-                            <button id="report-generate-btn" class="button button--ghost" type="button">刷新</button>
+                            <div class="showcase-stage__chips">
+                                <span>纸感背景</span>
+                                <span>暖色留白</span>
+                                <span>层级分明</span>
+                                <span>移动优先</span>
+                            </div>
                         </div>
-                        <div id="report-history-list" class="report-archive-list"></div>
+                        <div class="showcase-stage__visual" aria-hidden="true">
+                            <article class="showcase-hero-card showcase-hero-card--main">
+                                <p>主路径</p>
+                                <strong>首页 / 打卡 / 简报 / 时间轴</strong>
+                                <span>一眼看懂今天该做什么</span>
+                            </article>
+                            <article class="showcase-hero-card showcase-hero-card--secondary">
+                                <p>视觉气质</p>
+                                <strong>像杂志，也像手账</strong>
+                            </article>
+                            <article class="showcase-hero-card showcase-hero-card--tertiary">
+                                <p>信息节奏</p>
+                                <strong>先给结论，再给细节</strong>
+                            </article>
+                        </div>
                     </section>
+
+                    <div class="showcase-board">
+                        <article class="showcase-panel showcase-panel--wide">
+                            <p class="showcase-panel__eyebrow">页面节奏</p>
+                            <h4>四个主页面，四种阅读速度</h4>
+                            <div class="showcase-journey">
+                                <div class="showcase-journey__item">
+                                    <span>01</span>
+                                    <strong>首页总览</strong>
+                                    <p>先看关系状态，再看下一步动作。</p>
+                                </div>
+                                <div class="showcase-journey__item">
+                                    <span>02</span>
+                                    <strong>记录输入</strong>
+                                    <p>低摩擦输入，先把今天留下来。</p>
+                                </div>
+                                <div class="showcase-journey__item">
+                                    <span>03</span>
+                                    <strong>关系简报</strong>
+                                    <p>把体验压缩成可行动的建议。</p>
+                                </div>
+                                <div class="showcase-journey__item">
+                                    <span>04</span>
+                                    <strong>时间轴回看</strong>
+                                    <p>把成长铺成可回放的路径。</p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <div class="showcase-board__stack">
+                            <article class="showcase-panel">
+                                <p class="showcase-panel__eyebrow">视觉语言</p>
+                                <h4>纸感、暖光、细边线</h4>
+                                <div class="showcase-swatch-list">
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--paper"></span>
+                                        <div>
+                                            <strong>纸感米白</strong>
+                                            <p>让内容先呼吸，再进入细节。</p>
+                                        </div>
+                                    </div>
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--coral"></span>
+                                        <div>
+                                            <strong>晚霞珊瑚</strong>
+                                            <p>只在主按钮和重点处发亮。</p>
+                                        </div>
+                                    </div>
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--sage"></span>
+                                        <div>
+                                            <strong>青瓷薄荷</strong>
+                                            <p>给辅助信息一点安静的呼吸。</p>
+                                        </div>
+                                    </div>
+                                    <div class="showcase-swatch">
+                                        <span class="showcase-swatch__dot showcase-swatch__dot--ink"></span>
+                                        <div>
+                                            <strong>墨褐深色</strong>
+                                            <p>保持标题和正文的稳定感。</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="showcase-panel">
+                                <p class="showcase-panel__eyebrow">手机预览</p>
+                                <h4>像手账，也像一页便签</h4>
+                                <div class="showcase-phone">
+                                    <div class="showcase-phone__screen">
+                                        <div class="showcase-phone__top">亲健 · 关系总览</div>
+                                        <div class="showcase-phone__body">
+                                            <p class="showcase-phone__eyebrow">今日</p>
+                                            <h4>关系总览</h4>
+                                            <p>把今天的状态先看清，再决定下一步做什么。</p>
+                                            <div class="showcase-phone__pills">
+                                                <span>已记录</span>
+                                                <span>有简报</span>
+                                                <span>可回看</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="page-report" class="page">
+                    <div class="page-head page-head--split">
+                        <div>
+                            <p class="eyebrow">关系洞察</p>
+                            <h3>关系简报</h3>
+                        </div>
+                        <button id="report-generate-btn" class="button button--primary" type="button">刷新简报</button>
+                    </div>
+                    <div class="segmented segmented--report">
+                            <button class="segmented__item segmented__item--active" data-report-type="daily"
+                            type="button">今日回顾</button>
+                        <button class="segmented__item" data-report-type="weekly" type="button">本周回看</button>
+                        <button class="segmented__item" data-report-type="monthly" type="button">月度简报</button>
+                    </div>
+                    <div id="report-main" class="panel panel--report"></div>
+                    <div class="panel">
+                        <div class="panel__header">
+                            <div>
+                                <p class="panel__eyebrow">历史</p>
+                                <h4>历史简报</h4>
+                            </div>
+                        </div>
+                        <div id="report-history-list" class="stack-list"></div>
+                    </div>
                 </section>
 
                 <section id="page-timeline" class="page">
                     <div class="page-head page-head--split">
                         <div>
-                            <p class="eyebrow">时间轴</p>
-                            <h3>回到这段关系是怎么走到这里的</h3>
+                            <p class="eyebrow">时光长廊</p>
+                            <h3>关系时间轴</h3>
+                            <p>把重要时刻排成一条线，方便回头看看你们是怎么一路走来的。</p>
                         </div>
                         <div class="page-head__aside">
-                            <button class="button button--ghost" data-jump-page="report" type="button">回简报</button>
-                            <button id="timeline-refresh-btn" class="button button--primary" type="button">刷新时间轴</button>
+                            <button class="button button--ghost" data-jump-page="report" type="button">回到报告</button>
+                            <button id="timeline-refresh-btn" class="button button--primary"
+                                type="button">更新时间轴</button>
                         </div>
                     </div>
                     <div id="timeline-main" class="timeline-page-shell"></div>
@@ -779,8 +736,8 @@
 
                 <section id="page-profile" class="page">
                     <div class="page-head">
-                            <p class="eyebrow">我的</p>
-                        <h3>我的</h3>
+                            <p class="eyebrow">个人中心</p>
+                            <h3>我的亲健</h3>
                     </div>
                     <div id="profile-summary" class="hero-card hero-card--profile"></div>
                     <div class="layout-grid">
@@ -798,8 +755,8 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">里程碑</p>
-                            <h3>关系里程碑管理</h3>
-                            <p>把纪念日、关键决定和特殊节点收进同一个时间轴，并在需要时生成成长回顾。</p>
+                            <h3>关系里程碑</h3>
+                            <p>把纪念日、重要决定和特别节点收在一起，方便以后回头看。</p>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -808,8 +765,8 @@
                         <div class="panel">
                             <div class="panel__header">
                                 <div>
-                                <p class="panel__eyebrow">新建节点</p>
-                                    <h4>新增里程碑</h4>
+                                    <p class="panel__eyebrow">新建节点</p>
+                                    <h4>添加里程碑</h4>
                                 </div>
                             </div>
                             <form id="milestone-form" class="form-stack">
@@ -839,8 +796,8 @@
                         <div class="panel">
                             <div class="panel__header">
                                 <div>
-                            <p class="panel__eyebrow">时间线</p>
-                                    <h4>时间轴</h4>
+                                    <p class="panel__eyebrow">时间线</p>
+                                    <h4>里程碑列表</h4>
                                 </div>
                             </div>
                             <div id="milestone-list" class="stack-list"></div>
@@ -852,7 +809,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">异地关系</p>
-                            <h3>异地关系协作面板</h3>
+                            <h3>异地协作面板</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -861,7 +818,7 @@
                         <div class="panel__header">
                             <div>
                                 <p class="panel__eyebrow">快捷入口</p>
-                                <h4>快速创建同步活动</h4>
+                                <h4>创建同步活动</h4>
                             </div>
                         </div>
                         <div class="option-grid option-grid--compact">
@@ -876,7 +833,7 @@
                         <div class="panel__header">
                             <div>
                                 <p class="panel__eyebrow">活动</p>
-                                <h4>近期异地互动</h4>
+                                <h4>近期互动</h4>
                             </div>
                             <button id="longdistance-refresh" class="text-button" type="button">刷新</button>
                         </div>
@@ -888,7 +845,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">依恋</p>
-                            <h3>依恋风格分析</h3>
+                            <h3>依恋模式分析</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -909,7 +866,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">关系体检</p>
-                            <h3>关系快速体检</h3>
+                            <h3>关系小体检</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -945,7 +902,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">社区</p>
-                            <h3>社群技巧与通知整合</h3>
+                            <h3>关系社区与通知</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -954,7 +911,7 @@
                         <div class="panel">
                             <div class="panel__header">
                                 <div>
-                                <p class="panel__eyebrow">技巧</p>
+                                    <p class="panel__eyebrow">建议</p>
                                     <h4>关系经营建议</h4>
                                 </div>
                                 <div class="toolbar-row">
@@ -967,7 +924,7 @@
                         <div class="panel">
                             <div class="panel__header">
                                 <div>
-                                <p class="panel__eyebrow">通知</p>
+                                    <p class="panel__eyebrow">通知</p>
                                     <h4>消息状态</h4>
                                 </div>
                             </div>
@@ -979,8 +936,8 @@
                 <section id="page-challenges" class="page">
                     <div class="page-head page-head--split">
                         <div>
-                            <p class="eyebrow">挑战</p>
-                            <h3>行动任务和完成率</h3>
+                            <p class="eyebrow">行动</p>
+                            <h3>关系行动清单</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -989,7 +946,7 @@
                         <div class="panel__header">
                             <div>
                                 <p class="panel__eyebrow">任务</p>
-                                <h4>今日挑战</h4>
+                                <h4>今日小行动</h4>
                             </div>
                         </div>
                         <div id="challenge-task-list" class="stack-list"></div>
@@ -1000,7 +957,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">课程</p>
-                            <h3>学习内容展示位</h3>
+                            <h3>关系课程</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -1027,7 +984,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">咨询</p>
-                            <h3>咨询服务展示位</h3>
+                            <h3>专家咨询</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -1057,7 +1014,7 @@
                     <div class="page-head page-head--split">
                         <div>
                             <p class="eyebrow">会员</p>
-                            <h3>会员分层展示</h3>
+                            <h3>会员权益</h3>
                         </div>
                         <button class="button button--ghost" data-jump-page="discover" type="button">返回功能总览</button>
                     </div>
@@ -1089,16 +1046,16 @@
     <nav id="tab-bar" class="tab-bar hidden">
         <button class="tab-item tab-item--active" data-page="home" type="button"><svg class="icon">
                 <use href="#i-home"></use>
-            </svg><span>首页</span></button>
+            </svg><span>关系</span></button>
         <button class="tab-item" data-page="checkin" type="button"><svg class="icon">
                 <use href="#i-edit"></use>
-            </svg><span>打卡</span></button>
+            </svg><span>记录</span></button>
         <button class="tab-item" data-page="discover" type="button"><svg class="icon">
                 <use href="#i-compass"></use>
-            </svg><span>总览</span></button>
+            </svg><span>发现</span></button>
         <button class="tab-item" data-page="report" type="button"><svg class="icon">
                 <use href="#i-chart"></use>
-            </svg><span>简报</span></button>
+            </svg><span>洞察</span></button>
         <button class="tab-item" data-page="profile" type="button"><svg class="icon">
                 <use href="#i-user"></use>
             </svg><span>我的</span></button>
@@ -1112,14 +1069,15 @@
     </div>
 
     <script>
-      window.QJ_CONFIG = window.QJ_CONFIG || {};
+        window.QJ_CONFIG = window.QJ_CONFIG || {};
     </script>
-    <script src="js/config.local.js?v=20260329-secure"></script>
-    <script src="js-compat/demo-fixtures.js?v=20260327d"></script>
-    <script src="js-compat/api.js?v=20260411-checkin"></script>
-    <script src="js-compat/client-ai.js?v=20260327d"></script>
-    <script src="js/app.js?v=20260411-checkin"></script>
-    <script src="js-compat/handmade.js?v=20260327d"></script>
-  </body>
+    <script src="js/config.example.js?v=20260315c"></script>
+    <script src="js/config.local.js?v=20260315c"></script>
+    <script src="js/demo-fixtures.js?v=20260328_final_js"></script>
+    <script src="js/api.js?v=20260328_final_js"></script>
+    <script src="js/client-ai.js?v=20260328_final_js"></script>
+    <script src="js/app.js?v=20260328_final_js"></script>
+    <script src="js/handmade.js?v=20260328_final_js"></script>
+</body>
 
 </html>
