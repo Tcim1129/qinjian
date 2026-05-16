@@ -248,4 +248,4 @@ docker compose exec backend alembic upgrade head
 - 版本: 2026.03
 - Python: 3.11+
 - FastAPI: 0.135.1
-- 最后更新: 2026-03-29
+- 最后更新: 2026-05-16
