@@ -1,30 +1,154 @@
 import defaultConfig from './config.example.js'
-
-let localConfig = {}
-
-try {
-  const localModule = require('./config.local.js')
-  localConfig = localModule.default || localModule
-} catch (error) {
-  localConfig = {}
-}
+import localConfig from './config.local.js'
 
 const TOKEN_KEY = 'qj_app_token'
+const USER_KEY = 'qj_app_user'
+const PAIR_SUMMARY_KEY = 'qj_app_pair_summary'
+const AUTH_REDIRECT_PATH = '/pages/auth/index'
+const REQUEST_TIMEOUT = 15000
+const MAX_READ_RETRIES = 1
+const RETRYABLE_STATUS_CODES = [408, 429, 502, 503, 504]
+const AUTH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/phone/login',
+  '/auth/phone/send-code',
+]
+
+let volatileToken = ''
+let legacyStorageCleared = false
+
+function getUniLike() {
+  if (typeof globalThis !== 'undefined' && globalThis.uni) {
+    return globalThis.uni
+  }
+  return {
+    getStorageSync(key) {
+      try {
+        return globalThis?.localStorage?.getItem?.(key)
+      } catch (_) {
+        return ''
+      }
+    },
+    setStorageSync(key, value) {
+      try {
+        globalThis?.localStorage?.setItem?.(key, value)
+      } catch (_) {
+        // ignore
+      }
+    },
+    removeStorageSync(key) {
+      try {
+        globalThis?.localStorage?.removeItem?.(key)
+      } catch (_) {
+        // ignore
+      }
+    },
+  }
+}
+
+function clearLegacySessionStorage() {
+  if (legacyStorageCleared) return
+  legacyStorageCleared = true
+}
+
+function loadPersistedToken() {
+  const uniLike = getUniLike()
+  const token = uniLike.getStorageSync(TOKEN_KEY)
+  return typeof token === 'string' ? token : ''
+}
+
+function isAuthPath(path) {
+  return AUTH_ENDPOINTS.some((item) => path.startsWith(item))
+}
+
+function extractErrorMessage(payload, fallback = '请求失败') {
+  if (!payload) return fallback
+  if (typeof payload === 'string') return payload
+  return payload.detail || payload.message || payload.error || fallback
+}
+
+function createApiError({
+  code = -1,
+  message = '请求失败',
+  data = null,
+  detail = null,
+  network = false,
+  timeout = false,
+  unauthorized = false,
+} = {}) {
+  const error = new Error(message)
+  error.code = code
+  error.data = data
+  error.detail = detail
+  error.network = network
+  error.timeout = timeout
+  error.unauthorized = unauthorized
+  return error
+}
+
+function shouldRetry(method, error, attempt, retries) {
+  if (attempt >= retries) return false
+  if (method !== 'GET') return false
+  if (!error) return false
+  if (error.network || error.timeout) return true
+  return RETRYABLE_STATUS_CODES.includes(error.code)
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function safeParseJson(raw) {
+  if (!raw) return {}
+  if (typeof raw !== 'string') return raw
+  try {
+    return JSON.parse(raw)
+  } catch (error) {
+    return raw
+  }
+}
+
+function toWebSocketUrl(url) {
+  const value = String(url || '').trim()
+  if (!value) return ''
+  if (value.startsWith('https://')) return `wss://${value.slice(8)}`
+  if (value.startsWith('http://')) return `ws://${value.slice(7)}`
+  return value
+}
 
 class ApiClient {
   constructor() {
-    const resolvedConfig = localConfig?.apiRoot ? localConfig : defaultConfig
+    const runtimeConfig = globalThis.__QJ_API_ROOT__
+      ? { apiRoot: globalThis.__QJ_API_ROOT__ }
+      : null
+    const resolvedConfig = runtimeConfig || (localConfig?.apiRoot ? localConfig : defaultConfig)
     this.baseUrl = (resolvedConfig.apiRoot || '').replace(/\/$/, '')
-    this.token = uni.getStorageSync(TOKEN_KEY) || ''
+    clearLegacySessionStorage()
+    this.token = volatileToken || loadPersistedToken()
+    this.lastUnauthorizedAt = 0
+  }
+
+  ensureBaseUrl() {
+    if (!this.baseUrl) {
+      throw createApiError({
+        code: -2,
+        message: '服务地址未配置，请检查 config.local.js',
+      })
+    }
+    return this.baseUrl
   }
 
   setToken(token) {
+    clearLegacySessionStorage()
     this.token = token || ''
+    volatileToken = this.token
+    const uniLike = getUniLike()
     if (this.token) {
-      uni.setStorageSync(TOKEN_KEY, this.token)
-    } else {
-      uni.removeStorageSync(TOKEN_KEY)
+      uniLike.setStorageSync(TOKEN_KEY, this.token)
+      return
     }
+    uniLike.removeStorageSync(TOKEN_KEY)
   }
 
   clearToken() {
@@ -35,48 +159,123 @@ class ApiClient {
     return !!this.token
   }
 
-  request(method, path, data = null, header = {}) {
-    return new Promise((resolve, reject) => {
-      uni.request({
-        url: `${this.baseUrl}${path}`,
-        method,
-        data,
-        header: {
-          ...(data && method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
-          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-          ...header,
-        },
-        success: (res) => {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(res.data)
-            return
-          }
-          if (res.statusCode === 401) {
-            this.clearToken()
-          }
-          reject(new Error(res.data?.detail || res.data?.message || '请求失败'))
-        },
-        fail: () => reject(new Error('网络连接失败')),
-      })
+  handleUnauthorized(path) {
+    if (isAuthPath(path)) return
+    const now = Date.now()
+    if (now - this.lastUnauthorizedAt < 1200) return
+    this.lastUnauthorizedAt = now
+    this.clearToken()
+    uni.reLaunch({
+      url: AUTH_REDIRECT_PATH,
     })
   }
 
+  async request(method, path, data = null, header = {}, options = {}) {
+    const { retries = MAX_READ_RETRIES } = options
+    const baseUrl = this.ensureBaseUrl()
+
+    const attemptRequest = async (attempt = 0) => {
+      try {
+        return await new Promise((resolve, reject) => {
+          uni.request({
+            url: `${baseUrl}${path}`,
+            method,
+            data,
+            timeout: REQUEST_TIMEOUT,
+            header: {
+              ...(data && method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
+              ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+              ...header,
+            },
+            success: (res) => {
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                resolve(res.data)
+                return
+              }
+
+              if (res.statusCode === 401) {
+                this.handleUnauthorized(path)
+                reject(createApiError({
+                  code: 401,
+                  message: '登录已失效，请重新登录',
+                  data: res.data,
+                  unauthorized: true,
+                }))
+                return
+              }
+
+              reject(createApiError({
+                code: res.statusCode,
+                message: extractErrorMessage(res.data, '请求失败'),
+                data: res.data,
+              }))
+            },
+            fail: (err) => {
+              const isTimeout = String((err && err.errMsg) || '').toLowerCase().includes('timeout')
+              reject(createApiError({
+                code: isTimeout ? 408 : -1,
+                message: isTimeout ? '请求超时，请稍后重试' : '网络连接失败，请检查网络后重试',
+                detail: err,
+                network: !isTimeout,
+                timeout: isTimeout,
+              }))
+            },
+          })
+        })
+      } catch (error) {
+        if (shouldRetry(method, error, attempt, retries)) {
+          await wait(250 * (attempt + 1))
+          return attemptRequest(attempt + 1)
+        }
+        throw error
+      }
+    }
+
+    return attemptRequest(0)
+  }
+
   uploadFile(type, filePath) {
+    const baseUrl = this.ensureBaseUrl()
+
     return new Promise((resolve, reject) => {
       uni.uploadFile({
-        url: `${this.baseUrl}/upload/${type}`,
+        url: `${baseUrl}/upload/${type}`,
         filePath,
         name: 'file',
+        timeout: REQUEST_TIMEOUT,
         header: this.token ? { Authorization: `Bearer ${this.token}` } : {},
         success: (res) => {
-          const payload = JSON.parse(res.data || '{}')
+          const payload = safeParseJson(res.data)
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(payload)
             return
           }
-          reject(new Error(payload.detail || payload.message || '上传失败'))
+          if (res.statusCode === 401) {
+            this.handleUnauthorized(`/upload/${type}`)
+            reject(createApiError({
+              code: 401,
+              message: '登录已失效，请重新登录',
+              data: payload,
+              unauthorized: true,
+            }))
+            return
+          }
+          reject(createApiError({
+            code: res.statusCode,
+            message: extractErrorMessage(payload, '上传失败'),
+            data: payload,
+          }))
         },
-        fail: () => reject(new Error('上传失败')),
+        fail: (err) => {
+          const isTimeout = String((err && err.errMsg) || '').toLowerCase().includes('timeout')
+          reject(createApiError({
+            code: isTimeout ? 408 : -1,
+            message: isTimeout ? '上传超时，请稍后重试' : '上传失败，请检查网络后重试',
+            detail: err,
+            network: !isTimeout,
+            timeout: isTimeout,
+          }))
+        },
       })
     })
   }
@@ -128,12 +327,47 @@ class ApiClient {
   getHealthTrend(pairId = null, days = 14) {
     return this.request('GET', pairId ? `/reports/trend?pair_id=${pairId}&days=${days}` : `/reports/trend?mode=solo&days=${days}`)
   }
+  getSafetyStatus(pairId = null) {
+    return this.request('GET', pairId ? `/insights/safety/status?pair_id=${pairId}` : '/insights/safety/status?mode=solo')
+  }
+  submitWeeklyAssessment(pairId = null, payload = {}) {
+    return this.request('POST', pairId ? `/insights/assessments/weekly?pair_id=${pairId}` : '/insights/assessments/weekly?mode=solo', payload)
+  }
+  getWeeklyAssessmentLatest(pairId = null) {
+    return this.request('GET', pairId ? `/insights/assessments/latest?pair_id=${pairId}` : '/insights/assessments/latest?mode=solo')
+  }
+  getWeeklyAssessmentTrend(pairId = null, limit = 4) {
+    return this.request('GET', pairId ? `/insights/assessments/trend?pair_id=${pairId}&limit=${limit}` : `/insights/assessments/trend?mode=solo&limit=${limit}`)
+  }
+  getPolicyDecisionAudit(pairId = null) {
+    return this.request('GET', pairId ? `/insights/plans/policy-audit?pair_id=${pairId}` : '/insights/plans/policy-audit?mode=solo')
+  }
+  getPrivacyStatus() {
+    return this.request('GET', '/privacy/status')
+  }
+  createPrivacyDeleteRequest() {
+    return this.request('POST', '/privacy/delete-request')
+  }
+  cancelPrivacyDeleteRequest() {
+    return this.request('POST', '/privacy/delete-request/cancel')
+  }
   generateDailyReport(pairId = null) { return this.request('POST', pairId ? `/reports/generate-daily?pair_id=${pairId}` : '/reports/generate-daily?mode=solo') }
   generateWeeklyReport(pairId) { return this.request('POST', `/reports/generate-weekly?pair_id=${pairId}`) }
   generateMonthlyReport(pairId) { return this.request('POST', `/reports/generate-monthly?pair_id=${pairId}`) }
   createAgentSession(pairId = null) { return this.request('POST', `/agent/sessions${pairId ? `?pair_id=${pairId}` : ''}`) }
   getAgentMessages(sessionId) { return this.request('GET', `/agent/sessions/${sessionId}/messages`) }
   chatWithAgent(sessionId, content) { return this.request('POST', `/agent/sessions/${sessionId}/chat`, { content }) }
+  buildRealtimeAsrSocketUrl() {
+    if (!this.token) {
+      throw createApiError({
+        code: 401,
+        message: '登录已失效，请重新登录',
+        unauthorized: true,
+      })
+    }
+    const baseUrl = this.ensureBaseUrl()
+    return `${toWebSocketUrl(baseUrl)}/agent/asr/realtime?token=${encodeURIComponent(this.token)}`
+  }
 }
 
 const api = new ApiClient()

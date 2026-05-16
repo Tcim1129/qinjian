@@ -6,6 +6,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.time import current_local_date
 from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, PairStatus, Milestone, Report, ReportType, ReportStatus
 from app.ai.reporter import generate_milestone_report
@@ -67,7 +68,7 @@ async def get_milestones(
     milestones = result.scalars().all()
 
     from datetime import date
-    today = date.today()
+    today = current_local_date()
 
     return [
         {

@@ -8,6 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, async_session
+from app.core.time import current_local_date
 from app.api.deps import get_current_user
 from app.models import User, Pair, Checkin, Report, ReportType, PairStatus, ReportStatus
 from app.schemas import ReportResponse
@@ -17,6 +18,14 @@ from app.ai.reporter import (
     generate_monthly_report,
     generate_solo_report,
 )
+from app.services.relationship_intelligence import (
+    record_relationship_event,
+    refresh_profile_and_plan,
+)
+from app.services.safety_summary import build_safety_status
+from app.services.privacy_audit import privacy_audit_scope
+from app.services.product_prefs import resolve_privacy_mode
+from app.api.v1.checkins import _combine_checkin_contents
 
 router = APIRouter(prefix="/reports", tags=["报告"])
 logger = logging.getLogger(__name__)
@@ -29,7 +38,8 @@ async def _get_authorized_pair(
     *,
     require_active: bool,
 ) -> Pair:
-    result = await db.execute(select(Pair).where(Pair.id == pair_id))
+    normalized_pair_id = uuid.UUID(str(pair_id))
+    result = await db.execute(select(Pair).where(Pair.id == normalized_pair_id))
     pair = result.scalar_one_or_none()
     if not pair:
         raise HTTPException(status_code=404, detail="配对不存在")
@@ -41,7 +51,13 @@ async def _get_authorized_pair(
 
 
 async def _process_daily_report(
-    report_id: uuid.UUID, pair_id: str, pair_type: str, content_a: str, content_b: str
+    report_id: uuid.UUID,
+    pair_id: str,
+    pair_type: str,
+    content_a: str,
+    content_b: str,
+    actor_user_id: str | None = None,
+    privacy_mode: str = "cloud",
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -53,27 +69,71 @@ async def _process_daily_report(
 
         try:
             if pair_type == "solo":
-                report_content = await generate_solo_report(
-                    pair_type="solo", content=content_a
-                )
+                with privacy_audit_scope(
+                    db=db,
+                    user_id=report.user_id,
+                    scope="solo",
+                    run_type="solo_daily_report",
+                    privacy_mode=privacy_mode,
+                ):
+                    report_content = await generate_solo_report(
+                        pair_type="solo", content=content_a
+                    )
                 report.content = report_content
                 report.health_score = report_content.get("health_score")
                 report.status = ReportStatus.COMPLETED
+                await record_relationship_event(
+                    db,
+                    event_type="report.completed",
+                    user_id=report.user_id,
+                    entity_type="report",
+                    entity_id=report.id,
+                    payload={
+                        "report_type": report.type.value,
+                        "health_score": report.health_score,
+                        "crisis_level": (report.content or {}).get("crisis_level"),
+                    },
+                    idempotency_key=f"report:{report.id}:completed",
+                )
+                await refresh_profile_and_plan(db, user_id=report.user_id)
                 await db.commit()
                 return
 
-            report_content = await generate_daily_report(
-                pair_type=pair_type,
-                content_a=content_a,
-                content_b=content_b,
-            )
+            with privacy_audit_scope(
+                db=db,
+                user_id=actor_user_id,
+                pair_id=report.pair_id,
+                scope="pair",
+                run_type="daily_report",
+                privacy_mode=privacy_mode,
+            ):
+                report_content = await generate_daily_report(
+                    pair_type=pair_type,
+                    content_a=content_a,
+                    content_b=content_b,
+                )
             report.content = report_content
             report.health_score = report_content.get("health_score")
             report.status = ReportStatus.COMPLETED
 
-            pair = await db.get(Pair, pair_id)
+            pair = await db.get(Pair, uuid.UUID(str(pair_id)))
             if pair:
                 await process_crisis_from_report(db, report, pair)
+
+            await record_relationship_event(
+                db,
+                event_type="report.completed",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={
+                    "report_type": report.type.value,
+                    "health_score": report.health_score,
+                    "crisis_level": (report.content or {}).get("crisis_level"),
+                },
+                idempotency_key=f"report:{report.id}:completed",
+            )
+            await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
@@ -83,7 +143,12 @@ async def _process_daily_report(
 
 
 async def _process_weekly_report(
-    report_id: uuid.UUID, pair_id: str, pair_type: str, daily_reports: list
+    report_id: uuid.UUID,
+    pair_id: str,
+    pair_type: str,
+    daily_reports: list,
+    actor_user_id: str | None = None,
+    privacy_mode: str = "cloud",
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -94,14 +159,37 @@ async def _process_weekly_report(
             return
 
         try:
-            report_content = await generate_weekly_report(pair_type, daily_reports)
+            with privacy_audit_scope(
+                db=db,
+                user_id=actor_user_id,
+                pair_id=report.pair_id,
+                scope="pair",
+                run_type="weekly_report",
+                privacy_mode=privacy_mode,
+            ):
+                report_content = await generate_weekly_report(pair_type, daily_reports)
             report.content = report_content
             report.health_score = report_content.get("overall_health_score")
             report.status = ReportStatus.COMPLETED
 
-            pair = await db.get(Pair, pair_id)
+            pair = await db.get(Pair, uuid.UUID(str(pair_id)))
             if pair:
                 await process_crisis_from_report(db, report, pair)
+
+            await record_relationship_event(
+                db,
+                event_type="report.completed",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={
+                    "report_type": report.type.value,
+                    "health_score": report.health_score,
+                    "crisis_level": (report.content or {}).get("crisis_level"),
+                },
+                idempotency_key=f"report:{report.id}:completed",
+            )
+            await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
@@ -111,7 +199,12 @@ async def _process_weekly_report(
 
 
 async def _process_monthly_report(
-    report_id: uuid.UUID, pair_id: str, pair_type: str, weekly_reports: list
+    report_id: uuid.UUID,
+    pair_id: str,
+    pair_type: str,
+    weekly_reports: list,
+    actor_user_id: str | None = None,
+    privacy_mode: str = "cloud",
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -122,14 +215,37 @@ async def _process_monthly_report(
             return
 
         try:
-            report_content = await generate_monthly_report(pair_type, weekly_reports)
+            with privacy_audit_scope(
+                db=db,
+                user_id=actor_user_id,
+                pair_id=report.pair_id,
+                scope="pair",
+                run_type="monthly_report",
+                privacy_mode=privacy_mode,
+            ):
+                report_content = await generate_monthly_report(pair_type, weekly_reports)
             report.content = report_content
             report.health_score = report_content.get("overall_health_score")
             report.status = ReportStatus.COMPLETED
 
-            pair = await db.get(Pair, pair_id)
+            pair = await db.get(Pair, uuid.UUID(str(pair_id)))
             if pair:
                 await process_crisis_from_report(db, report, pair)
+
+            await record_relationship_event(
+                db,
+                event_type="report.completed",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={
+                    "report_type": report.type.value,
+                    "health_score": report.health_score,
+                    "crisis_level": (report.content or {}).get("crisis_level"),
+                },
+                idempotency_key=f"report:{report.id}:completed",
+            )
+            await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
@@ -147,19 +263,22 @@ async def trigger_daily_report(
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发生成今日报告（异步，使用后台任务以防阻塞）"""
-    today = date.today()
+    today = current_local_date()
     is_solo = mode == "solo"
+    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
 
     if is_solo:
         result = await db.execute(
-            select(Checkin).where(
+            select(Checkin)
+            .where(
                 Checkin.user_id == user.id,
                 Checkin.pair_id.is_(None),
                 Checkin.checkin_date == today,
             )
+            .order_by(Checkin.created_at.asc(), Checkin.id.asc())
         )
-        checkin = result.scalar_one_or_none()
-        if not checkin:
+        checkins = list(result.scalars().all())
+        if not checkins:
             raise HTTPException(status_code=400, detail="今天尚未打卡")
 
         result = await db.execute(
@@ -188,7 +307,14 @@ async def trigger_daily_report(
 
         if background_tasks:
             background_tasks.add_task(
-                _process_daily_report, report.id, "solo", "solo", checkin.content, ""
+                _process_daily_report,
+                report.id,
+                "solo",
+                "solo",
+                _combine_checkin_contents(checkins),
+                "",
+                str(user.id),
+                privacy_mode,
             )
         return report
 
@@ -198,14 +324,18 @@ async def trigger_daily_report(
     pair = await _get_authorized_pair(db, pair_id, user, require_active=True)
 
     result = await db.execute(
-        select(Checkin).where(Checkin.pair_id == pair_id, Checkin.checkin_date == today)
+        select(Checkin)
+        .where(Checkin.pair_id == pair.id, Checkin.checkin_date == today)
+        .order_by(Checkin.created_at.asc(), Checkin.id.asc())
     )
-    checkins = result.scalars().all()
-    if len(checkins) < 2:
+    checkins = list(result.scalars().all())
+    checkin_a_entries = [item for item in checkins if item.user_id == pair.user_a_id]
+    checkin_b_entries = [item for item in checkins if item.user_id == pair.user_b_id]
+    if not checkin_a_entries or not checkin_b_entries:
         raise HTTPException(status_code=400, detail="需要双方都完成打卡后才能生成报告")
     result = await db.execute(
         select(Report).where(
-            Report.pair_id == pair_id,
+            Report.pair_id == pair.id,
             Report.report_date == today,
             Report.type == ReportType.DAILY,
         )
@@ -218,11 +348,8 @@ async def trigger_daily_report(
         else:
             return existing
 
-    checkin_a = next((c for c in checkins if c.user_id == pair.user_a_id), checkins[0])
-    checkin_b = next((c for c in checkins if c.user_id == pair.user_b_id), checkins[-1])
-
     report = Report(
-        pair_id=pair_id,
+        pair_id=pair.id,
         type=ReportType.DAILY,
         status=ReportStatus.PENDING,
         content=None,
@@ -237,10 +364,12 @@ async def trigger_daily_report(
         background_tasks.add_task(
             _process_daily_report,
             report.id,
-            pair_id,
+            str(pair.id),
             pair.type.value,
-            checkin_a.content,
-            checkin_b.content,
+            _combine_checkin_contents(checkin_a_entries),
+            _combine_checkin_contents(checkin_b_entries),
+            str(user.id),
+            privacy_mode,
         )
 
     return report
@@ -255,7 +384,8 @@ async def trigger_weekly_report(
     db: AsyncSession = Depends(get_db),
 ):
     """生成周报（基于过去7天的日报汇总，异步后台任务）"""
-    today = date.today()
+    today = current_local_date()
+    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
     if mode == "solo":
         raise HTTPException(status_code=400, detail="单人模式不支持周报")
     if not pair_id:
@@ -266,7 +396,7 @@ async def trigger_weekly_report(
 
     result = await db.execute(
         select(Report).where(
-            Report.pair_id == pair_id,
+            Report.pair_id == pair.id,
             Report.report_date >= week_ago,
             Report.type == ReportType.WEEKLY,
         )
@@ -282,7 +412,7 @@ async def trigger_weekly_report(
     result = await db.execute(
         select(Report)
         .where(
-            Report.pair_id == pair_id,
+            Report.pair_id == pair.id,
             Report.report_date >= week_ago,
             Report.type == ReportType.DAILY,
             Report.status == ReportStatus.COMPLETED,
@@ -297,7 +427,7 @@ async def trigger_weekly_report(
         )
 
     report = Report(
-        pair_id=pair_id,
+        pair_id=pair.id,
         type=ReportType.WEEKLY,
         status=ReportStatus.PENDING,
         content=None,
@@ -310,7 +440,13 @@ async def trigger_weekly_report(
 
     if background_tasks:
         background_tasks.add_task(
-            _process_weekly_report, report.id, pair_id, pair.type.value, daily_reports
+            _process_weekly_report,
+            report.id,
+            str(pair.id),
+            pair.type.value,
+            daily_reports,
+            str(user.id),
+            privacy_mode,
         )
 
     return report
@@ -325,7 +461,8 @@ async def trigger_monthly_report(
     db: AsyncSession = Depends(get_db),
 ):
     """生成月报（基于过去30天的周报汇总，异步后台任务）"""
-    today = date.today()
+    today = current_local_date()
+    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
     if mode == "solo":
         raise HTTPException(status_code=400, detail="单人模式不支持月报")
     if not pair_id:
@@ -337,7 +474,7 @@ async def trigger_monthly_report(
     result = await db.execute(
         select(Report)
         .where(
-            Report.pair_id == pair_id,
+            Report.pair_id == pair.id,
             Report.report_date >= month_ago,
             Report.type == ReportType.MONTHLY,
         )
@@ -354,7 +491,7 @@ async def trigger_monthly_report(
     result = await db.execute(
         select(Report)
         .where(
-            Report.pair_id == pair_id,
+            Report.pair_id == pair.id,
             Report.report_date >= month_ago,
             Report.type == ReportType.WEEKLY,
             Report.status == ReportStatus.COMPLETED,
@@ -367,7 +504,7 @@ async def trigger_monthly_report(
         raise HTTPException(status_code=400, detail="至少需要2周的完整数据才能生成月报")
 
     report = Report(
-        pair_id=pair_id,
+        pair_id=pair.id,
         type=ReportType.MONTHLY,
         status=ReportStatus.PENDING,
         content=None,
@@ -380,7 +517,13 @@ async def trigger_monthly_report(
 
     if background_tasks:
         background_tasks.add_task(
-            _process_monthly_report, report.id, pair_id, pair.type.value, weekly_reports
+            _process_monthly_report,
+            report.id,
+            str(pair.id),
+            pair.type.value,
+            weekly_reports,
+            str(user.id),
+            privacy_mode,
         )
 
     return report
@@ -403,14 +546,38 @@ async def get_latest_report(
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
-        await _get_authorized_pair(db, pair_id, user, require_active=False)
-        query = select(Report).where(Report.pair_id == pair_id)
+        pair = await _get_authorized_pair(db, pair_id, user, require_active=False)
+        query = select(Report).where(Report.pair_id == pair.id)
         if report_type in ("daily", "weekly", "monthly"):
             query = query.where(Report.type == ReportType(report_type))
     query = query.order_by(Report.report_date.desc()).limit(1)
 
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    report = result.scalar_one_or_none()
+    if not report:
+        return None
+
+    safety = await build_safety_status(
+        db,
+        pair_id=report.pair_id,
+        user_id=report.user_id,
+    )
+    return ReportResponse(
+        id=report.id,
+        pair_id=report.pair_id,
+        user_id=report.user_id,
+        type=report.type.value if hasattr(report.type, "value") else str(report.type),
+        status=report.status.value
+        if hasattr(report.status, "value")
+        else str(report.status),
+        content=report.content,
+        health_score=report.health_score,
+        evidence_summary=safety.get("evidence_summary") or [],
+        limitation_note=safety.get("limitation_note"),
+        safety_handoff=safety.get("handoff_recommendation"),
+        report_date=report.report_date,
+        created_at=report.created_at,
+    )
 
 
 @router.get("/history", response_model=list[ReportResponse])
@@ -419,6 +586,8 @@ async def get_report_history(
     mode: str | None = None,
     report_type: str = "daily",
     limit: int = 7,
+    start_date: date | None = None,
+    end_date: date | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -430,15 +599,23 @@ async def get_report_history(
             Report.type == ReportType.SOLO,
             Report.status == ReportStatus.COMPLETED,
         )
+        if start_date:
+            query = query.where(Report.report_date >= start_date)
+        if end_date:
+            query = query.where(Report.report_date <= end_date)
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
-        await _get_authorized_pair(db, pair_id, user, require_active=False)
+        pair = await _get_authorized_pair(db, pair_id, user, require_active=False)
         query = select(Report).where(
-            Report.pair_id == pair_id, Report.status == ReportStatus.COMPLETED
+            Report.pair_id == pair.id, Report.status == ReportStatus.COMPLETED
         )
         if report_type in ("daily", "weekly", "monthly"):
             query = query.where(Report.type == ReportType(report_type))
+        if start_date:
+            query = query.where(Report.report_date >= start_date)
+        if end_date:
+            query = query.where(Report.report_date <= end_date)
     query = query.order_by(Report.report_date.desc()).limit(limit)
 
     result = await db.execute(query)
@@ -454,7 +631,7 @@ async def get_health_trend(
     db: AsyncSession = Depends(get_db),
 ):
     """获取健康度趋势数据（用于绘制图表）"""
-    since = date.today() - timedelta(days=days)
+    since = current_local_date() - timedelta(days=days)
     if mode == "solo":
         result = await db.execute(
             select(Report.report_date, Report.health_score)
@@ -470,11 +647,11 @@ async def get_health_trend(
     else:
         if not pair_id:
             raise HTTPException(status_code=422, detail="缺少配对ID")
-        await _get_authorized_pair(db, pair_id, user, require_active=False)
+        pair = await _get_authorized_pair(db, pair_id, user, require_active=False)
         result = await db.execute(
             select(Report.report_date, Report.health_score)
             .where(
-                Report.pair_id == pair_id,
+                Report.pair_id == pair.id,
                 Report.type == ReportType.DAILY,
                 Report.status == ReportStatus.COMPLETED,
                 Report.report_date >= since,

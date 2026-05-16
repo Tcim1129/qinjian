@@ -1,19 +1,23 @@
-"""亲健 API 应用入口"""
+"""亲见 API 应用入口"""
 
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.engine import make_url
 
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.services.phone_code_store import close_phone_code_store
+from app.services.upload_access import public_upload_access_enabled
 
 APP_DESCRIPTION = """
-亲健 API 面向关系健康场景，覆盖账号认证、关系打卡、危机预警、关系智能画像、
+亲见 API 面向关系健康场景，覆盖账号认证、关系打卡、危机预警、关系智能画像、
 干预计划、剧本运行时、策略审计和叙事对齐等核心能力。
 """
 
@@ -34,6 +38,7 @@ OPENAPI_TAGS = [
         "name": "关系智能",
         "description": "关系画像、时间轴、干预计划、策略审计与叙事对齐接口。",
     },
+    {"name": "隐私沙盒", "description": "隐私状态、删除请求、审计与保留治理接口。"},
     {"name": "admin", "description": "策略发布台、版本审计、回滚与管理接口。"},
 ]
 
@@ -47,7 +52,30 @@ def _ensure_upload_dirs() -> None:
     os.makedirs(os.path.join(UPLOAD_ROOT, "voices"), exist_ok=True)
 
 
+def _is_using_weak_database_secret() -> bool:
+    try:
+        db_url = make_url(settings.DATABASE_URL)
+    except Exception:
+        return False
+
+    weak_passwords = {"qinjian", "qinjian_dev_123", "change-me-in-production"}
+    return str(db_url.password or "").strip() in weak_passwords
+
+
+def _is_secret_key_strong_enough(secret_key: str) -> bool:
+    return len(secret_key.encode("utf-8")) >= 32
+
+
 _ensure_upload_dirs()
+
+
+def _should_auto_create_tables() -> bool:
+    return bool(settings.AUTO_CREATE_TABLES)
+
+
+def _is_demo_read_only_request(request: Request) -> bool:
+    demo_header = str(request.headers.get("x-qj-demo-mode") or "").strip()
+    return demo_header == "1"
 
 
 @asynccontextmanager
@@ -57,10 +85,16 @@ async def lifespan(app: FastAPI):
             "CRITICAL SECURITY ERROR: 检测到非 DEBUG 环境下使用了默认弱密钥！"
             "生产环境必须通过 SECRET_KEY 环境变量修改密钥以保证 JWT 安全。"
         )
-    # Alembic 负责迁移；create_all 仅在表完全不存在时兜底
-    # 注意：create_all 不会修改已有表结构，所以不会和 Alembic 冲突
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if not settings.DEBUG and not _is_secret_key_strong_enough(settings.SECRET_KEY):
+        raise RuntimeError("生产环境 SECRET_KEY 长度不足 32 字节，拒绝启动。")
+    if not settings.DEBUG and settings.PHONE_CODE_DEBUG_RETURN:
+        raise RuntimeError("生产环境禁止返回验证码调试字段。")
+    if not settings.DEBUG and _is_using_weak_database_secret():
+        raise RuntimeError("生产环境检测到默认数据库密码，请立即替换 DB_PASSWORD。")
+    # 默认由 Alembic 显式管理结构；仅在临时开发/演示环境按开关兜底建表。
+    if _should_auto_create_tables():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     # 创建上传目录
     _ensure_upload_dirs()
     try:
@@ -68,26 +102,50 @@ async def lifespan(app: FastAPI):
     finally:
         await close_phone_code_store()
 
-
+api_docs_enabled = settings.api_docs_enabled()
 app = FastAPI(
     title=settings.APP_NAME,
     description=APP_DESCRIPTION.strip(),
     version="2026.03",
     openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
+    docs_url="/docs" if api_docs_enabled else None,
+    redoc_url="/redoc" if api_docs_enabled else None,
+    openapi_url="/openapi.json" if api_docs_enabled else None,
+)
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.trusted_hosts(),
 )
 
 # CORS - 允许 Web 前端跨域 (收紧为仅允许明确的前端源)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_ORIGIN],
+    allow_origins=settings.frontend_origins(),
+    allow_origin_regex=settings.frontend_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 静态文件：上传的图片/语音
-app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
+
+@app.middleware("http")
+async def enforce_demo_mode_read_only(request: Request, call_next):
+    if (
+        request.url.path.startswith("/api/")
+        and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
+        and _is_demo_read_only_request(request)
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Demo Mode is read-only."},
+        )
+    return await call_next(request)
+
+# 静态文件：仅在显式开启兼容模式时公开暴露上传目录
+if public_upload_access_enabled():
+    app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 # API 路由
 app.include_router(api_router, prefix="/api/v1")
@@ -95,4 +153,4 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/api/health", tags=["admin"], summary="服务健康检查")
 async def health_check():
-    return {"status": "ok", "app": settings.APP_NAME}
+    return {"status": "ok"}

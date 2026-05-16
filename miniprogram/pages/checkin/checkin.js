@@ -32,9 +32,13 @@ Page({
     lastReply: '',
     voiceSupported: true,
     transcribingVoice: false,
+    recognizingVoice: false,
+    realtimeAsrStatus: '',
   },
 
   onLoad() {
+    this.realtimeAsr = null
+    this.skipNextVoiceTranscription = false
     this.initRecorder()
   },
 
@@ -52,10 +56,18 @@ Page({
   },
 
   onHide() {
+    this.stopRealtimeRecognition({ discard: true })
+    if (this.data.isRecording) {
+      this.skipNextVoiceTranscription = true
+    }
     this.stopRecording()
   },
 
   onUnload() {
+    this.stopRealtimeRecognition({ discard: true })
+    if (this.data.isRecording) {
+      this.skipNextVoiceTranscription = true
+    }
     this.stopRecording()
   },
 
@@ -68,6 +80,14 @@ Page({
     })
     this.recorderManager.onStop((res) => {
       this.setData({ isRecording: false })
+      if (this.realtimeAsr && this.realtimeAsr.active) {
+        this.finishRealtimeRecognition()
+        return
+      }
+      if (this.skipNextVoiceTranscription) {
+        this.skipNextVoiceTranscription = false
+        return
+      }
       // 如果是语音转文字模式，自动上传转录
       if (this.data.mode === 'voice' && res.tempFilePath) {
         this.transcribeVoice(res.tempFilePath)
@@ -77,9 +97,22 @@ Page({
       }
     })
     this.recorderManager.onError((err) => {
-      this.setData({ isRecording: false, transcribingVoice: false })
+      this.setData({ isRecording: false, transcribingVoice: false, recognizingVoice: false, realtimeAsrStatus: '' })
+      if (this.realtimeAsr && this.realtimeAsr.active) {
+        this.cleanupRealtimeRecognition()
+      }
       wx.showToast({ title: '录音失败：' + err.message, icon: 'none' })
     })
+    if (typeof this.recorderManager.onFrameRecorded === 'function') {
+      this.recorderManager.onFrameRecorded((res) => {
+        if (!this.realtimeAsr || !this.realtimeAsr.active || !this.realtimeAsr.socketReady) return
+        const audio = wx.arrayBufferToBase64(res.frameBuffer)
+        if (!audio) return
+        this.realtimeAsr.socket.send({
+          data: JSON.stringify({ type: 'audio.chunk', audio })
+        })
+      })
+    }
   },
 
   // 开始录音
@@ -109,6 +142,195 @@ Page({
     }
   },
 
+  toggleVoiceChatRecord() {
+    if (this.realtimeAsr && this.realtimeAsr.stopping) {
+      wx.showToast({ title: '正在整理最后一句，请稍候', icon: 'none' })
+      return
+    }
+    if (this.data.recognizingVoice) {
+      this.stopRealtimeRecognition({ discard: true })
+    }
+    this.toggleVoiceRecord()
+  },
+
+  async startVoiceRecognize() {
+    if (this.realtimeAsr && this.realtimeAsr.stopping) {
+      wx.showToast({ title: '正在整理最后一句，请稍候', icon: 'none' })
+      return
+    }
+    if (this.data.recognizingVoice) {
+      this.stopRealtimeRecognition()
+      return
+    }
+
+    try {
+      await this.startRealtimeRecognition()
+    } catch (error) {
+      this.cleanupRealtimeRecognition()
+      wx.showToast({ title: error.message || '实时识别不可用，已切换录完转写', icon: 'none' })
+      if (!this.data.isRecording) {
+        this.startRecording()
+      }
+    }
+  },
+
+  async startRealtimeRecognition() {
+    if (!this.recorderManager || typeof wx.connectSocket !== 'function' || typeof this.recorderManager.onFrameRecorded !== 'function') {
+      throw new Error('当前环境不支持实时识别')
+    }
+
+    const socket = wx.connectSocket({
+      url: api.getRealtimeAsrSocketUrl(),
+      timeout: 10000,
+    })
+
+    this.realtimeAsr = {
+      active: true,
+      socket,
+      socketReady: false,
+      finalDelivered: false,
+      stopping: false,
+    }
+
+    socket.onOpen(() => {
+      if (!this.realtimeAsr || this.realtimeAsr.socket !== socket) return
+      this.realtimeAsr.socketReady = true
+      this.setData({
+        recognizingVoice: true,
+        realtimeAsrStatus: '正在实时转写，说完后再点一次结束识别。',
+      })
+      socket.send({
+        data: JSON.stringify({
+          type: 'session.start',
+          format: 'pcm',
+          sample_rate: 16000,
+          language: 'zh',
+        })
+      })
+      this.recorderManager.start({
+        duration: 60000,
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        encodeBitRate: 256000,
+        format: 'pcm',
+        frameSize: 16,
+      })
+    })
+
+    socket.onMessage(async (event) => {
+      let payload = null
+      try {
+        payload = JSON.parse(event.data)
+      } catch (error) {
+        return
+      }
+
+      if (payload.type === 'partial') {
+        this.setData({ chatInput: payload.text || '' })
+        return
+      }
+
+      if (payload.type === 'final') {
+        const finalText = (payload.text || '').trim()
+        if (this.realtimeAsr) {
+          this.realtimeAsr.finalDelivered = true
+        }
+        this.setData({
+          chatInput: finalText,
+          recognizingVoice: false,
+          realtimeAsrStatus: '',
+        })
+        this.cleanupRealtimeRecognition()
+        if (finalText) {
+          await this.sendChat()
+        }
+        return
+      }
+
+      if (payload.type === 'error') {
+        this.cleanupRealtimeRecognition()
+        this.setData({ recognizingVoice: false, realtimeAsrStatus: '' })
+        wx.showToast({ title: payload.message || '实时识别失败', icon: 'none' })
+      }
+    })
+
+    socket.onError(() => {
+      const shouldFallback = this.realtimeAsr && !this.realtimeAsr.finalDelivered
+      this.cleanupRealtimeRecognition()
+      this.setData({ recognizingVoice: false, realtimeAsrStatus: '' })
+      if (shouldFallback && !this.data.isRecording) {
+        wx.showToast({ title: '实时识别失败，已切换录完转写', icon: 'none' })
+        this.startRecording()
+      }
+    })
+
+    socket.onClose(() => {
+      const shouldNotify = this.realtimeAsr && !this.realtimeAsr.finalDelivered && !this.realtimeAsr.stopping
+      this.cleanupRealtimeRecognition()
+      this.setData({ recognizingVoice: false, realtimeAsrStatus: '' })
+      if (shouldNotify) {
+        wx.showToast({ title: '实时识别已中断', icon: 'none' })
+      }
+    })
+  },
+
+  finishRealtimeRecognition() {
+    if (!this.realtimeAsr || !this.realtimeAsr.active) return
+    this.realtimeAsr.stopping = true
+    this.setData({
+      recognizingVoice: false,
+      realtimeAsrStatus: '正在整理最后一句，请稍候。',
+    })
+    if (this.realtimeAsr.socketReady) {
+      this.realtimeAsr.socket.send({
+        data: JSON.stringify({ type: 'session.stop' })
+      })
+      return
+    }
+    this.cleanupRealtimeRecognition()
+  },
+
+  stopRealtimeRecognition(options = {}) {
+    const { discard = false } = options
+    if (!this.realtimeAsr || !this.realtimeAsr.active) return
+    this.realtimeAsr.stopping = true
+    if (discard) {
+      this.cleanupRealtimeRecognition()
+      this.setData({ recognizingVoice: false, realtimeAsrStatus: '' })
+      return
+    }
+    if (this.data.isRecording) {
+      this.stopRecording()
+      return
+    }
+    this.finishRealtimeRecognition()
+  },
+
+  cleanupRealtimeRecognition() {
+    if (this.realtimeAsr && this.realtimeAsr.socket) {
+      try {
+        this.realtimeAsr.socket.close({})
+      } catch (error) {
+        // noop
+      }
+    }
+    this.realtimeAsr = null
+  },
+
+  playLastReply() {
+    const text = this.data.lastReply
+    if (!text) {
+      wx.showToast({ title: '还没有回复可以播放', icon: 'none' })
+      return
+    }
+    wx.showModal({
+      title: '回复',
+      content: text,
+      showCancel: false,
+      confirmText: '好的'
+    })
+  },
+
   // 上传语音并转录
   async transcribeVoice(filePath) {
     this.setData({ transcribingVoice: true })
@@ -125,6 +347,9 @@ Page({
 
   switchMode(e) {
     const mode = e.currentTarget.dataset.mode
+    if (mode !== 'voice') {
+      this.stopRealtimeRecognition({ discard: true })
+    }
     this.setData({ mode })
     wx.setStorageSync('qj_checkin_mode', mode)
     if (mode === 'voice') {
@@ -143,9 +368,7 @@ Page({
         todayCheckin: res.my_checkin || res
       })
     } catch (e) {
-      if (e.code === 404) {
-        this.setData({ hasCheckedIn: false, todayCheckin: null })
-      }
+      this.setData({ hasCheckedIn: false, todayCheckin: null })
     }
   },
 
@@ -320,7 +543,7 @@ Page({
         chatMessages: messages || []
       })
     } catch (e) {
-      wx.showToast({ title: e.message || 'AI 会话启动失败', icon: 'none' })
+      wx.showToast({ title: e.message || '会话启动失败', icon: 'none' })
     }
   },
 

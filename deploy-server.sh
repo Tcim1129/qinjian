@@ -91,5 +91,5 @@ echo "  服务状态:"
 docker-compose ps
 echo ""
 echo "  查看日志:"
-echo "    cd /opt/qinjian && docker-compose logs -f"
+echo "    cd /root/qinjian && docker-compose logs -f"
 echo ""

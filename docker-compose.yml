@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: qinjian
       POSTGRES_USER: qinjian
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-qinjian_dev_123}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     # 生产环境不暴露PG端口到外网
     expose:
       - "5432"
@@ -25,12 +25,23 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgresql+psycopg://qinjian:${DB_PASSWORD:-qinjian_dev_123}@db:5432/qinjian
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      DATABASE_URL: postgresql+psycopg://qinjian:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/qinjian
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_BASE_URL: ${AI_BASE_URL:-}
+      ASR_PROVIDER: ${ASR_PROVIDER:-qwen3}
+      REALTIME_ASR_PROVIDER: ${REALTIME_ASR_PROVIDER:-qwen3}
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
       SILICONFLOW_BASE_URL: https://api.siliconflow.cn/v1
+      QWEN_ASR_API_KEY: ${QWEN_ASR_API_KEY:-}
+      QWEN_ASR_BASE_URL: ${QWEN_ASR_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      QWEN_ASR_FILE_MODEL: ${QWEN_ASR_FILE_MODEL:-qwen3-asr-flash}
+      QWEN_ASR_REALTIME_MODEL: ${QWEN_ASR_REALTIME_MODEL:-qwen3-asr-flash-realtime}
+      XFYUN_RTASR_APP_ID: ${XFYUN_RTASR_APP_ID:-}
+      XFYUN_RTASR_API_KEY: ${XFYUN_RTASR_API_KEY:-}
+      XFYUN_RTASR_API_SECRET: ${XFYUN_RTASR_API_SECRET:-}
+      XFYUN_RTASR_WS_URL: ${XFYUN_RTASR_WS_URL:-wss://office-api-ast-dx.iflyaisol.com/ast/communicate/v1}
+      XFYUN_RTASR_LANG: ${XFYUN_RTASR_LANG:-autodialect}
       AI_MULTIMODAL_MODEL: ${AI_MULTIMODAL_MODEL:-moonshot/kimi-k2.5}
       AI_TEXT_MODEL: ${AI_TEXT_MODEL:-deepseek-ai/DeepSeek-V3}
     volumes:

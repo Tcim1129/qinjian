@@ -9,7 +9,7 @@ echo "🚀 亲健项目自动部署"
 echo "===================="
 echo ""
 
-cd /opt/qinjian
+cd /root/qinjian
 
 echo "[1/5] 拉取最新代码..."
 git pull origin main
@@ -43,4 +43,4 @@ echo "访问地址:"
 echo "  Web: http://${PUBLIC_HOST}:8080"
 echo "  API: http://${PUBLIC_HOST}:8080/api/health"
 echo ""
-echo "查看日志: cd /opt/qinjian && docker-compose logs -f"
+echo "查看日志: cd /root/qinjian && docker-compose logs -f"

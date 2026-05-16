@@ -1,17 +1,37 @@
 #!/usr/bin/expect -f
 
 set timeout 60
-set host "143.198.110.145"
-set username "root"
-set password "7507906119HJL"
+proc required_value {index env_name description} {
+    global argv
+    if {[llength $argv] > $index} {
+        set value [string trim [lindex $argv $index]]
+        if {$value ne ""} {
+            return $value
+        }
+    }
+    if {[info exists ::env($env_name)]} {
+        set value [string trim $::env($env_name)]
+        if {$value ne ""} {
+            return $value
+        }
+    }
+    puts stderr "缺少${description}，请通过命令行参数或环境变量 ${env_name} 提供。"
+    exit 1
+}
 
-spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $username@$host
+set host [required_value 0 "QJ_REMOTE_HOST" "远端主机"]
+set username [required_value 1 "QJ_REMOTE_USER" "远端用户名"]
+set password [required_value 2 "QJ_REMOTE_PASSWORD" "远端密码"]
+set remote_root [required_value 3 "QJ_REMOTE_ROOT" "远端部署目录"]
+set strict_host_key_checking [string trim [expr {[info exists ::env(QJ_STRICT_HOST_KEY_CHECKING)] ? $::env(QJ_STRICT_HOST_KEY_CHECKING) : "accept-new"}]]
+
+spawn ssh -o StrictHostKeyChecking=$strict_host_key_checking $username@$host
 
 expect "password:"
 send "$password\r"
 
 expect "#"
-send "cd /opt/qinjian\r"
+send "cd $remote_root\r"
 
 expect "#"
 send "echo '[1/5] 拉取最新代码...'\r"
@@ -35,7 +55,7 @@ send "docker-compose ps\r"
 
 expect "#"
 send "echo '✅ 部署完成！'\r"
-send "echo '访问: http://143.198.110.145:8080'\r"
+send "echo '部署目标: $host'\r"
 send "exit\r"
 
 interact

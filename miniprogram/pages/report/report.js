@@ -1,38 +1,23 @@
-/**
- * 报告页 - 关系健康报告
- * 支持日报/周报/月报切换、生成报告、查看历史、趋势图表
- */
 const api = require('../../utils/api.js')
 const auth = require('../../utils/auth.js')
 
 Page({
   data: {
-    // 当前选中的报告类型 tab
     currentTab: 'daily',
     tabs: [
       { key: 'daily', label: '日报' },
       { key: 'weekly', label: '周报' },
       { key: 'monthly', label: '月报' }
     ],
-
-    // 当前报告内容
     reportContent: null,
     reportView: null,
-
-    // 历史报告列表
     historyList: [],
     historyListView: [],
-
-    // 趋势数据（占位）
     trendData: null,
-
-    // 加载 & 生成状态
-    loading: false,
-    generating: false
-  },
-
-  onLoad() {
-    // 初始化
+    safetyStatus: null,
+    assessmentTrend: null,
+    policyAudit: null,
+    loading: false
   },
 
   onShow() {
@@ -40,13 +25,9 @@ Page({
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 3 })
     }
-    this.loadHistory()
-    this.loadTrend()
+    this.loadDashboard()
   },
 
-  /**
-   * 切换报告类型 tab
-   */
   switchTab(e) {
     const tab = e.currentTarget.dataset.tab
     this.setData({
@@ -54,93 +35,60 @@ Page({
       reportContent: null,
       reportView: null
     })
-    this.loadHistory()
+    this.loadDashboard()
   },
 
-  /**
-   * 生成报告
-   */
-  async generateReport() {
-    if (this.data.generating) return
-    this.setData({ generating: true })
-
-    const urlMap = {
-      daily: '/reports/generate-daily',
-      weekly: '/reports/generate-weekly',
-      monthly: '/reports/generate-monthly'
-    }
-
-    const url = urlMap[this.data.currentTab]
-    const pairId = auth.getPairId()
-
-    try {
-      if (!pairId && this.data.currentTab !== 'daily') {
-        wx.showToast({ title: '单人模式仅支持日报', icon: 'none' })
-        this.setData({ generating: false })
-        return
-      }
-
-      const res = pairId
-        ? await api.post(`${url}?pair_id=${pairId}`)
-        : await api.post(`${url}?mode=solo`)
-      this.setData({ reportContent: res, reportView: this.normalizeReport(res) })
-      wx.showToast({ title: '报告生成成功', icon: 'success' })
-      this.loadHistory()
-    } catch (e) {
-      const isSolo = !pairId
-      if (isSolo && this.data.currentTab === 'daily') {
-        wx.showToast({ title: e.message || '请先完成今日打卡', icon: 'none' })
-      } else {
-        wx.showToast({ title: e.message || '生成失败', icon: 'none' })
-      }
-    } finally {
-      this.setData({ generating: false })
-    }
+  onPullDownRefresh() {
+    this.loadDashboard().then(() => {
+      wx.stopPullDownRefresh()
+    })
   },
 
-  /**
-   * 加载历史报告
-   */
-  async loadHistory() {
+  goCheckin() {
+    wx.switchTab({ url: '/pages/checkin/checkin' })
+  },
+
+  async loadDashboard() {
     this.setData({ loading: true })
     try {
       const pairId = auth.getPairId()
-      const qs = pairId
-        ? `pair_id=${pairId}&report_type=${this.data.currentTab}`
-        : `mode=solo&report_type=${this.data.currentTab}`
-      const res = await api.get(`/reports/history?${qs}`)
-      const list = res || []
+      const reportType = this.data.currentTab
+      const [latest, history, trend, safetyStatus, assessmentTrend, policyAudit] = await Promise.all([
+        pairId
+          ? api.get(`/reports/latest?pair_id=${pairId}&report_type=${reportType}`).catch(() => null)
+          : api.get(`/reports/latest?mode=solo&report_type=${reportType}`).catch(() => null),
+        pairId
+          ? api.get(`/reports/history?pair_id=${pairId}&report_type=${reportType}`).catch(() => [])
+          : api.get(`/reports/history?mode=solo&report_type=${reportType}`).catch(() => []),
+        pairId
+          ? api.get('/reports/trend?pair_id=' + pairId).catch(() => null)
+          : api.get('/reports/trend?mode=solo').catch(() => null),
+        api.getSafetyStatus(pairId).catch(() => null),
+        api.getWeeklyAssessmentTrend(pairId).catch(() => null),
+        api.getPolicyDecisionAudit(pairId).catch(() => null)
+      ])
+
+      const list = history || []
       this.setData({
+        reportContent: latest,
+        reportView: this.normalizeReport(latest),
         historyList: list,
         historyListView: list.map(item => ({
           ...item,
           _label: item.type === 'solo' ? '个人日报' : item.type === 'weekly' ? '周报' : item.type === 'monthly' ? '月报' : '日报'
-        }))
+        })),
+        trendData: trend,
+        safetyStatus,
+        assessmentTrend: this.normalizeAssessmentTrend(assessmentTrend),
+        policyAudit
       })
     } catch (e) {
-      console.error('获取报告历史失败:', e)
+      console.error('加载报告失败:', e)
     } finally {
       this.setData({ loading: false })
     }
   },
 
-  /**
-   * 加载趋势数据
-   */
-  async loadTrend() {
-    try {
-      const pairId = auth.getPairId()
-      const qs = pairId ? `pair_id=${pairId}` : `mode=solo`
-      const res = await api.get(`/reports/trend?${qs}`)
-      this.setData({ trendData: res })
-    } catch (e) {
-      console.error('获取趋势数据失败:', e)
-    }
-  },
-
-  /**
-   * 查看历史报告详情
-   */
   viewReport(e) {
     const report = e.currentTarget.dataset.report
     this.setData({ reportContent: report, reportView: this.normalizeReport(report) })
@@ -150,19 +98,53 @@ Page({
     if (!report) return null
     const content = report.content || {}
     const type = report.type || this.data.currentTab
-
-    const view = {
-      title: type === 'solo' ? '个人日报' : (type === 'weekly' ? '周报' : type === 'monthly' ? '月报' : '日报'),
+    return {
+      title: type === 'solo' ? '个人日报' : type === 'weekly' ? '周报' : type === 'monthly' ? '月报' : '日报',
       healthScore: content.health_score || content.overall_health_score || null,
       insight: content.insight || content.self_insight || content.executive_summary || '',
-      suggestion: content.suggestion || content.self_care_tip || '',
-      highlights: content.highlights || content.weekly_highlights || [],
-      concerns: content.concerns || content.areas_to_improve || [],
+      suggestion: content.suggestion || content.self_care_tip || content.professional_note || '',
+      highlights: content.highlights || content.weekly_highlights || content.strengths || [],
+      concerns: content.concerns || content.areas_to_improve || content.growth_areas || [],
       encouragement: content.encouragement || content.relationship_note || '',
-      trend: content.trend || content.monthly_trend || '',
-      raw: content
+      evidenceSummary: report.evidence_summary || [],
+      limitationNote: report.limitation_note || '',
+      safetyHandoff: report.safety_handoff || ''
     }
+  },
 
-    return view
+  normalizeAssessmentTrend(payload) {
+    if (!payload) return null
+    return {
+      latestScore: payload.latest_score,
+      changeSummary: payload.change_summary,
+      points: (payload.trend_points || []).slice(0, 4).map(item => ({
+        id: item.event_id,
+        label: (item.submitted_at || '').slice(5, 10) || '本周',
+        score: item.total_score,
+        summary: item.change_summary || '已记录本次评估'
+      })),
+      dimensions: (payload.dimension_scores || []).slice(0, 5).map(item => ({
+        id: item.id,
+        label: item.label,
+        score: item.score
+      }))
+    }
+  },
+
+  openAction(e) {
+    const path = e.currentTarget.dataset.path
+    if (!path) return
+    const tabPages = [
+      '/pages/home/home',
+      '/pages/checkin/checkin',
+      '/pages/discover/discover',
+      '/pages/report/report',
+      '/pages/profile/profile'
+    ]
+    if (tabPages.includes(path)) {
+      wx.switchTab({ url: path })
+      return
+    }
+    wx.navigateTo({ url: path })
   }
 })

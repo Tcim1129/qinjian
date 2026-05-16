@@ -6,6 +6,12 @@ try {
   config = require('./config.template.js')
 }
 
+function clearLegacyLoginCache() {
+  wx.removeStorageSync('token')
+  wx.removeStorageSync('userInfo')
+  wx.removeStorageSync('pairInfo')
+}
+
 /**
  * 亲健小程序 - 全局入口
  * 青年亲密关系健康管理专家
@@ -22,26 +28,8 @@ App({
   },
 
   onLaunch() {
-    // 从本地缓存读取登录态
-    const token = wx.getStorageSync('token')
-    const userInfo = wx.getStorageSync('userInfo')
-    const pairInfo = wx.getStorageSync('pairInfo')
-
-    if (token) {
-      this.globalData.token = token
-      this.globalData.isLoggedIn = true
-    }
-    if (userInfo) {
-      this.globalData.userInfo = userInfo
-    }
-    if (pairInfo) {
-      this.globalData.pairInfo = pairInfo
-    }
-
-    // 验证 token 有效性
-    if (token) {
-      this.checkTokenValid()
-    }
+    // 登录态改为仅驻留内存，启动时清理旧版持久化敏感数据。
+    clearLegacyLoginCache()
   },
 
   async syncPairState() {
@@ -66,7 +54,6 @@ App({
     const api = require('./utils/api.js')
     api.get('/auth/me').then(res => {
       this.globalData.userInfo = res
-      wx.setStorageSync('userInfo', res)
       return this.syncPairState()
     }).catch(() => {
       // token 失效，清除登录态
@@ -82,9 +69,7 @@ App({
     this.globalData.userInfo = userInfo
     this.globalData.pairInfo = null
     this.globalData.isLoggedIn = true
-    wx.setStorageSync('token', token)
-    wx.setStorageSync('userInfo', userInfo)
-    wx.removeStorageSync('pairInfo')
+    clearLegacyLoginCache()
   },
 
   /**
@@ -92,11 +77,6 @@ App({
    */
   setPairInfo(pairInfo) {
     this.globalData.pairInfo = pairInfo || null
-    if (pairInfo) {
-      wx.setStorageSync('pairInfo', pairInfo)
-      return
-    }
-
     wx.removeStorageSync('pairInfo')
   },
 
@@ -108,9 +88,7 @@ App({
     this.globalData.userInfo = null
     this.globalData.pairInfo = null
     this.globalData.isLoggedIn = false
-    wx.removeStorageSync('token')
-    wx.removeStorageSync('userInfo')
-    wx.removeStorageSync('pairInfo')
+    clearLegacyLoginCache()
   },
 
   /**

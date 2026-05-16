@@ -7,6 +7,7 @@ from datetime import date, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import current_local_date
 from app.services.intervention_effectiveness import build_intervention_scorecard
 from app.services.intervention_experimentation import build_intervention_experiment_ledger
 from app.services.policy_registry import (
@@ -267,7 +268,7 @@ def _build_stage(
         "days_remaining": days_remaining,
         "min_observations": min_observations,
         "observations_remaining": observations_remaining,
-        "checkpoint_date": date.today() + timedelta(days=days_remaining),
+        "checkpoint_date": current_local_date() + timedelta(days=days_remaining),
         "branch_label": policy.get("branch_label"),
         "intensity_label": policy.get("intensity_label"),
         "copy_mode_label": policy.get("copy_mode_label"),
@@ -384,7 +385,7 @@ def build_policy_schedule_preview(*, scorecard: dict | None, strategy: dict) -> 
         scorecard=scorecard,
     )
     schedule_label = SCHEDULE_LABELS.get(schedule_mode, schedule_mode)
-    checkpoint_date = date.today() + timedelta(days=days_remaining)
+    checkpoint_date = current_local_date() + timedelta(days=days_remaining)
     return {
         "schedule_mode": schedule_mode,
         "schedule_label": schedule_label,

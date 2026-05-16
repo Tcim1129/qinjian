@@ -1,0 +1,96 @@
+<!--pages/privacy/privacy.wxml-->
+<view class="privacy-page">
+  <!-- 顶部导航 -->
+  <view class="nav-bar">
+    <view class="nav-bar__left" bindtap="goBack">
+      <text class="nav-back-icon">‹</text>
+      <text>返回</text>
+    </view>
+    <view class="nav-bar__center">
+      <text class="nav-title">隐私中心</text>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载隐私设置...</text>
+  </view>
+
+  <scroll-view scroll-y class="privacy-content" wx:if="{{!loading}}">
+    <!-- 数据保留策略 -->
+    <view class="privacy-section">
+      <text class="privacy-section__title">数据保留策略</text>
+      <view class="privacy-card">
+        <view class="privacy-row">
+          <text class="privacy-label">数据保留期限</text>
+          <text class="privacy-value">{{privacyStatus.retention_days || 90}} 天</text>
+        </view>
+        <view class="privacy-row">
+          <text class="privacy-label">数据加密状态</text>
+          <text class="privacy-value privacy-value--success">{{privacyStatus.encryption_status || '已启用'}}</text>
+        </view>
+        <view class="privacy-row">
+          <text class="privacy-label">最后更新时间</text>
+          <text class="privacy-value privacy-value--muted">{{privacyStatus.updated_at || '--'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 数据删除请求 -->
+    <view class="privacy-section">
+      <text class="privacy-section__title">数据删除</text>
+      <view class="privacy-card">
+        <text class="privacy-desc">你可以申请删除你的全部个人数据。删除请求提交后，系统将在保留期内完成数据清理。</text>
+
+        <!-- 已有删除请求 -->
+        <view class="deletion-status" wx:if="{{deletionRequest}}">
+          <view class="deletion-status__icon">⏳</view>
+          <text class="deletion-status__title">删除请求处理中</text>
+          <text class="deletion-status__desc">提交时间：{{deletionRequest.created_at}}</text>
+          <text class="deletion-status__desc">预计完成：{{deletionRequest.estimated_completion || '--'}}</text>
+          <button class="btn btn--secondary" bindtap="cancelDelete">撤销删除请求</button>
+        </view>
+
+        <!-- 无删除请求 -->
+        <view class="deletion-action" wx:else>
+          <button class="btn btn--danger" bindtap="showDeleteDialog">申请删除全部数据</button>
+          <text class="privacy-warning">⚠️ 此操作不可逆，所有个人数据将被永久删除</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 隐私说明 -->
+    <view class="privacy-section">
+      <text class="privacy-section__title">隐私说明</text>
+      <view class="privacy-card privacy-card--soft">
+        <text class="privacy-note">亲健承诺保护你的隐私数据。所有数据均经过加密存储，仅在必要时用于关系分析。你可以随时申请查看或删除你的数据。</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 删除确认弹窗 -->
+  <view class="modal-mask {{showDeleteConfirm ? 'show' : ''}}" bindtap="hideDeleteDialog" wx:if="{{showDeleteConfirm}}"></view>
+  <view class="modal-panel {{showDeleteConfirm ? 'show' : ''}}" wx:if="{{showDeleteConfirm}}">
+    <view class="modal-header">
+      <text class="modal-title">确认删除全部数据</text>
+    </view>
+    <view class="modal-body">
+      <text class="modal-warning">此操作将永久删除你的所有个人数据，包括：</text>
+      <view class="modal-list">
+        <text class="modal-list__item">• 打卡记录和语音附件</text>
+        <text class="modal-list__item">• 关系档案和时间轴</text>
+        <text class="modal-list__item">• 智能对话和简报数据</text>
+        <text class="modal-list__item">• 个人设置和偏好</text>
+      </view>
+      <label class="modal-input-label">
+        <text class="modal-input-label__text">删除原因（可选）</text>
+        <textarea class="modal-textarea" placeholder="告诉我们为什么要删除数据" value="{{deleteReason}}" bindinput="onReasonInput" maxlength="200"></textarea>
+      </label>
+    </view>
+    <view class="modal-footer">
+      <button class="btn btn--ghost" bindtap="hideDeleteDialog">取消</button>
+      <button class="btn btn--danger" bindtap="confirmDelete">确认删除</button>
+    </view>
+  </view>
+</view>

@@ -6,22 +6,35 @@
       <text class="subtitle">先登录，再把网页、小程序和 app 的数据统一到同一个账户里。</text>
     </view>
 
-    <view class="auth-card">
+    <form class="auth-card" @submit.prevent="submit">
       <view class="tab-row">
         <text class="tab-chip" :class="{ active: mode === 'login' }" @click="mode = 'login'">登录</text>
         <text class="tab-chip" :class="{ active: mode === 'register' }" @click="mode = 'register'">注册</text>
       </view>
 
-      <input v-model="form.email" class="input" type="text" placeholder="邮箱" />
-      <input v-model="form.password" class="input" password placeholder="密码" />
-      <input v-if="mode === 'register'" v-model="form.nickname" class="input" type="text" placeholder="昵称" />
+      <input v-model="form.email" class="input" type="text" placeholder="邮箱" autocomplete="email" />
+      <input
+        v-model="form.password"
+        class="input"
+        type="password"
+        placeholder="密码"
+        :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+      />
+      <input
+        v-if="mode === 'register'"
+        v-model="form.nickname"
+        class="input"
+        type="text"
+        placeholder="昵称"
+        autocomplete="nickname"
+      />
 
-      <button class="submit-btn" @click="submit">{{ mode === 'login' ? '登录进入' : '注册并进入' }}</button>
+      <button class="submit-btn" type="submit">{{ mode === 'login' ? '登录进入' : '注册并进入' }}</button>
 
       <view class="helper-row">
         <text class="helper-link" @click="goBackHome">先看看首页</text>
       </view>
-    </view>
+    </form>
   </view>
 </template>
 
@@ -48,6 +61,10 @@ export default {
       }
       if (this.mode === 'register' && !this.form.nickname) {
         uni.showToast({ title: '请填写昵称', icon: 'none' })
+        return
+      }
+      if (this.mode === 'register' && this.form.password.length < 8) {
+        uni.showToast({ title: '注册密码至少 8 位', icon: 'none' })
         return
       }
 

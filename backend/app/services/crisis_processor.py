@@ -15,6 +15,7 @@ from app.models import (
     Report,
     UserNotification,
 )
+from app.services.relationship_intelligence import record_relationship_event
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,19 @@ async def process_crisis_from_report(
         ) or report.content.get("overall_health_score")
         last_active.report_id = report.id
         await db.flush()
+        await record_relationship_event(
+            db,
+            event_type="crisis.updated",
+            pair_id=report.pair_id,
+            entity_type="crisis_alert",
+            entity_id=last_active.id,
+            payload={
+                "level": crisis_level_str,
+                "health_score": last_active.health_score,
+                "status": last_active.status.value,
+            },
+            idempotency_key=f"crisis:{last_active.id}:updated:{report.id}",
+        )
         return last_active
 
     # 如果之前有 active 预警但级别变了，把旧的标记为 resolved
@@ -93,6 +107,19 @@ async def process_crisis_from_report(
         last_active.status = CrisisAlertStatus.RESOLVED
         last_active.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
         last_active.resolve_note = f"危机等级变更：{CRISIS_LEVEL_LABELS.get(previous_level_str, previous_level_str)} → {CRISIS_LEVEL_LABELS.get(crisis_level_str, crisis_level_str)}"
+        await record_relationship_event(
+            db,
+            event_type="crisis.resolved",
+            pair_id=report.pair_id,
+            entity_type="crisis_alert",
+            entity_id=last_active.id,
+            payload={
+                "level": previous_level_str,
+                "status": last_active.status.value,
+                "reason": "level_changed",
+            },
+            idempotency_key=f"crisis:{last_active.id}:resolved:{report.id}",
+        )
 
     # 创建新的 CrisisAlert
     intervention = report.content.get("intervention") or {}
@@ -113,6 +140,20 @@ async def process_crisis_from_report(
     )
     db.add(alert)
     await db.flush()
+    await record_relationship_event(
+        db,
+        event_type="crisis.raised",
+        pair_id=report.pair_id,
+        entity_type="crisis_alert",
+        entity_id=alert.id,
+        payload={
+            "level": crisis_level_str,
+            "previous_level": previous_level_str,
+            "health_score": alert.health_score,
+            "status": alert.status.value,
+        },
+        idempotency_key=f"crisis:{alert.id}:raised",
+    )
 
     # 创建通知（向配对双方）
     await _create_crisis_notifications(db, pair, crisis_level_str, previous_level_str)
@@ -139,6 +180,19 @@ async def _auto_resolve_active_alerts(db: AsyncSession, pair_id: str):
         alert.status = CrisisAlertStatus.RESOLVED
         alert.resolved_at = now
         alert.resolve_note = "关系状态恢复正常，预警自动解除"
+        await record_relationship_event(
+            db,
+            event_type="crisis.resolved",
+            pair_id=pair_id,
+            entity_type="crisis_alert",
+            entity_id=alert.id,
+            payload={
+                "level": alert.level.value,
+                "status": alert.status.value,
+                "reason": "auto_recovered",
+            },
+            idempotency_key=f"crisis:{alert.id}:auto_resolved",
+        )
     if active_alerts:
         logger.info(
             f"Auto-resolved {len(active_alerts)} crisis alerts for pair={pair_id}"

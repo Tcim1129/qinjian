@@ -1,114 +1,219 @@
-/* 登录页特有样式 */
-
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #5d4037 0%, #8d6e63 40%, #fff9f0 40%);
-  padding: 0 var(--spacing-lg);
-  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #F5EEE2 0%, #EEF3FA 100%);
 }
 
-.login-header {
-  padding-top: 160rpx;
+.login-ambient {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(20px);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.login-ambient-primary {
+  width: 260rpx;
+  height: 260rpx;
+  top: 60rpx;
+  left: -100rpx;
+  background: rgba(33, 75, 143, 0.08);
+}
+
+.login-ambient-secondary {
+  width: 240rpx;
+  height: 240rpx;
+  top: 200rpx;
+  right: -120rpx;
+  background: rgba(216, 142, 82, 0.08);
+}
+
+.login-shell {
+  position: relative;
+  z-index: 1;
+  padding: 70rpx 28rpx 48rpx;
+}
+
+.login-hero {
+  padding: 34rpx 30rpx;
+  border-radius: 38rpx;
+  background: linear-gradient(150deg, rgba(18, 40, 78, 0.96), rgba(39, 72, 126, 0.92));
+  box-shadow: 0 24rpx 52rpx rgba(20, 37, 69, 0.2);
   text-align: center;
-  padding-bottom: var(--spacing-xl);
+}
+
+.login-hero__badge {
+  display: inline-flex;
+  padding: 10rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.14);
+  color: #F7E9D3;
+  font-size: 20rpx;
+  font-weight: 800;
+  letter-spacing: 3rpx;
 }
 
 .login-logo {
-  font-size: 72rpx;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 28rpx;
+  margin-top: 24rpx;
+  box-shadow: 0 14rpx 28rpx rgba(0, 0, 0, 0.12);
+}
+
+.login-title {
+  margin-top: 22rpx;
+  font-size: 42rpx;
+  line-height: 1.25;
   font-weight: 800;
-  color: #ffffff;
-  letter-spacing: 8rpx;
+  color: #FFFFFF;
 }
 
 .login-slogan {
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: var(--spacing-sm);
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: rgba(245, 247, 252, 0.76);
 }
 
-/* 奶油风格 Tab 切换 */
+.login-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin-top: 24rpx;
+}
+
+.login-highlight {
+  padding: 18rpx 12rpx;
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.login-highlight__value {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.login-highlight__label {
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: rgba(245, 247, 252, 0.68);
+}
+
+.login-panel {
+  margin-top: 22rpx;
+  padding: 24rpx;
+  border-radius: 34rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1rpx solid rgba(25, 34, 52, 0.08);
+  box-shadow: 0 16rpx 36rpx rgba(26, 36, 54, 0.08);
+}
+
 .login-tabs-creamy {
-  margin: 0 40rpx 40rpx;
-  background: #f0f0f0;
-  border-radius: 40rpx;
-  padding: 8rpx;
   display: flex;
+  gap: 8rpx;
+  padding: 8rpx;
+  background: rgba(33, 75, 143, 0.05);
+  border-radius: 20rpx;
 }
 
 .login-tab-creamy {
   flex: 1;
   text-align: center;
   font-size: 28rpx;
-  padding: 20rpx 0;
-  border-radius: 32rpx;
-  color: #888;
-  transition: all 0.2s;
-  font-weight: 600;
+  padding: 18rpx 0;
+  border-radius: 16rpx;
+  color: var(--color-text-secondary);
+  font-weight: 700;
 }
 
 .login-tab-creamy.active {
-  background: #ffffff;
-  color: #5d4037;
-  box-shadow: 0 4rpx 12rpx rgba(93, 64, 55, 0.08);
+  background: #FFFFFF;
+  color: var(--color-primary);
+  box-shadow: 0 10rpx 18rpx rgba(26, 36, 54, 0.08);
 }
 
-/* 表单 */
 .login-form {
-  padding-bottom: var(--spacing-xl);
+  margin-top: 24rpx;
 }
 
-.login-mode-tabs {
-  justify-content: center;
-  gap: 24rpx;
-  margin-bottom: 24rpx;
+.panel-head {
+  margin-bottom: 20rpx;
 }
 
-.login-mode {
-  font-size: 26rpx;
-  padding: 10rpx 24rpx;
-  border-radius: 999rpx;
-  background: var(--color-bg);
+.panel-head__title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.panel-head__desc {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.75;
   color: var(--color-text-secondary);
 }
 
-.login-mode.active {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  font-weight: 600;
+.mode-tabs {
+  display: inline-flex;
+  gap: 12rpx;
+  padding: 8rpx;
+  border-radius: 999rpx;
+  background: rgba(33, 75, 143, 0.05);
+  margin-bottom: 20rpx;
 }
 
-.code-btn {
+.mode-tab {
+  padding: 14rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.mode-tab.active {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: #FFFFFF;
+}
+
+.input-wrap {
+  background: rgba(247, 249, 252, 0.9);
+  border: 1rpx solid rgba(25, 34, 52, 0.08);
+}
+
+.code-btn,
+.pwd-toggle {
   font-size: 24rpx;
   color: var(--color-primary);
   padding-left: 16rpx;
+  font-weight: 700;
 }
 
 .divider {
   height: 1rpx;
-  background: var(--color-border);
+  background: rgba(25, 34, 52, 0.08);
   margin: 32rpx 0;
 }
 
-.pwd-toggle {
-  font-size: 32rpx;
-  padding: 0 var(--spacing-sm);
+.login-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 12rpx;
+  flex-wrap: wrap;
 }
 
-.picker-display {
-  font-size: 28rpx;
-  color: var(--color-text-muted);
-  line-height: 88rpx;
-}
-
-/* 记住密码和自动登录 */
-.checkbox-wrap, .auto-login-wrap {
+.toggle-line {
   display: flex;
   align-items: center;
   gap: 8rpx;
 }
 
 .checkbox {
-  font-size: 32rpx;
+  font-size: 22rpx;
   color: var(--color-text-muted);
 }
 
@@ -117,19 +222,24 @@
 }
 
 .checkbox-label {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: var(--color-text-secondary);
 }
 
-/* 已保存账号列表 */
 .saved-accounts {
-  margin-bottom: 24rpx;
+  margin-bottom: 12rpx;
+}
+
+.card-title {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: var(--color-text);
 }
 
 .account-list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 14rpx;
 }
 
 .account-item {
@@ -137,35 +247,28 @@
   align-items: center;
   justify-content: space-between;
   padding: 24rpx;
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  border: 2rpx solid var(--color-border);
+  background: rgba(247, 249, 252, 0.9);
+  border-radius: 22rpx;
+  border: 1rpx solid rgba(25, 34, 52, 0.08);
 }
 
 .account-item:active {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary);
+  background: rgba(33, 75, 143, 0.08);
 }
 
 .account-name {
-  font-size: 30rpx;
-  font-weight: 600;
+  font-size: 28rpx;
+  font-weight: 700;
   color: var(--color-text);
 }
 
 .account-email {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: var(--color-text-secondary);
   margin-top: 4rpx;
 }
 
 .account-arrow {
-  font-size: 40rpx;
+  font-size: 36rpx;
   color: var(--color-text-muted);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--color-primary);
-  border: 2rpx solid var(--color-primary);
 }

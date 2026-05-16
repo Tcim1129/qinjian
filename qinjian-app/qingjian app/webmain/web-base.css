@@ -1,0 +1,97 @@
+:root,
+body {
+  --qj-rpx: clamp(0.5px, calc(100vw / 750), 1px);
+  --color-primary: #7b68ee;
+  --color-primary-light: #9b7bff;
+  --color-primary-bg: #e8e4ff;
+  --color-mint: #5dd3c7;
+  --color-coral: #ff8ba7;
+  --color-success: #2ecc71;
+  --color-danger: #ff6b6b;
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #4a4a5a;
+  --color-text-tertiary: #8a8a9a;
+  --color-border: #e8e8f0;
+  --color-bg: #f8f9fc;
+  margin: 0;
+  min-height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  font-size: 15px;
+  color: var(--color-text-primary);
+  background:
+    radial-gradient(circle at top left, rgba(255, 217, 188, 0.28), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(208, 231, 226, 0.26), transparent 24%),
+    linear-gradient(180deg, #fffaf4 0%, #f5eee7 100%);
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  padding: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+view,
+scroll-view {
+  display: block;
+  box-sizing: border-box;
+}
+
+text {
+  box-sizing: border-box;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.web-page-host {
+  min-height: 100vh;
+}
+
+@media (min-width: 960px) {
+  body {
+    padding: 24px 0;
+  }
+
+  .web-page-host {
+    width: min(100vw - 48px, 560px);
+    min-height: calc(100vh - 48px);
+    margin: 0 auto;
+    border-radius: 32px;
+    overflow: hidden;
+    box-shadow: 0 28px 60px rgba(62, 39, 35, 0.14);
+  }
+
+  .floating-shell {
+    width: min(calc(100vw - 96px), 520px) !important;
+    max-width: 520px !important;
+  }
+}

@@ -1,12 +1,15 @@
 {
   "name": "qinjian-app",
   "version": "2.8.0",
-  "description": "亲健 - 青年亲密关系AI健康管理平台",
+  "description": "亲见 - 青年亲密关系AI健康管理平台",
   "scripts": {
-    "dev:app": "uni",
-    "dev:h5": "uni",
-    "build:app": "uni build",
-    "build:h5": "uni build"
+    "sync:src": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-uni-src.ps1",
+    "dev:app": "npm run sync:src && uni",
+    "dev:h5": "npm run sync:src && uni",
+    "build:app": "npm run sync:src && uni build",
+    "build:h5": "npm run sync:src && uni build",
+    "dev:web": "vite --config vite.web.config.js",
+    "build:web": "vite build --config vite.web.config.js"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-3060420220922001",
@@ -17,6 +20,7 @@
   },
   "devDependencies": {
     "@dcloudio/vite-plugin-uni": "3.0.0-alpha-3060420220922001",
-    "vite": "3.1.4"
+    "@vitejs/plugin-vue": "^2.3.4",
+    "vite": "2.9.14"
   }
 }

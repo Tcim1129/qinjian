@@ -6,7 +6,7 @@
           <image class="brand-chip__logo" src="../../static/brand-logo.jpg" mode="aspectFit"></image>
           <view class="brand-chip__copy">
             <text class="brand-chip__eyebrow">QINJIAN APP</text>
-            <text class="brand-chip__name">亲健</text>
+            <text class="brand-chip__name">亲见</text>
           </view>
         </view>
         <text class="hero-title">{{ greeting }}</text>

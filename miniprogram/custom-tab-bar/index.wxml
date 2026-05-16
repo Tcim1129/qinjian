@@ -1,5 +1,5 @@
-<view class="floating-tab-shell">
-  <view class="floating-tab-bar">
+<view class="tab-bar-shell">
+  <view class="tab-bar">
     <view
       wx:for="{{list}}"
       wx:key="pagePath"
@@ -8,8 +8,13 @@
       data-index="{{index}}"
       bindtap="switchTab"
     >
-      <image class="tab-icon" src="{{selected === index ? item.selectedIcon : item.icon}}" mode="aspectFit"></image>
-      <text class="tab-text">{{item.text}}</text>
+      <view class="tab-item__active-pill" wx:if="{{selected === index}}"></view>
+      <view class="tab-item__content">
+        <view class="tab-icon-shell">
+          <image class="tab-icon" src="{{selected === index ? item.selectedIcon : item.icon}}" mode="aspectFit"></image>
+        </view>
+        <text class="tab-text">{{item.text}}</text>
+      </view>
     </view>
   </view>
 </view>

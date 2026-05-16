@@ -3,6 +3,54 @@ import api from './api.js'
 const USER_KEY = 'qj_app_user'
 const PAIR_SUMMARY_KEY = 'qj_app_pair_summary'
 
+let volatileUserInfo = null
+let volatilePairSummary = null
+let legacyStorageCleared = false
+
+function getUniLike() {
+  if (typeof globalThis !== 'undefined' && globalThis.uni) {
+    return globalThis.uni
+  }
+  return {
+    getStorageSync(key) {
+      try {
+        return globalThis?.localStorage?.getItem?.(key)
+      } catch (_) {
+        return ''
+      }
+    },
+    setStorageSync(key, value) {
+      try {
+        globalThis?.localStorage?.setItem?.(key, value)
+      } catch (_) {
+        // ignore
+      }
+    },
+    removeStorageSync(key) {
+      try {
+        globalThis?.localStorage?.removeItem?.(key)
+      } catch (_) {
+        // ignore
+      }
+    },
+  }
+}
+
+function clearLegacySessionStorage() {
+  if (legacyStorageCleared) return
+  legacyStorageCleared = true
+}
+
+function safeParse(value) {
+  if (!value) return null
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch (_) {
+    return null
+  }
+}
+
 export function normalizePair(pair) {
   if (!pair) return null
   const partnerName = pair.custom_partner_nickname || pair.partner_nickname || pair.partner_name || pair.partnerNickname || '陪伴对象'
@@ -21,8 +69,10 @@ function normalizeActivePair(summary) {
 }
 
 export function loadCachedSession() {
-  const userInfo = uni.getStorageSync(USER_KEY) || null
-  const pairSummary = uni.getStorageSync(PAIR_SUMMARY_KEY) || null
+  clearLegacySessionStorage()
+  const uniLike = getUniLike()
+  const userInfo = volatileUserInfo || safeParse(uniLike.getStorageSync(USER_KEY))
+  const pairSummary = volatilePairSummary || safeParse(uniLike.getStorageSync(PAIR_SUMMARY_KEY))
   return {
     userInfo,
     pairSummary: pairSummary ? {
@@ -33,16 +83,19 @@ export function loadCachedSession() {
 }
 
 export function persistSession(userInfo, pairSummary) {
-  if (userInfo) {
-    uni.setStorageSync(USER_KEY, userInfo)
+  clearLegacySessionStorage()
+  volatileUserInfo = userInfo || null
+  volatilePairSummary = pairSummary || null
+  const uniLike = getUniLike()
+  if (volatileUserInfo) {
+    uniLike.setStorageSync(USER_KEY, JSON.stringify(volatileUserInfo))
   } else {
-    uni.removeStorageSync(USER_KEY)
+    uniLike.removeStorageSync(USER_KEY)
   }
-
-  if (pairSummary) {
-    uni.setStorageSync(PAIR_SUMMARY_KEY, pairSummary)
+  if (volatilePairSummary) {
+    uniLike.setStorageSync(PAIR_SUMMARY_KEY, JSON.stringify(volatilePairSummary))
   } else {
-    uni.removeStorageSync(PAIR_SUMMARY_KEY)
+    uniLike.removeStorageSync(PAIR_SUMMARY_KEY)
   }
 }
 

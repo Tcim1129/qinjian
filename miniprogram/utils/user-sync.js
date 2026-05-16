@@ -1,5 +1,8 @@
 const api = require('./api.js')
 
+const PAIR_SUMMARY_RETRY_COOLDOWN_MS = 60 * 1000
+let pairSummaryRetryAfter = 0
+
 function normalizePair(pair) {
   if (!pair) return null
   const partnerName = pair.custom_partner_nickname || pair.partner_nickname || pair.partner_name || pair.partnerNickname || '伴侣'
@@ -23,9 +26,10 @@ async function syncUserAndPair() {
     return { userInfo: null, pairInfo: null, summary: null }
   }
 
+  const shouldSkipPairSummary = Date.now() < pairSummaryRetryAfter
   const [meResult, summaryResult] = await Promise.allSettled([
     api.get('/auth/me'),
-    api.get('/pairs/summary'),
+    shouldSkipPairSummary ? Promise.resolve(null) : api.get('/pairs/summary'),
   ])
 
   let userInfo = app.globalData.userInfo || null
@@ -35,13 +39,19 @@ async function syncUserAndPair() {
   if (meResult.status === 'fulfilled') {
     userInfo = meResult.value
     app.globalData.userInfo = userInfo
-    wx.setStorageSync('userInfo', userInfo)
   }
 
-  if (summaryResult.status === 'fulfilled') {
+  if (summaryResult.status === 'fulfilled' && summaryResult.value) {
     summary = summaryResult.value
     pairInfo = getActivePair(summary)
     app.setPairInfo(pairInfo)
+    pairSummaryRetryAfter = 0
+  } else if (
+    summaryResult.status === 'rejected' &&
+    summaryResult.reason &&
+    (summaryResult.reason.code >= 500 || summaryResult.reason.network || summaryResult.reason.timeout)
+  ) {
+    pairSummaryRetryAfter = Date.now() + PAIR_SUMMARY_RETRY_COOLDOWN_MS
   }
 
   return { userInfo, pairInfo, summary }

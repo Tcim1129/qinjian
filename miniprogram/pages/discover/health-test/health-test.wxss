@@ -1,96 +1,262 @@
-/* 关系健康测试页样式 */
-.container {
-  padding: 48rpx 32rpx;
-  min-height: 100vh;
-  box-sizing: border-box;
+.assessment-page {
+  padding-top: 24rpx;
+  padding-bottom: calc(72rpx + env(safe-area-inset-bottom));
 }
 
-.progress-bar {
-  height: 8rpx;
-  background: var(--color-border);
-  border-radius: 4rpx;
+.assessment-hero {
+  padding: 32rpx 30rpx;
+  border-radius: 38rpx;
+  background: linear-gradient(150deg, rgba(18, 40, 78, 0.96), rgba(39, 72, 126, 0.92));
+  box-shadow: 0 24rpx 52rpx rgba(20, 37, 69, 0.2);
+}
+
+.assessment-hero__top,
+.assessment-hero__strip {
+  position: relative;
+}
+
+.assessment-hero__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18rpx;
+}
+
+.assessment-hero__eyebrow,
+.section-eyebrow {
+  font-size: 18rpx;
+  letter-spacing: 4rpx;
+  color: rgba(245, 247, 252, 0.62);
+  text-transform: uppercase;
+}
+
+.section-eyebrow {
+  color: var(--color-text-muted);
+}
+
+.assessment-hero__title {
+  margin-top: 14rpx;
+  font-size: 40rpx;
+  line-height: 1.28;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.assessment-hero__desc {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: rgba(245, 247, 252, 0.78);
+}
+
+.assessment-hero__badge {
+  padding: 10rpx 16rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 22rpx;
+  font-weight: 800;
+  color: #F7E9D3;
+}
+
+.assessment-hero__strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin-top: 26rpx;
+}
+
+.assessment-hero__item {
+  padding: 18rpx 14rpx;
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.assessment-hero__item-value {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.assessment-hero__item-label {
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: rgba(245, 247, 252, 0.68);
+}
+
+.loading-card,
+.question-card,
+.result-card,
+.trend-card,
+.boundary-card,
+.dimension-card {
+  padding: 30rpx;
+}
+
+.question-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20rpx;
+}
+
+.question-title,
+.boundary-title,
+.dimension-title,
+.trend-title,
+.result-title {
+  margin-top: 12rpx;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.question-progress {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: var(--color-text-secondary);
+}
+
+.progress-track {
+  height: 10rpx;
+  margin-top: 22rpx;
+  border-radius: 999rpx;
+  background: rgba(33, 75, 143, 0.08);
   overflow: hidden;
-  margin-bottom: 32rpx;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-secondary), var(--color-primary));
-  transition: width 0.3s ease;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
 }
 
-.question-number {
-  font-size: 24rpx;
-  color: var(--color-text-muted);
-  margin-bottom: 16rpx;
-}
-
-.question-text {
-  font-size: 36rpx;
-  font-weight: 600;
+.question-core {
+  margin-top: 26rpx;
+  font-size: 34rpx;
+  line-height: 1.55;
+  font-weight: 800;
   color: var(--color-text);
-  line-height: 1.5;
-  margin-bottom: 48rpx;
 }
 
-.options {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.option-btn {
-  width: 100%;
-  height: 100rpx;
-  background: var(--color-white);
-  border: 2rpx solid var(--color-border);
-  border-radius: var(--radius-lg);
-  font-size: 28rpx;
-  color: var(--color-text);
-  text-align: center;
-  line-height: 100rpx;
-  transition: all 0.2s;
-}
-
-.option-btn:active {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.result-section {
-  text-align: center;
-  padding: 80rpx 32rpx;
-}
-
-.result-icon {
-  font-size: 100rpx;
-  margin-bottom: 32rpx;
-}
-
-.result-title {
-  font-size: 28rpx;
+.question-hint,
+.boundary-copy,
+.trend-copy,
+.trend-summary,
+.result-copy,
+.result-note {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.8;
   color: var(--color-text-secondary);
-  margin-bottom: 16rpx;
+}
+
+.option-list,
+.dimension-grid,
+.trend-grid,
+.result-actions {
+  display: grid;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.option-list {
+  grid-template-columns: 1fr;
+}
+
+.dimension-grid,
+.trend-grid,
+.result-actions {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.option-card,
+.dimension-item,
+.trend-item {
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: rgba(33, 75, 143, 0.05);
+  border: 1rpx solid rgba(33, 75, 143, 0.08);
+}
+
+.option-card:active {
+  transform: scale(0.985) translateY(2rpx);
+}
+
+.option-card__title,
+.dimension-label,
+.trend-label {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.option-card__copy {
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.result-card {
+  text-align: center;
 }
 
 .result-score {
-  font-size: 64rpx;
-  font-weight: 700;
+  margin-top: 20rpx;
+  font-size: 96rpx;
+  line-height: 1;
+  font-weight: 900;
   color: var(--color-primary);
-  margin-bottom: 16rpx;
 }
 
-.result-level {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: 24rpx;
+.result-unit {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: var(--color-text-muted);
 }
 
-.result-desc {
-  font-size: 28rpx;
-  color: var(--color-text-secondary);
+.dimension-score,
+.trend-score {
+  margin-top: 14rpx;
+  font-size: 38rpx;
+  font-weight: 900;
+  color: var(--color-primary);
+}
+
+.dimension-meter {
+  height: 10rpx;
+  margin-top: 16rpx;
+  border-radius: 999rpx;
+  background: rgba(33, 75, 143, 0.12);
+  overflow: hidden;
+}
+
+.dimension-meter-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+}
+
+.boundary-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 18rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(216, 142, 82, 0.16);
+  color: #A8632B;
+  font-size: 20rpx;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.handoff-box {
+  margin-top: 18rpx;
+  padding: 22rpx;
+  border-radius: 24rpx;
+  background: rgba(217, 92, 92, 0.12);
+  color: #8A3B2F;
+  font-size: 22rpx;
   line-height: 1.8;
-  padding: 0 24rpx;
 }

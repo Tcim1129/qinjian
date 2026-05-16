@@ -69,15 +69,16 @@
           <text class="voice-copy">你可以直接打字，也可以先按住录音。系统会引导你说出今天的心情、互动情况和值得记录的时刻。</text>
           <view class="voice-actions">
             <button class="action-btn primary" @click="toggleRecording">{{ isRecording ? '结束录音' : '开始录音' }}</button>
-            <button class="action-btn ghost" @click="startVoiceRecognize">{{ recognizing ? '识别中' : '语音识别' }}</button>
+            <button class="action-btn ghost" @click="startVoiceRecognize">{{ recognizing ? '结束识别' : '语音识别' }}</button>
             <button class="action-btn ghost" @click="playLastReply" :disabled="!lastReply">播放回复</button>
           </view>
+          <text v-if="realtimeAsrStatus" class="voice-copy">{{ realtimeAsrStatus }}</text>
         </view>
 
         <view class="panel-card chat-card">
           <view class="chat-list">
             <view v-for="msg in messages" :key="msg.id || msg.localId" class="chat-item" :class="msg.role === 'user' ? 'chat-user' : 'chat-ai'">
-              <text class="chat-role">{{ msg.role === 'user' ? '我' : '亲健 AI' }}</text>
+              <text class="chat-role">{{ msg.role === 'user' ? '我' : '亲见 AI' }}</text>
               <text class="chat-bubble">{{ msg.content }}</text>
             </view>
           </view>
@@ -130,6 +131,7 @@ export default {
       speechSupported: false,
       recognitionSupported: false,
       recognizing: false,
+      realtimeAsrStatus: '',
     }
   },
   computed: {
@@ -141,9 +143,10 @@ export default {
   },
   onUnload() {
     uni.removeStorageSync('qj_checkin_mode')
-    if (this.recognizing && typeof plus !== 'undefined' && plus.speech && typeof plus.speech.stopRecognize === 'function') {
-      plus.speech.stopRecognize()
-    }
+    this.stopVoiceRecognize({ discard: true })
+  },
+  onHide() {
+    this.stopVoiceRecognize({ discard: true })
   },
   methods: {
     async bootstrap() {
@@ -155,12 +158,18 @@ export default {
         }
       }
       this.speechSupported = typeof plus !== 'undefined' && !!plus.speech && typeof plus.speech.speak === 'function'
-      this.recognitionSupported = typeof plus !== 'undefined' && !!plus.speech && typeof plus.speech.startRecognize === 'function'
+      this.recognitionSupported = Boolean(
+        typeof uni.connectSocket === 'function'
+        || (typeof plus !== 'undefined' && !!plus.speech && typeof plus.speech.startRecognize === 'function')
+      )
       if (this.mode === 'voice') {
         await this.ensureSession()
       }
     },
     switchMode(mode) {
+      if (mode !== 'voice') {
+        this.stopVoiceRecognize({ discard: true })
+      }
       this.mode = mode
       uni.setStorageSync('qj_checkin_mode', mode)
       if (mode === 'voice') {
@@ -231,48 +240,285 @@ export default {
         uni.showToast({ title: e.message || '发送失败', icon: 'none' })
       }
     },
-    toggleRecording() {
+    ensureRecorderManager() {
+      if (this.recordManager || typeof uni.getRecorderManager !== 'function') {
+        return this.recordManager
+      }
+      this.recordManager = uni.getRecorderManager()
+      this.recordManager.onStop(() => {
+        this.isRecording = false
+        if (this._skipNextRecorderStop) {
+          this._skipNextRecorderStop = false
+          return
+        }
+        if (this._realtimeAsr && this._realtimeAsr.active) {
+          this.finishRealtimeRecognition()
+          return
+        }
+        this.hasDraftRecording = true
+        uni.showToast({ title: '录音完成，可转文字后发送', icon: 'none' })
+      })
+      this.recordManager.onError(() => {
+        this.isRecording = false
+        this.hasDraftRecording = false
+        if (this._realtimeAsr && this._realtimeAsr.active) {
+          this.cleanupRealtimeRecognition()
+          this.recognizing = false
+          this.realtimeAsrStatus = ''
+          uni.showToast({ title: '实时识别失败', icon: 'none' })
+          return
+        }
+        uni.showToast({ title: '录音失败', icon: 'none' })
+      })
+      if (typeof this.recordManager.onFrameRecorded === 'function') {
+        this.recordManager.onFrameRecorded((res) => {
+          if (!this._realtimeAsr || !this._realtimeAsr.active || !this._realtimeAsr.socketReady) {
+            return
+          }
+          const audio = this.encodeArrayBufferToBase64(res.frameBuffer)
+          if (!audio) return
+          this._realtimeAsr.socket.send({
+            data: JSON.stringify({ type: 'audio.chunk', audio })
+          })
+        })
+      }
+      return this.recordManager
+    },
+    encodeArrayBufferToBase64(buffer) {
+      if (!buffer) return ''
+      if (typeof uni.arrayBufferToBase64 === 'function') {
+        return uni.arrayBufferToBase64(buffer)
+      }
+      const bytes = new Uint8Array(buffer)
+      let binary = ''
+      const chunkSize = 0x8000
+      for (let index = 0; index < bytes.length; index += chunkSize) {
+        const chunk = bytes.subarray(index, index + chunkSize)
+        binary += String.fromCharCode(...chunk)
+      }
+      return btoa(binary)
+    },
+    async toggleRecording() {
       if (typeof uni.getRecorderManager !== 'function') {
         uni.showToast({ title: '当前环境不支持录音', icon: 'none' })
         return
       }
-      if (!this.recordManager) {
-        this.recordManager = uni.getRecorderManager()
-        this.recordManager.onStop(() => {
-          this.isRecording = false
-          this.hasDraftRecording = true
-          uni.showToast({ title: '录音完成，可转文字后发送', icon: 'none' })
-        })
-        this.recordManager.onError(() => {
-          this.isRecording = false
-          this.hasDraftRecording = false
-          uni.showToast({ title: '录音失败', icon: 'none' })
-        })
+      if (this._realtimeAsr && this._realtimeAsr.stopping) {
+        uni.showToast({ title: '正在整理最后一句，请稍候', icon: 'none' })
+        return
       }
+      if (this.recognizing) {
+        this.stopVoiceRecognize({ discard: true })
+      }
+      const manager = this.ensureRecorderManager()
+      if (!manager) return
 
       if (this.isRecording) {
-        this.recordManager.stop()
+        manager.stop()
         return
       }
 
       this.isRecording = true
       this.hasDraftRecording = false
-      this.recordManager.start({ duration: 60000, format: 'mp3' })
-      uni.showToast({ title: '录音中，可稍后转文字发送', icon: 'none' })
+      try {
+        const startResult = manager.start({ duration: 60000, format: 'mp3' })
+        if (startResult && typeof startResult.then === 'function') {
+          await startResult
+        }
+        uni.showToast({ title: '录音中，可稍后转文字发送', icon: 'none' })
+      } catch (_) {
+        this.isRecording = false
+      }
     },
-    startVoiceRecognize() {
+    async startVoiceRecognize() {
       if (!this.recognitionSupported) {
         uni.showToast({ title: '当前环境不支持语音识别', icon: 'none' })
         return
       }
-      if (this.recognizing && typeof plus !== 'undefined' && plus.speech && typeof plus.speech.stopRecognize === 'function') {
-        plus.speech.stopRecognize()
-        this.recognizing = false
+      if (this._realtimeAsr && this._realtimeAsr.stopping) {
+        uni.showToast({ title: '正在整理最后一句，请稍候', icon: 'none' })
         return
       }
+      if (this.recognizing) {
+        this.stopVoiceRecognize()
+        return
+      }
+      try {
+        await this.startRealtimeRecognition()
+      } catch (error) {
+        this.cleanupRealtimeRecognition()
+        this.startLocalVoiceRecognize(error)
+      }
+    },
+    async startRealtimeRecognition() {
+      const manager = this.ensureRecorderManager()
+      if (!manager || typeof manager.onFrameRecorded !== 'function' || typeof uni.connectSocket !== 'function') {
+        throw new Error('当前环境不支持统一实时识别')
+      }
+      await this.ensureSession()
+
+      const socket = uni.connectSocket({
+        url: api.buildRealtimeAsrSocketUrl(),
+        complete: () => {},
+      })
+
+      this._realtimeAsr = {
+        active: true,
+        socket,
+        socketReady: false,
+        finalDelivered: false,
+        stopping: false,
+      }
+
+      socket.onOpen(() => {
+        if (!this._realtimeAsr || this._realtimeAsr.socket !== socket) return
+        this._realtimeAsr.socketReady = true
+        this.recognizing = true
+        this.realtimeAsrStatus = '正在实时转写，说完后再点一次结束识别。'
+        socket.send({
+          data: JSON.stringify({
+            type: 'session.start',
+            format: 'pcm',
+            sample_rate: 16000,
+            language: 'zh',
+          })
+        })
+        this.isRecording = true
+        manager.start({
+          duration: 60000,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          encodeBitRate: 256000,
+          format: 'pcm',
+          frameSize: 16,
+        })
+      })
+
+      socket.onMessage(async (event) => {
+        let payload = null
+        try {
+          payload = JSON.parse(event.data)
+        } catch (error) {
+          return
+        }
+
+        if (payload.type === 'partial') {
+          this.chatInput = payload.text || ''
+          return
+        }
+
+        if (payload.type === 'final') {
+          const finalText = (payload.text || '').trim()
+          if (this._realtimeAsr) {
+            this._realtimeAsr.finalDelivered = true
+          }
+          this.chatInput = finalText
+          this.recognizing = false
+          this.realtimeAsrStatus = ''
+          this.cleanupRealtimeRecognition()
+          if (finalText) {
+            await this.sendChat()
+          }
+          return
+        }
+
+        if (payload.type === 'error') {
+          this.cleanupRealtimeRecognition()
+          this.recognizing = false
+          this.realtimeAsrStatus = ''
+          uni.showToast({ title: payload.message || '实时识别失败', icon: 'none' })
+        }
+      })
+
+      socket.onError(() => {
+        const shouldFallback = this._realtimeAsr && !this._realtimeAsr.finalDelivered && !this._realtimeAsr.stopping
+        this.cleanupRealtimeRecognition()
+        this.recognizing = false
+        this.realtimeAsrStatus = ''
+        if (shouldFallback) {
+          this.startLocalVoiceRecognize(new Error('统一实时识别不可用，已切回本地识别'))
+        }
+      })
+
+      socket.onClose(() => {
+        const shouldNotify = this._realtimeAsr && !this._realtimeAsr.finalDelivered && !this._realtimeAsr.stopping
+        this.cleanupRealtimeRecognition()
+        this.recognizing = false
+        this.realtimeAsrStatus = ''
+        if (shouldNotify) {
+          uni.showToast({ title: '实时识别已中断', icon: 'none' })
+        }
+      })
+    },
+    finishRealtimeRecognition() {
+      if (!this._realtimeAsr || !this._realtimeAsr.active) return
+      this._realtimeAsr.stopping = true
+      this.recognizing = false
+      this.realtimeAsrStatus = '正在整理最后一句，请稍候。'
+      if (this._realtimeAsr.socketReady) {
+        this._realtimeAsr.socket.send({
+          data: JSON.stringify({ type: 'session.stop' })
+        })
+        return
+      }
+      this.cleanupRealtimeRecognition()
+    },
+    cleanupRealtimeRecognition() {
+      if (this.isRecording && this.recordManager) {
+        this._skipNextRecorderStop = true
+        try {
+          this.recordManager.stop()
+        } catch (_) {
+          this._skipNextRecorderStop = false
+        }
+      }
+      if (this._realtimeAsr && this._realtimeAsr.socket) {
+        try {
+          this._realtimeAsr.socket.close({})
+        } catch (_) {
+          // noop
+        }
+      }
+      this._realtimeAsr = null
+      this.isRecording = false
+    },
+    stopVoiceRecognize(options = {}) {
+      const { discard = false } = options
+      if (this._realtimeAsr && this._realtimeAsr.active) {
+        this._realtimeAsr.stopping = true
+        if (discard) {
+          this.cleanupRealtimeRecognition()
+          this.recognizing = false
+          this.realtimeAsrStatus = ''
+          return
+        }
+        if (this.isRecording && this.recordManager) {
+          this.recordManager.stop()
+          return
+        }
+        this.finishRealtimeRecognition()
+        return
+      }
+      if (this.recognizing && typeof plus !== 'undefined' && plus.speech && typeof plus.speech.stopRecognize === 'function') {
+        plus.speech.stopRecognize()
+      }
+      this.recognizing = false
+      this.realtimeAsrStatus = ''
+    },
+    startLocalVoiceRecognize(reason) {
+      if (!(typeof plus !== 'undefined' && plus.speech && typeof plus.speech.startRecognize === 'function')) {
+        const message = reason?.message || '当前环境不支持本地语音识别'
+        uni.showToast({ title: message, icon: 'none' })
+        return
+      }
+      if (reason?.message) {
+        uni.showToast({ title: reason.message, icon: 'none' })
+      }
       this.recognizing = true
+      this.realtimeAsrStatus = '当前设备改用本地识别。'
       plus.speech.startRecognize({ engine: 'baidu' }, (result) => {
         this.recognizing = false
+        this.realtimeAsrStatus = ''
         this.chatInput = (result || '').trim()
         if (this.chatInput) {
           this.sendChat()
@@ -281,6 +527,7 @@ export default {
         }
       }, () => {
         this.recognizing = false
+        this.realtimeAsrStatus = ''
         uni.showToast({ title: '语音识别失败', icon: 'none' })
       })
     },

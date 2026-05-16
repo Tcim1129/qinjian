@@ -6,6 +6,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.time import current_local_date
 from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, PairStatus, LongDistanceActivity, Checkin, Report
 from sqlalchemy import func
@@ -110,8 +111,9 @@ async def get_health_index(
     pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     # 近14天打卡数据
-    from datetime import date, timedelta
-    cutoff = date.today() - timedelta(days=14)
+    from datetime import timedelta
+
+    cutoff = current_local_date() - timedelta(days=14)
     result = await db.execute(
         select(Checkin)
         .where(Checkin.pair_id == pair_id, Checkin.checkin_date >= cutoff)

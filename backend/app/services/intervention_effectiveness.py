@@ -15,6 +15,7 @@ from app.models import (
     ReportStatus,
     TaskStatus,
 )
+from app.core.time import current_local_date
 from app.services.task_feedback import summarize_feedback_map
 
 RISK_ORDER = {
@@ -274,7 +275,7 @@ async def build_intervention_scorecard(
     if not plan:
         return None
 
-    today = date.today()
+    today = current_local_date()
     effective_end_date = (
         min(plan.end_date, today)
         if plan.end_date and plan.end_date < today

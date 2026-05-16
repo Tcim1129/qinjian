@@ -1,26 +1,43 @@
 <view class="checkin-page container-safe">
   <view class="checkin-hero">
-    <view>
-      <view class="hero-eyebrow">CHECK-IN</view>
-      <view class="hero-title">{{mode === 'voice' ? 'AI 语音陪伴打卡' : '四步关系打卡'}}</view>
-      <view class="hero-subtitle">{{mode === 'voice' ? '像豆包那样聊一聊，系统会帮你提炼成今天的记录。' : '把今天留下一点痕迹，后面的洞察和报告都会更准。'}}</view>
+    <view class="checkin-hero__top">
+      <view>
+        <view class="hero-eyebrow">{{mode === 'voice' ? 'VOICE CAPTURE' : 'DAILY SIGNAL'}}</view>
+        <view class="hero-title">{{mode === 'voice' ? '像聊天一样，留下今天的关系声音' : '用四步，把今天的关系状态记录下来'}}</view>
+        <view class="hero-subtitle">{{mode === 'voice' ? '系统会帮你把语音整理成结构化记录，继续进入体检和报告。' : '不需要写很长，今天真实发生了什么，留下关键情绪和互动就够。'}}</view>
+      </view>
+      <view class="mode-switch">
+        <view class="mode-chip {{mode === 'form' ? 'active' : ''}}" bindtap="switchMode" data-mode="form">表单</view>
+        <view class="mode-chip {{mode === 'voice' ? 'active' : ''}}" bindtap="switchMode" data-mode="voice">语音</view>
+      </view>
     </view>
-    <view class="mode-switch">
-      <view class="mode-chip {{mode === 'form' ? 'active' : ''}}" bindtap="switchMode" data-mode="form">表单</view>
-      <view class="mode-chip {{mode === 'voice' ? 'active' : ''}}" bindtap="switchMode" data-mode="voice">语音</view>
+
+    <view class="hero-strip">
+      <view class="hero-strip__item">
+        <view class="hero-strip__value">{{totalSteps}}</view>
+        <view class="hero-strip__label">步骤</view>
+      </view>
+      <view class="hero-strip__item">
+        <view class="hero-strip__value">{{hasCheckedIn ? '已完成' : '待记录'}}</view>
+        <view class="hero-strip__label">今日状态</view>
+      </view>
+      <view class="hero-strip__item">
+        <view class="hero-strip__value">时间轴</view>
+        <view class="hero-strip__label">自动回流</view>
+      </view>
     </view>
   </view>
 
   <block wx:if="{{mode === 'form'}}">
     <block wx:if="{{hasCheckedIn && todayCheckin}}">
       <view class="card-creamy summary-card">
-        <view class="summary-icon">✨</view>
-        <view class="section-title-creamy mt-sm">今日打卡已完成</view>
-        <view class="text-caption mt-sm">每天一次记录，让关系被看见</view>
+        <view class="summary-badge">今日记录已完成</view>
+        <view class="section-title-creamy mt-sm">今天的关系信号已经收下</view>
+        <view class="text-caption mt-sm">继续做周体检或查看报告，系统会把这次记录一起纳入判断。</view>
       </view>
 
-      <view class="card-creamy mt-md summary-panel">
-        <view class="section-title-creamy mb-sm">打卡摘要</view>
+      <view class="card-creamy summary-panel">
+        <view class="summary-panel__title">今日记录摘要</view>
         <view class="summary-row"><text>心情评分</text><text>{{todayCheckin.mood_score || '--'}}</text></view>
         <view class="summary-row"><text>互动次数</text><text>{{todayCheckin.interaction_freq || 0}} 次</text></view>
         <view class="summary-row"><text>深度对话</text><text>{{todayCheckin.deep_conversation ? '有' : '无'}}</text></view>
@@ -34,11 +51,12 @@
         <view class="step-progress-bar-creamy">
           <view class="step-progress-fill-creamy" style="width: {{currentStep / totalSteps * 100}}%"></view>
         </view>
-        <view class="step-indicator-text">步骤 {{currentStep}} / {{totalSteps}}</view>
+        <view class="step-indicator-text">当前进度 · 第 {{currentStep}} 步 / 共 {{totalSteps}} 步</view>
       </view>
 
-      <view class="card-creamy mt-lg" wx:if="{{currentStep === 1}}">
-        <view class="section-title-creamy text-center">今天的心情如何？</view>
+      <view class="card-creamy stage-card" wx:if="{{currentStep === 1}}">
+        <view class="stage-card__eyebrow">STEP 1</view>
+        <view class="section-title-creamy">今天的整体感受更接近哪一种？</view>
         <view class="mood-grid-creamy mt-lg">
           <view
             wx:for="{{moodOptions}}"
@@ -53,14 +71,15 @@
         </view>
       </view>
 
-      <view class="card-creamy mt-lg" wx:if="{{currentStep === 2}}">
-        <view class="section-title-creamy text-center">今天有几次有效互动？</view>
+      <view class="card-creamy stage-card" wx:if="{{currentStep === 2}}">
+        <view class="stage-card__eyebrow">STEP 2</view>
+        <view class="section-title-creamy">今天你们有多少次有效互动？</view>
         <view class="counter-wrap mt-lg">
           <button class="counter-btn" bindtap="onInteractionInput" data-delta="-1">-</button>
           <input class="counter-input" type="number" value="{{interactionCount}}" bindinput="onInteractionInput" />
           <button class="counter-btn" bindtap="onInteractionInput" data-delta="1">+</button>
         </view>
-        <view class="text-caption text-center mt-md">谁更主动一点？</view>
+        <view class="text-caption text-center mt-md">今天谁更主动一点？</view>
         <view class="choice-grid mt-md">
           <view class="choice-chip {{initiativeScore === 'me' ? 'active' : ''}}" bindtap="selectInitiative" data-value="me">我更主动</view>
           <view class="choice-chip {{initiativeScore === 'equal' ? 'active' : ''}}" bindtap="selectInitiative" data-value="equal">差不多</view>
@@ -68,8 +87,9 @@
         </view>
       </view>
 
-      <view class="card-creamy mt-lg" wx:if="{{currentStep === 3}}">
-        <view class="section-title-creamy text-center">今天有深度交流吗？</view>
+      <view class="card-creamy stage-card" wx:if="{{currentStep === 3}}">
+        <view class="stage-card__eyebrow">STEP 3</view>
+        <view class="section-title-creamy">今天有没有一段真正说到心里的交流？</view>
         <view class="toggle-group-creamy mt-xl">
           <view class="toggle-card-creamy {{deepConversation === true ? 'active' : ''}}" bindtap="toggleDeepConversation" data-val="true">
             <text class="toggle-emoji-creamy">💬</text>
@@ -82,11 +102,13 @@
         </view>
       </view>
 
-      <view class="card-creamy mt-lg" wx:if="{{currentStep === 4}}">
-        <view class="section-title-creamy text-center">补一句今天最想留下的话</view>
+      <view class="card-creamy stage-card" wx:if="{{currentStep === 4}}">
+        <view class="stage-card__eyebrow">STEP 4</view>
+        <view class="section-title-creamy">补一句今天最想留下的话</view>
         <textarea class="free-text-area mt-md" placeholder="比如：今天终于把心里的委屈说开了。" value="{{freeText}}" bindinput="onFreeTextInput" maxlength="500"></textarea>
+
         <view class="task-row mt-md" bindtap="toggleTaskCompleted">
-          <text class="task-label">今日小任务：给对方一个具体赞美</text>
+          <text class="task-label">今日小动作：给对方一个具体赞美</text>
           <text class="task-state">{{taskCompleted ? '已完成' : '待完成'}}</text>
         </view>
 
@@ -95,9 +117,9 @@
           <view wx:for="{{emotionTags}}" wx:key="*this" class="tag {{selectedTags.indexOf(item) >= 0 ? 'tag-primary' : ''}} emotion-tag" bindtap="toggleTag" data-tag="{{item}}">{{item}}</view>
         </view>
 
-        <view class="mt-md">
-          <view class="text-caption">图片附件（可选）</view>
-          <view class="flex-row flex-wrap gap-sm mt-sm">
+        <view class="attachment-panel mt-md">
+          <view class="attachment-panel__title">图片附件（可选）</view>
+          <view class="attachment-panel__body">
             <view wx:for="{{imageList}}" wx:key="*this" class="image-preview-wrap">
               <image src="{{item}}" class="image-preview" mode="aspectFill"></image>
               <view class="image-remove" bindtap="removeImage" data-idx="{{index}}">✕</view>
@@ -106,12 +128,12 @@
           </view>
         </view>
 
-        <view class="mt-md">
-          <view class="text-caption">语音附件（可选）</view>
-          <view class="flex-row gap-sm mt-sm" wx:if="{{!voicePath}}">
+        <view class="attachment-panel mt-md">
+          <view class="attachment-panel__title">语音附件（可选）</view>
+          <view class="attachment-panel__body" wx:if="{{!voicePath}}">
             <button class="btn btn-secondary btn-small" bindtap="chooseVoice">{{isRecording ? '结束录音' : '录制语音'}}</button>
           </view>
-          <view class="flex-row gap-sm mt-sm" wx:else>
+          <view class="attachment-panel__body attachment-panel__body--inline" wx:else>
             <view class="tag tag-primary">已录制语音</view>
             <text class="text-caption text-danger" bindtap="clearVoice">删除</text>
           </view>
@@ -121,15 +143,16 @@
       <view class="checkin-actions-floating">
         <button class="btn btn-outline flex-1" bindtap="prevStep" wx:if="{{currentStep > 1}}">上一步</button>
         <button class="btn btn-primary flex-1" bindtap="nextStep" wx:if="{{currentStep < totalSteps}}">下一步</button>
-        <button class="btn btn-primary flex-1 {{submitting ? 'btn-disabled' : ''}}" bindtap="submitCheckin" wx:if="{{currentStep === totalSteps}}" disabled="{{submitting}}">{{submitting ? '提交中...' : '提交打卡'}}</button>
+        <button class="btn btn-primary flex-1 {{submitting ? 'btn-disabled' : ''}}" bindtap="submitCheckin" wx:if="{{currentStep === totalSteps}}" disabled="{{submitting}}">{{submitting ? '提交中...' : '完成记录'}}</button>
       </view>
     </block>
   </block>
 
   <block wx:else>
     <view class="card-creamy voice-card">
-      <view class="section-title-creamy">AI 语音陪伴</view>
-      <view class="text-caption mt-sm">你可以直接输入，也可以先录音。AI 会边聊边整理今天的关系记录。</view>
+      <view class="stage-card__eyebrow">VOICE MODE</view>
+      <view class="section-title-creamy">让 AI 帮你把今天说清楚</view>
+      <view class="text-caption mt-sm">你可以直接输入，也可以先录音。系统会边聊边整理成今天的关系记录。</view>
       <view class="voice-action-row mt-lg">
         <button class="btn btn-primary flex-1" bindtap="toggleVoiceChatRecord">{{isRecording ? '结束录音' : '开始录音'}}</button>
         <button class="btn btn-secondary flex-1" bindtap="startVoiceRecognize">{{recognizingVoice ? '识别中' : '语音识别'}}</button>
@@ -137,14 +160,14 @@
       </view>
     </view>
 
-    <view class="card-creamy mt-md chat-card">
+    <view class="card-creamy chat-card">
       <view class="chat-list" wx:if="{{chatMessages.length}}">
         <view wx:for="{{chatMessages}}" wx:key="id" class="chat-item {{item.role === 'user' ? 'chat-item-user' : 'chat-item-ai'}}">
           <view class="chat-role">{{item.role === 'user' ? '我' : '亲健AI'}}</view>
           <view class="chat-bubble">{{item.content}}</view>
         </view>
       </view>
-      <view class="empty-state" wx:else>从一句“今天其实有点累”开始也可以。</view>
+      <view class="empty-state" wx:else>从一句“今天其实有点累”开始，也已经足够了。</view>
       <textarea class="chat-input mt-md" placeholder="输入一句话，或者先录音再发送" value="{{chatInput}}" bindinput="onChatInput" maxlength="200"></textarea>
       <button class="btn btn-primary btn-block mt-md" bindtap="sendChat">发送给 AI</button>
     </view>

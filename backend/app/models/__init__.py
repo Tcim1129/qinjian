@@ -91,6 +91,7 @@ class User(Base):
     )
     wechat_unionid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wechat_avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    product_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
@@ -114,8 +115,8 @@ class Pair(Base):
         enum_values(PairStatus), default=PairStatus.PENDING
     )
     invite_code: Mapped[str] = mapped_column(
-        String(6), unique=True, index=True
-    )  # 6位数字绑定码
+        String(12), unique=True, index=True
+    )  # 高熵邀请码，降低枚举撞库风险
     # ── 解绑字段 ──
     unbind_requested_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
@@ -160,6 +161,7 @@ class Checkin(Base):
     voice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     mood_tags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    client_context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # ── 结构化四步打卡字段 ──
     mood_score: Mapped[int | None] = mapped_column(nullable=True)
@@ -680,3 +682,29 @@ class InterventionPolicyLibrary(Base):
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
+
+
+class PrivacyDeletionRequest(Base):
+    __tablename__ = "privacy_deletion_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    requested_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        index=True,
+    )
+    scheduled_for: Mapped[datetime] = mapped_column(index=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    reviewer: Mapped["User"] = relationship(foreign_keys=[reviewed_by])

@@ -3,13 +3,13 @@
 import json
 import base64
 import os
-from app.ai import chat_completion, client
+from app.ai import chat_completion, create_chat_completion
 from app.core.config import settings
 
 
 # ── 专业心理学系统 Prompt ──
 
-SYSTEM_PROMPT = """你是亲健平台的AI关系健康顾问，具备循证心理学专业背景。
+SYSTEM_PROMPT = """你是亲见平台的AI关系健康顾问，具备循证心理学专业背景。
 你的分析框架基于以下权威理论：
 - 约翰·戈特曼 (John Gottman) 的亲密关系理论，尤其是「末日四骑士」模型（批评、蔑视、防御、冷暴力）
 - 鲍尔比 (Bowlby) 的依恋理论（安全型、焦虑型、回避型、混乱型）
@@ -282,7 +282,7 @@ async def analyze_image(image_path: str, context: str = "") -> dict:
             },
         ]
 
-        response = await client.chat.completions.create(
+        response = await create_chat_completion(
             model=settings.AI_MULTIMODAL_MODEL,
             messages=messages,
             temperature=0.4,

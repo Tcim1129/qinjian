@@ -27,6 +27,7 @@ def _load_optional_router(module_name: str):
 
 insights_router = _load_optional_router("insights")
 admin_router = _load_optional_router("admin")
+privacy_router = _load_optional_router("privacy")
 
 api_router = APIRouter()
 
@@ -46,3 +47,5 @@ if insights_router is not None:
     api_router.include_router(insights_router)
 if admin_router is not None:
     api_router.include_router(admin_router)
+if privacy_router is not None:
+    api_router.include_router(privacy_router)

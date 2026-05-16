@@ -1,32 +1,38 @@
 /**
- * 个人中心页 - 用户信息与功能菜单
- * 展示头像、昵称、配对状态，提供各功能入口
+ * 个人中心页 - 账号、关系状态与设置入口
  */
 const auth = require('../../utils/auth.js')
+const api = require('../../utils/api.js')
 const { syncUserAndPair, normalizePair } = require('../../utils/user-sync.js')
+
+function normalizeAssessment(payload) {
+  if (!payload) return null
+  const score = Number(payload.total_score || 0)
+  let levelLabel = '继续记录中'
+
+  if (score >= 82) {
+    levelLabel = '状态很稳'
+  } else if (score >= 65) {
+    levelLabel = '整体可修复'
+  } else if (score >= 48) {
+    levelLabel = '建议先减压'
+  } else {
+    levelLabel = '需要更多支持'
+  }
+
+  return {
+    totalScore: score,
+    levelLabel
+  }
+}
 
 Page({
   data: {
     userInfo: null,
     pairInfo: null,
     isPaired: false,
-
-    // 菜单列表
-    menuItems: [
-      { id: 'edit-name', title: '修改名称', icon: '✏️', path: '' },
-      { id: 'change-password', title: '修改密码', icon: '🔒', path: '' },
-      { id: 'pair', title: '配对管理', icon: '🤝', path: '/pages/pair/pair' },
-      { id: 'tree', title: '关系树', icon: '🌳', path: '/pages/tree/tree' },
-      { id: 'milestone', title: '里程碑', icon: '🏅', path: '/pages/milestone/milestone' },
-      { id: 'history', title: '打卡历史', icon: '📅', path: '' },
-      { id: 'membership', title: '会员订阅', icon: '👑', path: '/pages/discover/membership/membership' },
-      { id: 'about', title: '关于亲健', icon: 'ℹ️', path: '' },
-      { id: 'logout', title: '退出登录', icon: '🚪', path: '' }
-    ]
-  },
-
-  onLoad() {
-    // 初始化
+    assessmentLatest: null,
+    privacyStatus: null
   },
 
   onShow() {
@@ -36,81 +42,75 @@ Page({
     this.refreshData()
   },
 
-  /**
-   * 刷新数据，包括用户信息和最新的配对状态
-   */
   async refreshData() {
     try {
       const synced = await syncUserAndPair()
       this.setData({
         userInfo: synced.userInfo,
-        pairInfo: synced.pairInfo,
+        pairInfo: normalizePair(synced.pairInfo),
         isPaired: !!(synced.summary && synced.summary.is_paired)
       })
       if (!synced.summary) {
         this.loadLocalData()
       }
-    } catch (e) {
-      console.warn('Profile拉取配对状态失败', e)
+    } catch (error) {
+      console.warn('Profile 拉取状态失败', error)
       this.loadLocalData()
+    }
+
+    await this.loadInsights()
+  },
+
+  async loadInsights() {
+    const pairId = auth.getPairId()
+    try {
+      const [assessmentLatest, privacyStatus] = await Promise.all([
+        api.getWeeklyAssessmentLatest(pairId).catch(() => null),
+        api.getPrivacyStatus().catch(() => null)
+      ])
+      this.setData({
+        assessmentLatest: normalizeAssessment(assessmentLatest),
+        privacyStatus
+      })
+    } catch (error) {
+      console.warn('Profile insight load failed', error)
     }
   },
 
-  /**
-   * 从全局数据加载本地缓存的信息
-   */
   loadLocalData() {
     const app = getApp()
     const userInfo = app.globalData.userInfo
-    const pairInfo = app.globalData.pairInfo
-    const normalizedPair = normalizePair(pairInfo)
+    const pairInfo = normalizePair(app.globalData.pairInfo)
 
     this.setData({
-      userInfo: userInfo,
-      pairInfo: normalizedPair,
-      isPaired: !!(normalizedPair && normalizedPair.status === 'active' && (normalizedPair.id || normalizedPair.pair_id))
+      userInfo,
+      pairInfo,
+      isPaired: !!(pairInfo && pairInfo.status === 'active' && (pairInfo.id || pairInfo.pair_id))
     })
   },
 
-  /**
-   * 菜单项点击处理
-   */
-  onMenuTap(e) {
-    const id = e.currentTarget.dataset.id
+  openPage(e) {
     const path = e.currentTarget.dataset.path
-
-    switch (id) {
-      case 'logout':
-        this.handleLogout()
-        break
-      case 'about':
-        this.showAbout()
-        break
-      case 'history':
-        this.goCheckinHistory()
-        break
-      case 'edit-name':
-        this.editName()
-        break
-      case 'change-password':
-        this.changePassword()
-        break
-      default:
-        if (path) {
-          wx.navigateTo({ url: path })
-        }
-        break
+    if (!path) return
+    const tabPages = [
+      '/pages/home/home',
+      '/pages/checkin/checkin',
+      '/pages/discover/discover',
+      '/pages/report/report',
+      '/pages/profile/profile'
+    ]
+    if (tabPages.includes(path)) {
+      wx.switchTab({ url: path })
+      return
     }
+    wx.navigateTo({ url: path })
   },
 
-  /**
-   * 退出登录
-   */
   handleLogout() {
     wx.showModal({
-      title: '提示',
-      content: '确定要退出登录吗？',
-      confirmColor: '#6C5CE7',
+      title: '退出登录',
+      content: '确定要退出当前账号吗？',
+      confirmColor: '#214B8F',
       success: (res) => {
         if (res.confirm) {
           const app = getApp()
@@ -121,32 +121,21 @@ Page({
     })
   },
 
-  /**
-   * 查看打卡历史（跳转到打卡页或单独页面）
-   */
-  goCheckinHistory() {
-    // 暂时跳转到打卡tab
-    wx.switchTab({ url: '/pages/checkin/checkin' })
-  },
-
-  /**
-   * 关于亲健
-   */
   showAbout() {
     wx.showModal({
       title: '关于亲健',
-      content: '亲健 v2.8.0\n青年亲密关系健康管理专家\n让爱有据可循',
+      content: '亲健 v2.8.0\\n青年亲密关系健康支持系统\\n把记录、体检、报告和修复建议串成一条主线。',
       showCancel: false,
-      confirmColor: '#6C5CE7'
+      confirmColor: '#214B8F'
     })
   },
 
   editName() {
     wx.showModal({
-      title: '修改名称',
+      title: '修改昵称',
       editable: true,
       placeholderText: '输入新的昵称',
-      content: this.data.userInfo?.nickname || '',
+      content: (this.data.userInfo && this.data.userInfo.nickname) || '',
       success: async (res) => {
         if (!res.confirm) return
         const nickname = (res.content || '').trim()
@@ -155,21 +144,19 @@ Page({
           return
         }
         try {
-          const api = require('../../utils/api.js')
           const updated = await api.put('/auth/me', { nickname })
           const app = getApp()
           app.globalData.userInfo = updated
-          wx.setStorageSync('userInfo', updated)
           this.setData({ userInfo: updated })
-          wx.showToast({ title: '名称已更新', icon: 'success' })
-        } catch (e) {
-          wx.showToast({ title: e.message || '保存失败', icon: 'none' })
+          wx.showToast({ title: '昵称已更新', icon: 'success' })
+        } catch (error) {
+          wx.showToast({ title: error.message || '保存失败', icon: 'none' })
         }
       }
     })
   },
 
   changePassword() {
-    wx.showToast({ title: '请在网页版或App中修改密码', icon: 'none' })
+    wx.showToast({ title: '请在网页版或 App 中修改密码', icon: 'none' })
   }
 })

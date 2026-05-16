@@ -1,34 +1,57 @@
 /**
- * 首页 - 亲健核心主页
- * 展示用户问候、配对状态、今日心情摘要、快捷操作、连续打卡天数、危机提醒
+ * 首页 - 比赛主链主页
+ * 聚焦记录、体检、报告、时间轴四条主线
  */
 const api = require('../../utils/api.js')
 const auth = require('../../utils/auth.js')
 const { syncUserAndPair, normalizePair } = require('../../utils/user-sync.js')
 
+function normalizeAssessment(payload) {
+  if (!payload) return null
+  const score = Number(payload.total_score || 0)
+  let levelLabel = '继续记录，系统会逐步形成更稳定的判断'
+
+  if (score >= 82) {
+    levelLabel = '这周状态很稳，可以做更深的表达'
+  } else if (score >= 65) {
+    levelLabel = '整体可修复，适合继续轻量推进'
+  } else if (score >= 48) {
+    levelLabel = '建议先减压，再谈更难的话题'
+  } else {
+    levelLabel = '先把安全感和边界放回前面'
+  }
+
+  return {
+    totalScore: score,
+    levelLabel,
+    submittedAt: payload.submitted_at || '',
+    changeSummary: payload.change_summary || '系统已经记录这次正式体检。'
+  }
+}
+
+function normalizeReport(payload) {
+  if (!payload) return null
+  const content = payload.content || {}
+  return {
+    title: payload.type === 'weekly' ? '最新周报' : payload.type === 'monthly' ? '最新月报' : '最新日报',
+    healthScore: content.health_score || content.overall_health_score || '--',
+    insight: content.insight || content.self_insight || content.executive_summary || '继续记录，系统会逐步给出更完整的判断。'
+  }
+}
+
 Page({
   data: {
-    // 用户信息
     userInfo: null,
     pairInfo: null,
     pairDisplayName: '伴侣',
     greeting: '',
-
-    // 今日打卡状态
     todayCheckin: null,
     hasCheckedIn: false,
-
-    // 连续打卡天数
     streak: 0,
-
-    // 关系树状态
-    treeStatus: null,
-
-    // 危机预警
     crisisStatus: null,
     hasCrisis: false,
-
-    // 加载状态
+    latestAssessment: null,
+    latestReport: null,
     loading: true
   },
 
@@ -36,10 +59,6 @@ Page({
     this.setGreeting()
   },
 
-  /**
-   * 页面显示时刷新数据
-   * 每次切回首页都重新拉取最新状态
-   */
   onShow() {
     if (!auth.checkLogin()) return
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
@@ -49,18 +68,12 @@ Page({
     this.loadHomeData()
   },
 
-  /**
-   * 下拉刷新
-   */
   onPullDownRefresh() {
     this.loadHomeData().finally(() => {
       wx.stopPullDownRefresh()
     })
   },
 
-  /**
-   * 根据时间段设置问候语
-   */
   setGreeting() {
     const hour = new Date().getHours()
     const userInfo = auth.getUserInfo()
@@ -85,13 +98,10 @@ Page({
 
     this.setData({
       greeting: `${greetText}，${name}`,
-      userInfo: userInfo
+      userInfo
     })
   },
 
-  /**
-   * 并行加载首页所有数据
-   */
   async loadHomeData() {
     this.setData({ loading: true })
 
@@ -100,13 +110,14 @@ Page({
     try {
       const synced = await syncUserAndPair()
       pairInfo = synced.pairInfo
-    } catch (e) {
-      console.warn('首页拉取配对信息失败', e)
+    } catch (error) {
+      console.warn('首页同步配对信息失败', error)
     }
-    const pairId = pairInfo ? (pairInfo.id || pairInfo.pair_id) : null
 
+    const pairId = pairInfo ? (pairInfo.id || pairInfo.pair_id) : null
     const normalizedPair = normalizePair(pairInfo)
     const displayName = normalizedPair && (normalizedPair.partner_nickname || normalizedPair.partner_name || normalizedPair.partnerNickname)
+
     this.setData({
       pairInfo: normalizedPair,
       pairDisplayName: displayName || '伴侣'
@@ -115,39 +126,37 @@ Page({
     const tasks = [
       this.loadTodayCheckin(pairId),
       this.loadStreak(pairId),
-      this.loadTreeStatus(pairId)
+      this.loadLatestAssessment(pairId),
+      this.loadLatestReport(pairId)
     ]
+
     if (pairId) {
       tasks.push(this.loadCrisisStatus(pairId))
+    } else {
+      this.setData({ crisisStatus: null, hasCrisis: false })
     }
 
     try {
       await Promise.allSettled(tasks)
-    } catch (e) {
-      console.error('首页数据加载异常:', e)
     } finally {
       this.setData({ loading: false })
     }
   },
 
-  /**
-   * 获取今日打卡记录
-   */
   async loadTodayCheckin(pairId = null) {
     const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
     const url = resolvedPairId ? `/checkins/today?pair_id=${resolvedPairId}` : '/checkins/today?mode=solo'
+
     try {
       const res = await api.get(url)
-      const myDone = res && res.my_done
       this.setData({
         todayCheckin: res.my_checkin || res,
-        hasCheckedIn: !!myDone
+        hasCheckedIn: !!(res && res.my_done)
       })
-    } catch (e) {
-      if (e.code === 404) {
-        this.setData({ todayCheckin: null, hasCheckedIn: false })
-      } else {
-        console.error('获取今日打卡失败:', e)
+    } catch (error) {
+      this.setData({ todayCheckin: null, hasCheckedIn: false })
+      if (error.code !== 404) {
+        console.error('获取今日记录失败:', error)
       }
     }
   },
@@ -155,88 +164,94 @@ Page({
   async loadStreak(pairId = null) {
     const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
     const url = resolvedPairId ? `/checkins/streak?pair_id=${resolvedPairId}` : '/checkins/streak?mode=solo'
+
     try {
       const res = await api.get(url)
       this.setData({ streak: res.streak || 0 })
-    } catch (e) {
-      console.error('获取打卡天数失败:', e)
+    } catch (error) {
+      this.setData({ streak: 0 })
+      console.error('获取记录天数失败:', error)
     }
   },
 
-  async loadTreeStatus(pairId = null) {
+  async loadLatestAssessment(pairId = null) {
     const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
-    if (!resolvedPairId) {
-      this.setData({ treeStatus: null })
-      return
-    }
     try {
-      const res = await api.get(`/tree/status?pair_id=${resolvedPairId}`)
-      this.setData({ treeStatus: res })
-    } catch (e) {
-      if (e.code === 403 || e.code === 404) {
-        const app = getApp()
-        app.setPairInfo(null)
-        this.setData({ pairInfo: null, pairDisplayName: '伴侣', treeStatus: null })
-        return
-      }
-      console.error('获取关系树状态失败:', e)
+      const res = await api.getWeeklyAssessmentLatest(resolvedPairId)
+      this.setData({ latestAssessment: normalizeAssessment(res) })
+    } catch (error) {
+      this.setData({ latestAssessment: null })
+      console.warn('获取体检结果失败', error)
     }
   },
 
-  /**
-   * 获取危机预警状态
-   * @param {string} pairId - 配对ID
-   */
+  async loadLatestReport(pairId = null) {
+    const resolvedPairId = pairId === undefined || pairId === null ? auth.getPairId() : pairId
+    const dailyUrl = resolvedPairId
+      ? `/reports/latest?pair_id=${resolvedPairId}&report_type=daily`
+      : '/reports/latest?mode=solo&report_type=daily'
+    const weeklyUrl = resolvedPairId
+      ? `/reports/latest?pair_id=${resolvedPairId}&report_type=weekly`
+      : '/reports/latest?mode=solo&report_type=weekly'
+
+    try {
+      let res = await api.get(dailyUrl).catch(() => null)
+      if (!res) {
+        res = await api.get(weeklyUrl).catch(() => null)
+      }
+      this.setData({ latestReport: normalizeReport(res) })
+    } catch (error) {
+      this.setData({ latestReport: null })
+      console.warn('获取最新报告失败', error)
+    }
+  },
+
   async loadCrisisStatus(pairId) {
     try {
       const res = await api.get(`/crisis/status/${pairId}`)
       this.setData({
         crisisStatus: res,
-        hasCrisis: res && res.crisis_level && res.crisis_level !== 'none'
+        hasCrisis: !!(res && res.crisis_level && res.crisis_level !== 'none')
       })
-    } catch (e) {
-      if (e.code === 403 || e.code === 404) {
-        const app = getApp()
-        app.setPairInfo(null)
-        this.setData({ pairInfo: null, pairDisplayName: '伴侣', crisisStatus: null, hasCrisis: false })
-        return
-      }
-      console.error('获取危机状态失败:', e)
+    } catch (error) {
+      this.setData({ crisisStatus: null, hasCrisis: false })
+      console.error('获取危机状态失败:', error)
     }
   },
 
-  /**
-   * 跳转到打卡页
-   */
   goCheckin() {
     wx.switchTab({ url: '/pages/checkin/checkin' })
   },
 
-  /**
-   * 跳转到报告页
-   */
+  goHealthTest() {
+    wx.switchTab({ url: '/pages/discover/discover' })
+  },
+
   goReport() {
     wx.switchTab({ url: '/pages/report/report' })
   },
 
-  /**
-   * 跳转到关系树
-   */
   goTree() {
     wx.navigateTo({ url: '/pages/tree/tree' })
   },
 
-  /**
-   * 跳转到危机详情
-   */
   goCrisis() {
     wx.navigateTo({ url: '/pages/crisis/crisis' })
   },
 
-  /**
-   * 跳转到配对页面
-   */
   goPair() {
     wx.navigateTo({ url: '/pages/pair/pair' })
+  },
+
+  goTimeline() {
+    wx.navigateTo({ url: '/pages/timeline/timeline' })
+  },
+
+  goNotification() {
+    wx.navigateTo({ url: '/pages/notification/notification' })
+  },
+
+  goPrivacy() {
+    wx.navigateTo({ url: '/pages/privacy/privacy' })
   }
 })

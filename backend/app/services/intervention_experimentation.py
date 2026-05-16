@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import RelationshipEvent
+from app.core.time import current_local_date
 from app.services.intervention_effectiveness import build_intervention_scorecard
 from app.services.intervention_evaluation import build_intervention_evaluation
 from app.services.intervention_theory import (
@@ -550,7 +551,7 @@ async def build_intervention_experiment_ledger(
         return None
 
     current_policy = _policy_descriptor(playbook, strategy)
-    today = date.today()
+    today = current_local_date()
     snapshot_payload = _snapshot_payload(
         evaluation=evaluation,
         current_policy=current_policy,

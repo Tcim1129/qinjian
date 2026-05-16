@@ -17,20 +17,23 @@
     "pages/discover/challenges/challenges",
     "pages/discover/courses/courses",
     "pages/discover/experts/experts",
-    "pages/discover/membership/membership"
+    "pages/discover/membership/membership",
+    "pages/timeline/timeline",
+    "pages/notification/notification",
+    "pages/privacy/privacy"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarBackgroundColor": "#F6F1E8",
     "navigationBarTitleText": "亲健",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#FFF9F0",
+    "backgroundColor": "#F6F1E8",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
     "custom": true,
-    "color": "#BCAAA4",
-    "selectedColor": "#8D6E63",
-    "backgroundColor": "#ffffff",
+    "color": "#7C8393",
+    "selectedColor": "#214B8F",
+    "backgroundColor": "#F6F1E8",
     "borderStyle": "white",
     "list": [
       {
@@ -41,13 +44,13 @@
       },
       {
         "pagePath": "pages/checkin/checkin",
-        "text": "打卡",
+        "text": "记录",
         "iconPath": "images/tab-checkin.png",
         "selectedIconPath": "images/tab-checkin-active.png"
       },
       {
         "pagePath": "pages/discover/discover",
-        "text": "发现",
+        "text": "体检",
         "iconPath": "images/tab-discover.png",
         "selectedIconPath": "images/tab-discover-active.png"
       },

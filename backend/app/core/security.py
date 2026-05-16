@@ -1,8 +1,9 @@
 """安全模块：密码哈希 + JWT"""
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
 import bcrypt
+import jwt
+from jwt import InvalidTokenError
 
 from app.core.config import settings
 
@@ -22,14 +23,32 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return jwt.encode({"sub": user_id, "exp": expire}, settings.SECRET_KEY, algorithm=ALGORITHM)
+    issued_at = datetime.now(timezone.utc)
+    expire = issued_at + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": user_id,
+        "type": "access",
+        "iat": issued_at,
+        "nbf": issued_at,
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> str | None:
     """解码JWT，返回user_id或None"""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
-    except JWTError:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp", "nbf", "iat"]},
+        )
+        if payload.get("type") not in (None, "access"):
+            return None
+        subject = payload.get("sub")
+        if not isinstance(subject, str) or not subject.strip():
+            return None
+        return subject
+    except InvalidTokenError:
         return None

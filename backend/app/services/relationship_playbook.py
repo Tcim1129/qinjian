@@ -5,6 +5,7 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import current_local_date
 from app.services.intervention_effectiveness import build_intervention_scorecard
 from app.services.intervention_theory import build_playbook_theory_basis
 
@@ -413,7 +414,7 @@ def _focus_tags(scorecard: dict) -> list[str]:
 
 
 def _current_day(start_date: date, end_date: date | None) -> int:
-    today = date.today()
+    today = current_local_date()
     total_days = max(((end_date or start_date) - start_date).days + 1, 1)
     delta = (today - start_date).days + 1
     return max(1, min(delta, total_days))

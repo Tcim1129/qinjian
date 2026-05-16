@@ -1,0 +1,204 @@
+<!--pages/timeline/timeline.wxml-->
+<view class="timeline-page">
+  <!-- 顶部导航 -->
+  <view class="nav-bar">
+    <view class="nav-bar__left" bindtap="goBack">
+      <text class="nav-back-icon">‹</text>
+      <text>返回</text>
+    </view>
+    <view class="nav-bar__center">
+      <text class="nav-title">时间轴</text>
+    </view>
+    <view class="nav-bar__right">
+      <view class="nav-icon-btn" bindtap="onPullDownRefresh">
+        <text class="nav-icon">↻</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 页面头部 -->
+  <view class="timeline-hero">
+    <text class="timeline-hero__title">回到这段关系是怎么走到这里的</text>
+    <text class="timeline-hero__subtitle" wx:if="{{highlights.length > 0}}">{{highlights[0]}}</text>
+    <view class="timeline-hero__stats">
+      <view class="stat-chip">
+        <text class="stat-chip__value">{{eventCount}}</text>
+        <text class="stat-chip__label">事件节点</text>
+      </view>
+      <view class="stat-chip" wx:if="{{latestEventAt}}">
+        <text class="stat-chip__value">{{latestEventAt}}</text>
+        <text class="stat-chip__label">最近更新</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 筛选器 -->
+  <view class="filter-bar" wx:if="{{categories.length > 1 || tones.length > 1}}">
+    <scroll-view scroll-x class="filter-scroll">
+      <view class="filter-group">
+        <view
+          class="filter-chip {{selectedCategory === item.value ? 'active' : ''}}"
+          wx:for="{{categories}}"
+          wx:key="value"
+          bindtap="onCategoryChange"
+          data-value="{{item.value}}"
+        >
+          {{item.label}}
+        </view>
+      </view>
+      <view class="filter-group">
+        <view
+          class="filter-chip {{selectedTone === item.value ? 'active' : ''}}"
+          wx:for="{{tones}}"
+          wx:key="value"
+          bindtap="onToneChange"
+          data-value="{{item.value}}"
+        >
+          {{item.label}}
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载时间轴...</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{!loading && groupedEvents.length === 0}}">
+    <text class="empty-icon">📭</text>
+    <text class="empty-title">还没有时间轴记录</text>
+    <text class="empty-desc">先完成几次打卡，系统会自动记录关系的演变脉络</text>
+    <button class="empty-btn" bindtap="goCheckin">去打卡</button>
+  </view>
+
+  <!-- 时间轴列表 -->
+  <view class="timeline-list" wx:if="{{!loading && groupedEvents.length > 0}}">
+    <view class="timeline-date-group" wx:for="{{groupedEvents}}" wx:key="date">
+      <view class="timeline-date-label">{{item.date}}</view>
+      <view class="timeline-events">
+        <view
+          class="timeline-event timeline-event--{{event.tone}}"
+          wx:for="{{item.events}}"
+          wx:key="id"
+          wx:for-item="event"
+          bindtap="onEventTap"
+          data-id="{{event.id}}"
+        >
+          <view class="timeline-event__rail">
+            <view class="timeline-event__dot" style="background: {{event.toneStyle.border}};"></view>
+            <view class="timeline-event__line" style="background: {{event.toneStyle.border}}20;"></view>
+          </view>
+          <view class="timeline-event__card" style="border-left-color: {{event.toneStyle.border}}; background: {{event.toneStyle.bg}};">
+            <view class="timeline-event__head">
+              <view class="timeline-event__meta">
+                <text class="timeline-event__time">{{event.timeLabel}}</text>
+                <text class="timeline-event__category">{{event.categoryLabel}}</text>
+              </view>
+              <text class="timeline-event__icon">{{event.toneStyle.icon}}</text>
+            </view>
+            <text class="timeline-event__summary">{{event.summary}}</text>
+            <text class="timeline-event__detail" wx:if="{{event.detail}}">{{event.detail}}</text>
+            <view class="timeline-event__tags" wx:if="{{event.tags && event.tags.length > 0}}">
+              <text class="timeline-event__tag" wx:for="{{event.tags}}" wx:key="*this" wx:for-item="tag">{{tag}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 事件详情抽屉 -->
+  <view class="drawer-mask {{showDetailDrawer ? 'show' : ''}}" bindtap="closeDetailDrawer" wx:if="{{showDetailDrawer}}"></view>
+  <view class="drawer-panel {{showDetailDrawer ? 'show' : ''}}" wx:if="{{showDetailDrawer}}">
+    <view class="drawer-handle"></view>
+
+    <!-- 详情加载中 -->
+    <view class="drawer-loading" wx:if="{{loadingDetail}}">
+      <view class="loading-spinner"></view>
+      <text>正在加载事件详情...</text>
+    </view>
+
+    <!-- 详情内容 -->
+    <scroll-view scroll-y class="drawer-content" wx:if="{{!loadingDetail && eventDetail}}">
+      <!-- 事件概要 -->
+      <view class="drawer-section">
+        <view class="drawer-event-head">
+          <text class="drawer-event-category">{{eventDetail.event.categoryLabel}}</text>
+          <text class="drawer-event-time">{{eventDetail.event.timeLabel}}</text>
+        </view>
+        <text class="drawer-event-summary">{{eventDetail.summary}}</text>
+        <text class="drawer-event-detail" wx:if="{{eventDetail.event.detail}}">{{eventDetail.event.detail}}</text>
+      </view>
+
+      <!-- 指标数据 -->
+      <view class="drawer-section" wx:if="{{eventDetail.metrics.length > 0}}">
+        <text class="drawer-section-title">关键指标</text>
+        <view class="metrics-grid">
+          <view class="metric-item" wx:for="{{eventDetail.metrics}}" wx:key="label">
+            <text class="metric-label">{{item.label}}</text>
+            <text class="metric-value">{{item.value || '--'}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 证据卡片 -->
+      <view class="drawer-section" wx:if="{{eventDetail.evidenceCards.length > 0}}">
+        <text class="drawer-section-title">证据摘录</text>
+        <view class="evidence-stack">
+          <view
+            class="evidence-card evidence-card--{{item.tone || 'neutral'}}"
+            wx:for="{{eventDetail.evidenceCards}}"
+            wx:key="title"
+          >
+            <text class="evidence-card__title">{{item.title}}</text>
+            <text class="evidence-card__content">{{item.content}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 影响模块 -->
+      <view class="drawer-section" wx:if="{{eventDetail.impactModules.length > 0}}">
+        <text class="drawer-section-title">影响模块</text>
+        <view class="module-tags">
+          <text class="module-tag" wx:for="{{eventDetail.impactModules}}" wx:key="*this">{{item}}</text>
+        </view>
+      </view>
+
+      <!-- 建议动作 -->
+      <view class="drawer-section drawer-section--soft" wx:if="{{eventDetail.recommendedNextAction}}">
+        <text class="drawer-section-title">建议动作</text>
+        <text class="drawer-action-text">{{eventDetail.recommendedNextAction}}</text>
+      </view>
+
+      <!-- 当前上下文 -->
+      <view class="drawer-section" wx:if="{{eventDetail.currentContext}}">
+        <text class="drawer-section-title">当前关系状态</text>
+        <view class="context-rows">
+          <view class="context-row" wx:if="{{eventDetail.currentContext.active_plan_type}}">
+            <text class="context-label">计划类型</text>
+            <text class="context-value">{{eventDetail.currentContext.active_plan_type}}</text>
+          </view>
+          <view class="context-row" wx:if="{{eventDetail.currentContext.active_branch_label}}">
+            <text class="context-label">当前分支</text>
+            <text class="context-value">{{eventDetail.currentContext.active_branch_label}}</text>
+          </view>
+          <view class="context-row" wx:if="{{eventDetail.currentContext.momentum}}">
+            <text class="context-label">关系动量</text>
+            <text class="context-value">{{eventDetail.currentContext.momentum}}</text>
+          </view>
+          <view class="context-row" wx:if="{{eventDetail.currentContext.risk_level}}">
+            <text class="context-label">风险等级</text>
+            <text class="context-value">{{eventDetail.currentContext.risk_level}}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="drawer-close-btn" bindtap="closeDetailDrawer">
+      <text>关闭</text>
+    </view>
+  </view>
+</view>

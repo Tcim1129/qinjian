@@ -16,6 +16,20 @@ Page({
     partnerInitial: '❤',
     pairList: [],
 
+    // WXML 兼容派生字段
+    inviteCodeDisplay: '------',
+    hasInviteDraft: false,
+    bindBtnClass: '',
+    pairTypeText: '情侣',
+    hasPartnerContact: false,
+    partnerContact: '',
+    pairCreatedAt: '--',
+    hasPartnerId: false,
+    checkinDays: '0',
+    relationshipDays: '0',
+    hasInviteCode: false,
+    joinBtnText: '加入配对',
+
     // 未配对表单
     inviteCode: '',
 
@@ -30,31 +44,17 @@ Page({
 
     // 奶油风 UI 专属数据
     notices: [
-      "恭喜 242***打卡挑战成功奖励 1520元",
-      "用户 '小木' 刚刚完成了 7 天亲密打卡",
-      "今日已有 1284 对情侣通过 AI 陪伴完成记录"
+      '双人空间建立后，体检、报告与时间轴会共享同一段关系上下文',
+      '邀请码只用于建立双方关系档案，不会公开你的私密记录',
+      '配对完成后，系统会把双方的记录放进同一条关系主线'
     ],
     featureIcons: [
-      { name: '蜜语聊天', icon: '💬', bg: '#E3F2FD' },
-      { name: '情侣定位', icon: '📍', bg: '#FCE4EC' },
-      { name: '恋爱日记', icon: '📒', bg: '#E8F5E9' },
-      { name: '私密相册', icon: '🖼️', bg: '#FFF3E0' },
-      { name: '一起养娃', icon: '🍼', bg: '#F3E5F5' },
-      { name: '一起睡', icon: '🌙', bg: '#EDE7F6' },
-      { name: '打卡赚钱', icon: '💰', bg: '#FFFDE7' },
-      { name: '答题赚钱', icon: '❓', bg: '#F1F8E9' },
-      { name: '结婚登记', icon: '💍', bg: '#FCE4EC' },
-      { name: '想你', icon: '☁️', bg: '#E1F5FE' },
-      { name: '恋爱课堂', icon: '🎓', bg: '#E8EAF6' },
-      { name: '纪念日提醒', icon: '📅', bg: '#FFEBEE' },
-      { name: '恩爱果园', icon: '🌳', bg: '#E8F5E9' },
-      { name: '姨妈助手', icon: '🩸', bg: '#FCE4EC' },
-      { name: '生你气', icon: '😤', bg: '#FFF3E0' },
-      { name: '恋爱记账本', icon: '📒', bg: '#F9FBE7' },
-      { name: '恋爱清单', icon: '📜', bg: '#E0F2F1' },
-      { name: '许愿', icon: '🎋', bg: '#F3E5F5' },
-      { name: '一起看爽片', icon: '🎬', bg: '#EFEBE9' },
-      { name: '秀恩爱', icon: '💜', bg: '#FCE4EC' }
+      { name: '共同记录', icon: '✍', bg: '#EAF1FB' },
+      { name: '周体检', icon: '🩺', bg: '#F4ECE3' },
+      { name: '关系报告', icon: '📊', bg: '#E7F3EE' },
+      { name: '时间轴', icon: '🕒', bg: '#F6EEF7' },
+      { name: '叙事对齐', icon: '🧭', bg: '#FFF2E6' },
+      { name: '修复建议', icon: '🧩', bg: '#EEF4FD' }
     ]
   },
 
@@ -76,25 +76,74 @@ Page({
     try {
       const res = await api.get('/pairs/me')
       const pairs = (Array.isArray(res) ? res : [res]).map(normalizePair)
-      const activePair = pairs.find(p => p.status === 'active') || pairs[0] || null
+      const activePair = pairs.find(p => p.status === 'active') || null
+      const pendingPair = pairs.find(p => p.status === 'pending') || null
       const app = getApp()
       if (activePair) {
         const displayName = activePair.partner_nickname || activePair.partner_name || activePair.partnerNickname || '伴侣'
         app.setPairInfo(activePair)
         this.setData({
-          isPaired: activePair.status === 'active',
+          isPaired: true,
           pairInfo: activePair,
           partnerDisplay: displayName,
           partnerInitial: displayName ? displayName[0] : '❤',
-          pairList: pairs
+          pairList: pairs.map(p => this.enrichPairItem(p)),
+          // WXML 兼容派生字段
+          pairTypeText: this.getPairTypeText(activePair.type),
+          hasPartnerContact: !!(activePair.partner_email || activePair.partner_phone),
+          partnerContact: activePair.partner_phone || activePair.partner_email || '',
+          pairCreatedAt: activePair.created_at || '--',
+          hasPartnerId: !!activePair.partner_id,
+          checkinDays: String(activePair.checkin_days || 0),
+          relationshipDays: String(activePair.relationship_days || 0),
+          hasInviteCode: !!activePair.invite_code,
+          joinBtnText: '加入配对',
+          inviteCodeDisplay: activePair.invite_code || '------',
+          hasInviteDraft: !!activePair.invite_code
+        })
+      } else if (pendingPair) {
+        // 有 pending 配对：显示邀请码供分享
+        app.setPairInfo(null)
+        this.setData({
+          isPaired: false,
+          pairInfo: pendingPair,
+          partnerDisplay: '伴侣',
+          partnerInitial: '❤',
+          pairList: pairs.map(p => this.enrichPairItem(p)),
+          // WXML 兼容派生字段
+          inviteCodeDisplay: pendingPair.invite_code || '------',
+          hasInviteDraft: !!pendingPair.invite_code,
+          bindBtnClass: this.data.inviteCode.length >= 6 ? 'active' : '',
+          joinBtnText: '加入配对'
         })
       } else {
         app.setPairInfo(null)
-        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤', pairList: [] })
+        this.setData({
+          isPaired: false,
+          pairInfo: null,
+          partnerDisplay: '伴侣',
+          partnerInitial: '❤',
+          pairList: [],
+          // WXML 兼容派生字段
+          inviteCodeDisplay: '------',
+          hasInviteDraft: false,
+          bindBtnClass: '',
+          joinBtnText: '加入配对'
+        })
       }
     } catch (e) {
       if (e.code === 404) {
-        this.setData({ isPaired: false, pairInfo: null, partnerDisplay: '伴侣', partnerInitial: '❤', pairList: [] })
+        this.setData({
+          isPaired: false,
+          pairInfo: null,
+          partnerDisplay: '伴侣',
+          partnerInitial: '❤',
+          pairList: [],
+          inviteCodeDisplay: '------',
+          hasInviteDraft: false,
+          bindBtnClass: '',
+          joinBtnText: '加入配对'
+        })
       } else {
         console.error('获取配对状态失败:', e)
       }
@@ -112,7 +161,16 @@ Page({
     this.setData({
       pairInfo: pair,
       partnerDisplay: displayName,
-      partnerInitial: displayName ? displayName[0] : '❤'
+      partnerInitial: displayName ? displayName[0] : '❤',
+      pairTypeText: this.getPairTypeText(pair.type),
+      hasPartnerContact: !!(pair.partner_email || pair.partner_phone),
+      partnerContact: pair.partner_phone || pair.partner_email || '',
+      pairCreatedAt: pair.created_at || '--',
+      hasPartnerId: !!pair.partner_id,
+      checkinDays: String(pair.checkin_days || 0),
+      relationshipDays: String(pair.relationship_days || 0),
+      hasInviteCode: !!pair.invite_code,
+      inviteCodeDisplay: pair.invite_code || '------'
     })
     wx.showToast({ title: '已切换配对', icon: 'success' })
   },
@@ -121,7 +179,43 @@ Page({
    * 邀请码输入
    */
   onInviteCodeInput(e) {
-    this.setData({ inviteCode: e.detail.value })
+    const value = e.detail.value
+    this.setData({
+      inviteCode: value,
+      bindBtnClass: value.length >= 6 ? 'active' : ''
+    })
+  },
+
+  /**
+   * 获取配对类型文本
+   */
+  getPairTypeText(type) {
+    if (type === 'spouse') return '夫妻'
+    if (type === 'bestfriend') return '挚友'
+    if (type === 'parent') return '亲子'
+    return '情侣'
+  },
+
+  /**
+   * 获取配对状态文本
+   */
+  getPairStatusText(status) {
+    if (status === 'pending') return '待确认'
+    if (status === 'inactive') return '未激活'
+    if (status === 'unbinding') return '解绑处理中'
+    return '已激活'
+  },
+
+  /**
+   * 为配对列表项添加 WXML 兼容字段
+   */
+  enrichPairItem(item) {
+    return {
+      ...item,
+      partnerDisplayName: item.partner_nickname || item.partner_name || item.partnerNickname || '伴侣',
+      typeText: this.getPairTypeText(item.type),
+      statusText: this.getPairStatusText(item.status)
+    }
   },
 
   /**
@@ -133,11 +227,15 @@ Page({
 
     try {
       const res = await api.post('/pairs/create', { type: 'couple' })
+      this.setData({
+        inviteCodeDisplay: res.invite_code || res.code || '------',
+        hasInviteDraft: !!(res.invite_code || res.code)
+      })
       wx.showModal({
         title: '配对码已生成',
         content: `请将此配对码分享给伴侣：${res.invite_code || res.code}`,
         showCancel: false,
-        confirmColor: '#6C5CE7'
+        confirmColor: '#214B8F'
       })
       this.loadPairStatus()
     } catch (e) {
@@ -158,7 +256,7 @@ Page({
       return
     }
 
-    this.setData({ joining: true })
+    this.setData({ joining: true, joinBtnText: '加入中...' })
 
     try {
       const res = await api.post('/pairs/join', { invite_code: code })
@@ -169,6 +267,7 @@ Page({
       this.loadPairStatus()
     } catch (e) {
       wx.showToast({ title: e.message || '加入失败', icon: 'none' })
+      this.setData({ joinBtnText: '加入配对' })
     } finally {
       this.setData({ joining: false })
     }
@@ -220,7 +319,7 @@ Page({
    * 复制邀请码
    */
   copyInviteCode() {
-    const code = this.data.pairInfo && this.data.pairInfo.invite_code
+    const code = (this.data.pairInfo && this.data.pairInfo.invite_code) || this.data.inviteCodeDisplay
     if (code) {
       wx.setClipboardData({
         data: code,
@@ -235,7 +334,7 @@ Page({
    * 显示设置备注名弹窗
    */
   showSetNicknameModal() {
-    const currentNickname = this.data.pairInfo?.custom_partner_nickname || ''
+    const currentNickname = (this.data.pairInfo && this.data.pairInfo.custom_partner_nickname) || ''
     this.setData({
       showNicknameModal: true,
       customNicknameInput: currentNickname
@@ -260,7 +359,7 @@ Page({
    * 保存自定义昵称
    */
   async saveCustomNickname() {
-    const pairId = this.data.pairInfo?.id || this.data.pairInfo?.pair_id
+    const pairId = this.data.pairInfo && (this.data.pairInfo.id || this.data.pairInfo.pair_id)
     if (!pairId) {
       wx.showToast({ title: '配对信息异常', icon: 'none' })
       return
@@ -278,7 +377,7 @@ Page({
       const app = getApp()
       app.setPairInfo(normalized)
       
-      const displayName = nickname || normalized.partner_nickname || '伴侣'
+      const displayName = normalized.partner_nickname || '伴侣'
       this.setData({
         pairInfo: normalized,
         partnerDisplay: displayName,

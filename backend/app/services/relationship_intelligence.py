@@ -13,6 +13,7 @@ from statistics import mean
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import current_local_date
 from app.models import (
     Checkin,
     CrisisAlert,
@@ -92,7 +93,11 @@ async def record_relationship_event(
     normalized_user_id = _normalize_uuid(user_id)
     normalized_entity_id = str(entity_id) if entity_id is not None else None
 
-    if normalized_pair_id is None and normalized_user_id is None:
+    if (
+        normalized_pair_id is None
+        and normalized_user_id is None
+        and not str(event_type).startswith("privacy.")
+    ):
         raise ValueError("record_relationship_event requires pair_id or user_id")
 
     if idempotency_key:
@@ -138,7 +143,7 @@ async def refresh_profile_snapshot(
     if (normalized_pair_id is None) == (normalized_user_id is None):
         raise ValueError("refresh_profile_snapshot requires exactly one scope")
 
-    resolved_snapshot_date = snapshot_date or date.today()
+    resolved_snapshot_date = snapshot_date or current_local_date()
     start_date, end_date = _date_window(resolved_snapshot_date, window_days)
 
     if normalized_pair_id:

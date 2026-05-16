@@ -45,6 +45,9 @@ env/
 *~
 .DS_Store
 Thumbs.db
+frontend_out.log
+playwright-*.txt
+voice-click-console.txt
 
 # === IDE 和编辑器 ===
 .idea/
@@ -59,10 +62,10 @@ uploads/
 *.jpeg
 *.png
 *.gif
+*.wav
 *.pdf
 *.doc
 *.docx
-!screenshots/*.png
 !images/*.png
 !images/*.jpg
 
@@ -80,6 +83,8 @@ miniprogram/project.private.config.json
 miniprogram/config.js
 web/js/config.local.js
 qinjian-app/qingjian app/utils/config.local.js
+qinjian-app/qingjian app/src/utils/config.local.js
+qinjian-app/qingjian app/.hbuilderx/
 
 # === 依赖目录 ===
 node_modules/
@@ -113,9 +118,15 @@ coverage.xml
 # === 其他 ===
 docker-compose.override.yml
 .deploy/
+artifacts/
 output/
+screenshots/
 tmp/
 tmp_playwright/
+web-vue-dist/
+*_codex_*.png
+home-*.png
+timeline-*.png
 
 # === 部署脚本（可能包含硬编码密钥） ===
 deploy-server.sh

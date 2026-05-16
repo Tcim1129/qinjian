@@ -1,0 +1,58 @@
+<!--pages/notification/notification.wxml-->
+<view class="notification-page">
+  <!-- 顶部导航 -->
+  <view class="nav-bar">
+    <view class="nav-bar__left" bindtap="goBack">
+      <text class="nav-back-icon">‹</text>
+      <text>返回</text>
+    </view>
+    <view class="nav-bar__center">
+      <text class="nav-title">通知中心</text>
+    </view>
+    <view class="nav-bar__right">
+      <view class="nav-action-btn" bindtap="markAllRead" wx:if="{{unreadCount > 0}}">
+        <text>全部已读</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 未读计数 -->
+  <view class="unread-banner" wx:if="{{unreadCount > 0}}">
+    <text class="unread-banner__count">{{unreadCount}} 条未读通知</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载通知...</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{!loading && notifications.length === 0}}">
+    <text class="empty-icon">🔔</text>
+    <text class="empty-title">暂无通知</text>
+    <text class="empty-desc">系统会在有重要关系动态时通知你</text>
+  </view>
+
+  <!-- 通知列表 -->
+  <view class="notification-list" wx:if="{{!loading && notifications.length > 0}}">
+    <view
+      class="notification-item {{item.is_read ? 'read' : 'unread'}}"
+      wx:for="{{notifications}}"
+      wx:key="id"
+      bindtap="onNotificationTap"
+      data-idx="{{index}}"
+    >
+      <view class="notification-item__icon">
+        <text class="notification-icon">{{item.type === 'crisis' ? '⚠️' : item.type === 'tip' ? '💡' : item.type === 'task' ? '✅' : '📢'}}</text>
+      </view>
+      <view class="notification-item__content">
+        <text class="notification-item__text">{{item.content}}</text>
+        <text class="notification-item__time">{{item.created_at}}</text>
+      </view>
+      <view class="notification-item__badge" wx:if="{{!item.is_read}}">
+        <view class="unread-dot"></view>
+      </view>
+    </view>
+  </view>
+</view>

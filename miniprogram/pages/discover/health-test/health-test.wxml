@@ -1,34 +1,122 @@
-<!--关系健康测试页-->
-<view class="container">
-  <view wx:if="{{!showResult}}" class="question-section">
-    <view class="progress-bar">
-      <view class="progress-fill" style="width: {{(currentQuestion + 1) / questions.length * 100}}%"></view>
+<view class="container container-safe assessment-page">
+  <view class="assessment-hero">
+    <view class="assessment-hero__top">
+      <view>
+        <view class="assessment-hero__eyebrow">WEEKLY REVIEW</view>
+        <view class="assessment-hero__title">把“这周到底怎样”变成正式可追踪的关系体检</view>
+        <view class="assessment-hero__desc">这不是随手问答，而是会写回事件流、影响报告与策略强度的正式评估。</view>
+      </view>
+      <view class="assessment-hero__badge">5 题</view>
     </view>
-    <view class="question-number">问题 {{currentQuestion + 1}} / {{questions.length}}</view>
-    <view class="question-text">{{questions[currentQuestion].q}}</view>
-    <view class="options">
-      <button class="option-btn" wx:for="{{questions[currentQuestion].options}}" wx:key="index" data-idx="{{index}}" bindtap="selectOption">
-        {{item}}
-      </button>
+
+    <view class="assessment-hero__strip">
+      <view class="assessment-hero__item">
+        <view class="assessment-hero__item-value">正式提交</view>
+        <view class="assessment-hero__item-label">进入趋势</view>
+      </view>
+      <view class="assessment-hero__item">
+        <view class="assessment-hero__item-value">结构化</view>
+        <view class="assessment-hero__item-label">影响报告</view>
+      </view>
+      <view class="assessment-hero__item">
+        <view class="assessment-hero__item-value">边界明确</view>
+        <view class="assessment-hero__item-label">可追踪</view>
+      </view>
     </view>
   </view>
 
-  <view wx:else class="result-section">
-    <view class="result-icon">{{score >= 16 ? '💖' : score >= 12 ? '💕' : score >= 8 ? '💔' : '⚠️'}}</view>
-    <view class="result-title">关系健康评分</view>
-    <view class="result-score">{{score}} / 20</view>
-    <view class="result-level">
-      <block wx:if="{{score >= 16}}">关系非常健康</block>
-      <block wx:elif="{{score >= 12}}">关系总体良好</block>
-      <block wx:elif="{{score >= 8}}">关系需要关注</block>
-      <block wx:else>建议寻求帮助</block>
+  <view class="loading-card card-creamy mt-lg" wx:if="{{loading}}">
+    正在整理最近的体检记录...
+  </view>
+
+  <block wx:if="{{!loading && !showResult}}">
+    <view class="question-card card-creamy mt-lg">
+      <view class="question-topline">
+        <view>
+          <view class="section-eyebrow">本周体检</view>
+          <view class="question-title">第 {{currentQuestion + 1}} 题 / 共 {{questions.length}} 题</view>
+        </view>
+        <view class="question-progress">{{Math.floor((currentQuestion + 1) / questions.length * 100)}}%</view>
+      </view>
+
+      <view class="progress-track">
+        <view class="progress-fill" style="width: {{(currentQuestion + 1) / questions.length * 100}}%;"></view>
+      </view>
+
+      <view class="question-core">{{questions[currentQuestion].prompt}}</view>
+      <view class="question-hint">{{questions[currentQuestion].hint}}</view>
+
+      <view class="option-list">
+        <view
+          wx:for="{{options}}"
+          wx:key="label"
+          class="option-card"
+          bindtap="selectOption"
+          data-index="{{index}}"
+        >
+          <view class="option-card__title">{{item.label}}</view>
+          <view class="option-card__copy">{{item.caption}}</view>
+        </view>
+      </view>
     </view>
-    <view class="result-desc">
-      <block wx:if="{{score >= 16}}">你们的沟通顺畅，相互支持，关系稳固。</block>
-      <block wx:elif="{{score >= 12}}">关系基础良好，可以尝试更多深度交流。</block>
-      <block wx:elif="{{score >= 8}}">建议增加高质量相处时间，改善沟通方式。</block>
-      <block wx:else>建议寻求专业咨询，共同面对挑战。</block>
+
+    <view class="boundary-card card-creamy mt-lg" wx:if="{{safetyStatus}}">
+      <view class="section-eyebrow">边界提醒</view>
+      <view class="boundary-title">系统当前的安全边界</view>
+      <view class="boundary-pill">{{safetyStatus.risk_level || 'low'}}</view>
+      <view class="boundary-copy">{{safetyStatus.why_now}}</view>
     </view>
-    <button class="btn btn-primary btn-block mt-lg" bindtap="restart">重新测试</button>
+  </block>
+
+  <block wx:if="{{!loading && showResult && resultView}}">
+    <view class="result-card card-creamy mt-lg">
+      <view class="section-eyebrow">最新结果</view>
+      <view class="result-score">{{resultView.totalScore}}</view>
+      <view class="result-unit">/ 100</view>
+      <view class="result-title">{{resultView.levelLabel}}</view>
+      <view class="result-copy">{{resultView.description}}</view>
+      <view class="result-note">{{resultView.changeSummary}}</view>
+
+      <view class="result-actions">
+        <button class="btn btn-secondary" bindtap="restart">重新体检</button>
+        <button class="btn btn-primary" bindtap="openReport">查看报告</button>
+      </view>
+    </view>
+
+    <view class="dimension-card card-creamy mt-lg" wx:if="{{resultView.dimensions.length}}">
+      <view class="section-eyebrow">维度详情</view>
+      <view class="dimension-title">这次体检里最关键的几个维度</view>
+      <view class="dimension-grid">
+        <view class="dimension-item" wx:for="{{resultView.dimensions}}" wx:key="id">
+          <view class="dimension-label">{{item.label}}</view>
+          <view class="dimension-score">{{item.score || '--'}}</view>
+          <view class="dimension-meter">
+            <view class="dimension-meter-fill" style="width: {{item.score || 0}}%;"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="trend-card card-creamy mt-lg" wx:if="{{trendView}}">
+    <view class="section-eyebrow">趋势变化</view>
+    <view class="trend-title">近 4 次正式体检</view>
+    <view class="trend-copy">{{trendView.changeSummary}}</view>
+    <view class="trend-grid" wx:if="{{trendView.points.length}}">
+      <view class="trend-item" wx:for="{{trendView.points}}" wx:key="id">
+        <view class="trend-label">{{item.label}}</view>
+        <view class="trend-score">{{item.score}}</view>
+        <view class="trend-summary">{{item.summary}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="boundary-card card-creamy mt-lg" wx:if="{{showResult && safetyStatus}}">
+    <view class="section-eyebrow">信任与边界</view>
+    <view class="boundary-title">什么时候该减少依赖系统，转向人工支持</view>
+    <view class="boundary-copy">{{safetyStatus.limitation_note}}</view>
+    <view class="handoff-box" wx:if="{{safetyStatus.handoff_recommendation}}">
+      {{safetyStatus.handoff_recommendation}}
+    </view>
   </view>
 </view>

@@ -1,11 +1,11 @@
 """关系树游戏化接口"""
 
-from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.time import current_local_date
 from app.api.deps import get_current_user, validate_pair_access
 from app.models import (
     User,
@@ -101,7 +101,7 @@ async def get_tree_status(
         else 100,
         "milestones": tree.milestones or [],
         "last_watered": str(tree.last_watered) if tree.last_watered else None,
-        "can_water": tree.last_watered != date.today(),
+        "can_water": tree.last_watered != current_local_date(),
     }
 
 
@@ -132,7 +132,7 @@ async def water_tree(
 
     tree = await _get_or_create_tree(pair_id, db)
 
-    today = date.today()
+    today = current_local_date()
     if tree.last_watered == today:
         raise HTTPException(status_code=400, detail="今天已经浇过水了，明天再来吧 💧")
 
@@ -185,7 +185,7 @@ async def grow_tree_on_checkin(pair_id: str, both_done: bool, streak: int):
                 {
                     "type": "level_up",
                     "level": tree.level.value,
-                    "date": str(date.today()),
+                    "date": str(current_local_date()),
                 }
             )
             tree.milestones = milestones

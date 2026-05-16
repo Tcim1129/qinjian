@@ -274,7 +274,7 @@ Page({
 
       // 保存账号信息
       if (loginMode === 'email') {
-        this.saveAccount(loginEmail.trim(), loginPassword, res.user?.nickname)
+        this.saveAccount(loginEmail.trim(), loginPassword, res.user ? res.user.nickname : '')
       }
 
       await syncUserAndPair()
@@ -307,8 +307,8 @@ Page({
         wx.showToast({ title: '请输入邮箱', icon: 'none' })
         return
       }
-      if (!regPassword || regPassword.length < 6) {
-        wx.showToast({ title: '密码至少6位', icon: 'none' })
+      if (!regPassword || regPassword.length < 8) {
+        wx.showToast({ title: '密码至少8位', icon: 'none' })
         return
       }
       if (regPassword !== regPasswordConfirm) {

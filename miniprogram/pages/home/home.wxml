@@ -1,110 +1,133 @@
-<!--
-  首页 - 亲健
-  顶部渐变区域 + 快捷操作卡片 + 打卡天数 + 危机横幅
--->
-<view class="container container-safe">
+<!-- 首页 - 比赛主链主页 -->
+<view class="splash-screen">
+  <image class="splash-logo" src="../../images/brand-logo.jpg" mode="aspectFit"></image>
+  <view class="splash-text">亲健</view>
+  <view class="splash-sub">把关系慢慢照顾好</view>
+</view>
 
-  <!-- 顶部渐变头部：问候、配对状态 -->
-  <view class="home-header-creamy">
-    <view class="brand-ribbon">
-      <image class="brand-ribbon__logo" src="/images/brand-logo.jpg" mode="aspectFit"></image>
-      <view class="brand-ribbon__copy">
-        <view class="brand-ribbon__eyebrow">QINJIAN MINI</view>
-        <view class="brand-ribbon__title">把关系慢慢照顾好</view>
+<view class="container container-safe home-page">
+  <view class="home-hero">
+    <view class="hero-glow hero-glow--one"></view>
+    <view class="hero-glow hero-glow--two"></view>
+
+    <view class="hero-brand-row">
+      <view class="brand-ribbon">
+        <image class="brand-ribbon__logo" src="../../images/brand-logo.jpg" mode="aspectFit"></image>
+        <view class="brand-ribbon__copy">
+          <view class="brand-ribbon__eyebrow">QINJIAN AI</view>
+          <view class="brand-ribbon__title">青年亲密关系健康支持</view>
+        </view>
+      </view>
+      <view class="hero-badge">AI 主链</view>
+    </view>
+
+    <view class="hero-greeting">{{greeting}}</view>
+    <view class="hero-subtitle">把记录、体检、报告和时间轴串成一条更清楚的关系主线。</view>
+
+    <view class="hero-chip-row">
+      <view class="hero-chip" bindtap="goPair" wx:if="{{pairInfo}}">已配对 · 与 {{pairDisplayName}} 同行</view>
+      <view class="hero-chip" bindtap="goPair" wx:else>单人模式 · 去建立双人空间</view>
+      <view class="hero-chip hero-chip--soft" wx:if="{{hasCheckedIn}}">今日已记录</view>
+      <view class="hero-chip hero-chip--soft" wx:else>今日待记录</view>
+    </view>
+
+    <view class="hero-action-grid">
+      <view class="hero-action hero-action--primary" bindtap="goCheckin">
+        <view class="hero-action__eyebrow">Daily Signal</view>
+        <view class="hero-action__title">今天记录一下</view>
+        <view class="hero-action__desc">把今天的互动和情绪留进时间轴。</view>
+      </view>
+      <view class="hero-action hero-action--secondary" bindtap="goHealthTest">
+        <view class="hero-action__eyebrow">Weekly Review</view>
+        <view class="hero-action__title">做一次关系体检</view>
+        <view class="hero-action__desc">正式提交本周状态，让报告更稳。</view>
       </view>
     </view>
 
-    <view class="flex-between home-header-main">
+    <view class="hero-metric-grid">
+      <view class="hero-metric">
+        <view class="hero-metric__value">{{streak}}</view>
+        <view class="hero-metric__label">连续记录</view>
+      </view>
+      <view class="hero-metric">
+        <view class="hero-metric__value">{{latestAssessment ? latestAssessment.totalScore : '--'}}</view>
+        <view class="hero-metric__label">最新体检</view>
+      </view>
+      <view class="hero-metric">
+        <view class="hero-metric__value">{{latestReport ? latestReport.healthScore : '--'}}</view>
+        <view class="hero-metric__label">最新报告</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="notice-bar" wx:if="{{hasCrisis}}" bindtap="goCrisis">
+    <view class="notice-bar__left">
+      <text class="notice-icon">⚠</text>
       <view>
-        <view class="home-greeting">{{greeting}}</view>
-        <view class="home-pair-status-creamy" wx:if="{{pairInfo}}">
-          已配对 · 与 {{pairDisplayName}} 同行
-        </view>
-        <view class="home-pair-status-creamy" wx:else>
-          <text bindtap="goPair">单人模式 · 点击配对 →</text>
-        </view>
-      </view>
-      <view class="home-mood-capsule" wx:if="{{hasCheckedIn && todayCheckin}}">
-        <text class="mood-emoji-sm">{{todayCheckin.mood_score == 4 ? '😊' : todayCheckin.mood_score == 3 ? '🙂' : todayCheckin.mood_score == 2 ? '😐' : '😟'}}</text>
-        <text class="mood-label-sm">今日心情</text>
+        <view class="notice-title">关系预警提醒</view>
+        <view class="notice-desc">{{crisisStatus.message || '系统识别到关系波动，建议优先查看安全提示。'}}</view>
       </view>
     </view>
-
-    <view class="home-hero-card">
-      <view class="home-hero-card__eyebrow">TODAY</view>
-      <view class="home-hero-card__title">{{hasCheckedIn ? '今天已经留下关系记录' : '先完成今天最重要的一步'}}</view>
-      <view class="home-hero-card__copy">{{hasCheckedIn ? '你已经把情绪、互动和节奏留了下来，接下来更适合看简报与建议。' : '先用一次打卡，把今天的关系和心情安放下来，再决定下一步。'}}</view>
-    </view>
+    <text class="cell-arrow">›</text>
   </view>
 
-  <!-- 危机预警横幅 -->
-  <view class="crisis-banner card" wx:if="{{hasCrisis}}" bindtap="goCrisis">
-    <view class="flex-row gap-sm">
-      <text class="crisis-icon">⚠️</text>
-      <view class="flex-1">
-        <view class="text-subtitle" style="color: var(--color-danger);">关系预警提醒</view>
-        <view class="text-caption">{{crisisStatus.message || '检测到关系波动，请及时关注'}}</view>
+  <view class="section-block home-section">
+    <view class="section-block__title">继续你的主线</view>
+    <view class="home-flow-list">
+      <view class="flow-card" bindtap="goReport">
+        <view class="flow-card__icon">📊</view>
+        <view class="flow-card__title">打开报告</view>
+        <view class="flow-card__desc">{{latestReport ? latestReport.insight : '查看最近一次系统判断与建议。'}}</view>
       </view>
-      <text class="text-caption">查看 ></text>
-    </view>
-  </view>
-
-  <!-- 打卡天数展示 (浮动大卡片) -->
-  <view class="card-creamy streak-card-creamy">
-    <view class="flex-center flex-col">
-      <view class="streak-number-creamy">{{streak}}</view>
-      <view class="streak-label-creamy">连续打卡天数</view>
-    </view>
-  </view>
-
-  <!-- 快捷操作区域 -->
-  <view class="section-title-creamy mb-md mt-lg">快捷操作</view>
-  <view class="flex-row gap-md">
-    <!-- 今日打卡 -->
-    <view class="card-creamy action-card-creamy flex-1" bindtap="goCheckin">
-      <view class="action-icon-creamy">✏️</view>
-      <view class="action-text-creamy">今日打卡</view>
-      <view class="action-status-creamy {{hasCheckedIn ? 'done' : 'pending'}}">
-        {{hasCheckedIn ? '已完成 ✓' : '待完成'}}
+      <view class="flow-card" bindtap="goTimeline">
+        <view class="flow-card__icon">🕒</view>
+        <view class="flow-card__title">回看时间轴</view>
+        <view class="flow-card__desc">把记录、体检和报告串回真实发生的过程。</view>
+      </view>
+      <view class="flow-card" bindtap="goPrivacy">
+        <view class="flow-card__icon">🔒</view>
+        <view class="flow-card__title">检查隐私边界</view>
+        <view class="flow-card__desc">确认数据权限、沙盒模式与删除请求状态。</view>
       </view>
     </view>
+  </view>
 
-    <!-- 查看报告 -->
-    <view class="card-creamy action-card-creamy flex-1" bindtap="goReport">
-      <view class="action-icon-creamy">📊</view>
-      <view class="action-text-creamy">查看报告</view>
-      <view class="action-sub-creamy">AI 深度分析</view>
-    </view>
-
-    <!-- 关系树 -->
-    <view class="card-creamy action-card-creamy flex-1" bindtap="goTree">
-      <view class="action-icon-creamy">🌳</view>
-      <view class="action-text-creamy">关系树</view>
-      <view class="action-sub-creamy">{{treeStatus ? treeStatus.level_name : '正在生长'}}</view>
+  <view class="section-block home-section" wx:if="{{latestAssessment || latestReport}}">
+    <view class="section-block__title">系统快照</view>
+    <view class="snapshot-grid">
+      <view class="snapshot-card" wx:if="{{latestAssessment}}">
+        <view class="snapshot-card__label">本周体检</view>
+        <view class="snapshot-card__score">{{latestAssessment.totalScore}}</view>
+        <view class="snapshot-card__desc">{{latestAssessment.levelLabel}}</view>
+      </view>
+      <view class="snapshot-card" wx:if="{{latestReport}}">
+        <view class="snapshot-card__label">{{latestReport.title}}</view>
+        <view class="snapshot-card__score">{{latestReport.healthScore}}</view>
+        <view class="snapshot-card__desc">{{latestReport.insight}}</view>
+      </view>
     </view>
   </view>
 
-  <!-- 今日打卡摘要 -->
-    <view class="card mt-lg" wx:if="{{hasCheckedIn && todayCheckin}}">
-    <view class="text-subtitle mb-sm">今日打卡摘要</view>
-    <view class="divider"></view>
-    <view class="flex-between mt-sm">
-      <text class="text-caption">心情评分</text>
-      <text class="text-body">{{todayCheckin.mood_score || 0}} / 4</text>
-    </view>
-    <view class="flex-between mt-sm">
-      <text class="text-caption">互动次数</text>
-      <text class="text-body">{{todayCheckin.interaction_freq || 0}} 次</text>
-    </view>
-    <view class="flex-between mt-sm">
-      <text class="text-caption">深度对话</text>
-      <text class="text-body">{{todayCheckin.deep_conversation ? '有' : '无'}}</text>
+  <view class="section-block home-section" wx:if="{{hasCheckedIn && todayCheckin}}">
+    <view class="section-block__title">今日记录摘要</view>
+    <view class="daily-summary">
+      <view class="daily-summary__row">
+        <text class="daily-summary__label">心情评分</text>
+        <text class="daily-summary__value">{{todayCheckin.mood_score || 0}} / 4</text>
+      </view>
+      <view class="daily-summary__row">
+        <text class="daily-summary__label">互动次数</text>
+        <text class="daily-summary__value">{{todayCheckin.interaction_freq || 0}} 次</text>
+      </view>
+      <view class="daily-summary__row">
+        <text class="daily-summary__label">深度交流</text>
+        <text class="daily-summary__value">{{todayCheckin.deep_conversation ? '有' : '无'}}</text>
+      </view>
+      <view class="daily-summary__note" wx:if="{{todayCheckin.content}}">{{todayCheckin.content}}</view>
     </view>
   </view>
 
-  <!-- 加载提示 -->
   <view class="loading-wrap" wx:if="{{loading}}">
-    <text class="text-caption">加载中...</text>
+    <text class="text-caption">正在同步首页状态...</text>
   </view>
-
 </view>

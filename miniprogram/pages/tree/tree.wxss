@@ -71,7 +71,7 @@
 
 .progress-fill-creamy {
   height: 100%;
-  background: linear-gradient(to right, #5d4037, #d4a373);
+  background: linear-gradient(to right, #5B8DEE, #8BAFF2);
   border-radius: 8rpx;
   transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -82,7 +82,7 @@
 }
 
 .highlight-creamy {
-  color: #d4a373;
+  color: #FF9A76;
   font-weight: 800;
 }
 .progress-section {
@@ -237,8 +237,8 @@
 
 .level-node-creamy.active .level-node-icon-creamy {
   background: #ffffff;
-  box-shadow: 0 8rpx 16rpx rgba(93, 64, 55, 0.1);
-  border: 2rpx solid #5d4037;
+  box-shadow: 0 8rpx 16rpx rgba(91, 141, 238, 0.1);
+  border: 2rpx solid #5B8DEE;
 }
 
 .level-node-name-creamy {

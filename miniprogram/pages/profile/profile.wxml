@@ -1,68 +1,129 @@
-<!--
-  个人中心页 - 头像信息 + 菜单列表
--->
-<view class="container container-safe">
+<view class="container container-safe profile-page">
+  <view class="profile-hero">
+    <view class="profile-hero__orb"></view>
+    <view class="profile-hero__content">
+      <view class="profile-avatar">{{userInfo && userInfo.nickname ? userInfo.nickname[0] : '亲'}}</view>
+      <view class="profile-info">
+        <view class="profile-name">{{userInfo && userInfo.nickname ? userInfo.nickname : '亲健用户'}}</view>
+        <view class="profile-meta">{{userInfo && (userInfo.email || userInfo.phone) ? (userInfo.email || userInfo.phone) : '登录后同步关系状态'}}</view>
+      </view>
+      <view class="profile-status {{isPaired ? 'paired' : 'single'}}">{{isPaired ? '已配对' : '单人模式'}}</view>
+    </view>
 
-  <!-- 用户信息头部 -->
-  <!-- 用户信息头部 (奶油风格大卡片) -->
-  <view class="card-creamy profile-header-creamy animate-fade-in" bindtap="onMenuTap" data-id="pair" data-path="/pages/pair/pair">
-    <view class="brand-ribbon profile-brand-ribbon">
-      <image class="brand-ribbon__logo" src="/images/brand-logo.jpg" mode="aspectFit"></image>
-      <view class="brand-ribbon__copy">
-        <view class="brand-ribbon__eyebrow">QINJIAN MINI</view>
-        <view class="brand-ribbon__title">我的关系空间</view>
+    <view class="profile-summary-grid">
+      <view class="profile-summary-card">
+        <view class="profile-summary-card__label">关系状态</view>
+        <view class="profile-summary-card__value">{{isPaired ? '双人空间' : '单人空间'}}</view>
+        <view class="profile-summary-card__desc">{{pairInfo && pairInfo.invite_code ? ('邀请码：' + pairInfo.invite_code) : '还未建立共同关系档案'}}</view>
+      </view>
+      <view class="profile-summary-card" wx:if="{{assessmentLatest}}">
+        <view class="profile-summary-card__label">最新体检</view>
+        <view class="profile-summary-card__value">{{assessmentLatest.totalScore}}</view>
+        <view class="profile-summary-card__desc">{{assessmentLatest.levelLabel}}</view>
+      </view>
+      <view class="profile-summary-card" wx:if="{{privacyStatus}}">
+        <view class="profile-summary-card__label">隐私状态</view>
+        <view class="profile-summary-card__value">{{privacyStatus.sandbox_enabled ? '沙盒已开' : '常规模式'}}</view>
+        <view class="profile-summary-card__desc">{{privacyStatus.deletion_request_pending ? '存在删除请求待处理' : '当前无删除请求'}}</view>
       </view>
     </view>
-    <view class="flex-row gap-lg">
-      <!-- 头像 -->
-      <view class="profile-avatar-creamy">
-        <image
-          wx:if="{{userInfo && userInfo.avatar}}"
-          src="{{userInfo.avatar}}"
-          class="profile-avatar-img-creamy"
-          mode="aspectFill"
-        ></image>
-        <view wx:else class="profile-avatar-placeholder-creamy">
-          <text>{{userInfo && userInfo.nickname ? userInfo.nickname[0] : '亲'}}</text>
-        </view>
-      </view>
- 
-      <!-- 名称与状态 -->
-      <view class="flex-1">
-        <view class="profile-nickname-creamy">{{userInfo ? userInfo.nickname : '立即登录'}}</view>
-        <view class="mt-sm">
-          <view class="pair-status-tag-creamy {{isPaired ? 'paired' : 'not-paired'}}">
-            {{isPaired ? '已配对 · ' + (pairInfo.partner_nickname || pairInfo.partner_name || pairInfo.partnerNickname || '伴侣') : '尚未配对 · 建立连接'}}
+  </view>
+
+  <view class="section-group">
+    <view class="section-group__title">常用入口</view>
+    <view class="menu-list">
+      <view class="menu-item" bindtap="openPage" data-path="/pages/report/report">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">📊</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">关系报告</view>
+            <view class="menu-item__desc">查看最新判断、趋势与边界提醒</view>
           </view>
         </view>
+        <view class="menu-item__arrow">›</view>
       </view>
- 
-      <view class="arrow-icon-creamy">chevron_right</view>
+      <view class="menu-item" bindtap="openPage" data-path="/pages/discover/health-test/health-test">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">🩺</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">关系体检</view>
+            <view class="menu-item__desc">正式提交本周评估</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
+      </view>
+      <view class="menu-item" bindtap="openPage" data-path="/pages/timeline/timeline">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">🕒</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">时间轴</view>
+            <view class="menu-item__desc">回看记录、体检与报告如何关联</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
+      </view>
+      <view class="menu-item" bindtap="openPage" data-path="/pages/privacy/privacy">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">🔒</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">隐私中心</view>
+            <view class="menu-item__desc">管理权限、删除请求与边界设置</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
+      </view>
     </view>
   </view>
 
-  <!-- 功能菜单 -->
-  <!-- 功能菜单 (分组奶油卡片) -->
-  <view class="card-creamy mt-md menu-list-creamy">
-    <view
-      wx:for="{{menuItems}}"
-      wx:key="id"
-      class="menu-item-creamy {{index !== menuItems.length - 1 ? 'divider-creamy' : ''}}"
-      bindtap="onMenuTap"
-      data-id="{{item.id}}"
-      data-path="{{item.path}}"
-    >
-      <view class="flex-row gap-md">
-        <view class="menu-icon-box-creamy">{{item.icon}}</view>
-        <text class="menu-title-creamy {{item.id === 'logout' ? 'text-danger' : ''}}">{{item.title}}</text>
+  <view class="section-group">
+    <view class="section-group__title">账号与设置</view>
+    <view class="menu-list">
+      <view class="menu-item" bindtap="editName">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">👤</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">修改昵称</view>
+            <view class="menu-item__desc">同步更新你的展示名称</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
       </view>
-      <view class="arrow-sm-creamy" wx:if="{{item.id !== 'logout'}}">›</view>
+      <view class="menu-item" bindtap="changePassword">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">🔑</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">修改密码</view>
+            <view class="menu-item__desc">建议在更完整的端上完成</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
+      </view>
+      <view class="menu-item" bindtap="openPage" data-path="/pages/pair/pair">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">🔗</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">配对管理</view>
+            <view class="menu-item__desc">管理邀请关系与双人空间状态</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
+      </view>
+      <view class="menu-item" bindtap="showAbout">
+        <view class="menu-item__left">
+          <view class="menu-item__icon">ℹ️</view>
+          <view class="menu-item__text">
+            <view class="menu-item__title">关于亲健</view>
+            <view class="menu-item__desc">查看版本信息与产品定位</view>
+          </view>
+        </view>
+        <view class="menu-item__arrow">›</view>
+      </view>
     </view>
   </view>
 
-  <view class="card-creamy mt-md profile-copyright-card">
-    <view class="profile-copyright-eyebrow">COPYRIGHT</view>
-    <view class="profile-copyright-text">版权所有：心晴合伙人项目组 黄菁蓝、吴秀秀、叶笙尧、钟昊桐、郑梓滢</view>
+  <view class="section-group">
+    <view class="logout-btn" bindtap="handleLogout">退出登录</view>
   </view>
 
+  <view class="copyright">亲健 · 青年亲密关系健康支持系统</view>
 </view>

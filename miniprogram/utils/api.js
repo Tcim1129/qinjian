@@ -1,13 +1,22 @@
 /**
- * API 请求封装模块
- * 基于 wx.request 的统一网络请求工具
+ * Miniprogram API client
+ * Focused on production basics: timeout, retry, error normalization, and auth expiry handling.
  */
 
 const API_PREFIX = '/api/v1'
+const REQUEST_TIMEOUT = 15000
+const MAX_READ_RETRIES = 1
+const RETRYABLE_STATUS_CODES = [408, 429, 502, 503, 504]
+const OPTIONAL_ENDPOINT_PREFIXES = [
+  '/insights/safety/status',
+  '/insights/assessments/latest',
+  '/insights/assessments/trend',
+  '/insights/plans/policy-audit',
+]
 
-/**
- * 获取应用全局数据
- */
+let unauthorizedPending = false
+const unsupportedOptionalEndpoints = new Set()
+
 function getGlobalData() {
   const app = getApp()
   return app ? app.globalData : {}
@@ -17,11 +26,55 @@ function isAuthEndpoint(url) {
   return url === '/auth/login' || url === '/auth/phone/login' || url === '/auth/register'
 }
 
-/**
- * 处理 401 未授权响应
- * 清除登录态并跳转到登录页
- */
+function extractErrorMessage(payload, fallback = '请求失败') {
+  if (!payload) return fallback
+  if (typeof payload === 'string') return payload
+  return payload.detail || payload.message || payload.error || fallback
+}
+
+function createApiError({
+  code = -1,
+  message = '请求失败',
+  data = null,
+  detail = null,
+  network = false,
+  timeout = false,
+  unauthorized = false,
+} = {}) {
+  const error = new Error(message)
+  error.code = code
+  error.data = data
+  error.detail = detail
+  error.network = network
+  error.timeout = timeout
+  error.unauthorized = unauthorized
+  return error
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function shouldRetry(method, error, attempt, retries) {
+  if (attempt >= retries) return false
+  if (method !== 'GET') return false
+  if (!error) return false
+  if (error.network || error.timeout) return true
+  return RETRYABLE_STATUS_CODES.includes(error.code)
+}
+
+function showNetworkToast(message) {
+  wx.showToast({
+    title: message,
+    icon: 'none',
+    duration: 2200,
+  })
+}
+
 function handleUnauthorized() {
+  if (unauthorizedPending) return
+  unauthorizedPending = true
+
   const app = getApp()
   if (app && app.globalData) {
     app.globalData.token = null
@@ -35,117 +88,169 @@ function handleUnauthorized() {
   wx.removeStorageSync('pairInfo')
 
   wx.reLaunch({
-    url: '/pages/login/login'
+    url: '/pages/login/login',
   })
+
+  setTimeout(() => {
+    unauthorizedPending = false
+  }, 1200)
 }
 
-/**
- * 核心请求方法
- * @param {string} url - 请求路径（不含 baseUrl 和前缀）
- * @param {string} method - HTTP 方法
- * @param {object} data - 请求数据
- * @returns {Promise}
- */
-function request(url, method, data) {
-  return new Promise((resolve, reject) => {
-    const globalData = getGlobalData()
-    const baseUrl = globalData.baseUrl || ''
-    const token = globalData.token || ''
-
-    const header = {
-      'Content-Type': 'application/json'
-    }
-
-    // 存在 token 时添加认证头
-    if (token) {
-      header['Authorization'] = `Bearer ${token}`
-    }
-
-    wx.request({
-      url: `${baseUrl}${API_PREFIX}${url}`,
-      method,
-      data,
-      header,
-      success(res) {
-        if (res.statusCode === 401 && !isAuthEndpoint(url)) {
-          handleUnauthorized()
-          reject({ code: 401, message: '登录已过期，请重新登录' })
-          return
-        }
-
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(res.data)
-        } else {
-          const errMsg = (res.data && (res.data.detail || res.data.message)) || '请求失败'
-          reject({ code: res.statusCode, message: errMsg, data: res.data })
-        }
-      },
-      fail(err) {
-        wx.showToast({
-          title: '网络连接失败，请检查网络设置',
-          icon: 'none',
-          duration: 2000
-        })
-        reject({ code: -1, message: '网络异常', detail: err })
-      }
+function ensureBaseUrl() {
+  const globalData = getGlobalData()
+  const baseUrl = globalData.baseUrl || ''
+  if (!baseUrl) {
+    throw createApiError({
+      code: -2,
+      message: '服务地址未配置，请先完成环境配置',
     })
-  })
+  }
+  return baseUrl
 }
 
-/**
- * GET 请求
- * @param {string} url - 请求路径
- * @param {object} [data] - 查询参数
- */
-function get(url, data) {
-  return request(url, 'GET', data)
+function getOptionalEndpointPrefix(url) {
+  return OPTIONAL_ENDPOINT_PREFIXES.find((prefix) => url.startsWith(prefix)) || null
 }
 
-/**
- * POST 请求
- * @param {string} url - 请求路径
- * @param {object} [data] - 请求体数据
- */
-function post(url, data) {
-  return request(url, 'POST', data)
+function shouldSkipOptionalEndpoint(url) {
+  const prefix = getOptionalEndpointPrefix(url)
+  return prefix ? unsupportedOptionalEndpoints.has(prefix) : false
 }
 
-/**
- * PUT 请求
- * @param {string} url - 请求路径
- * @param {object} [data] - 请求体数据
- */
-function put(url, data) {
-  return request(url, 'PUT', data)
+function markOptionalEndpointUnsupported(url, error) {
+  const prefix = getOptionalEndpointPrefix(url)
+  if (!prefix || !error) return
+  if (error.code === 404 || error.code === 501) {
+    unsupportedOptionalEndpoints.add(prefix)
+  }
 }
 
-/**
- * DELETE 请求
- * @param {string} url - 请求路径
- * @param {object} [data] - 请求体数据
- */
-function del(url, data) {
-  return request(url, 'DELETE', data)
+async function request(url, method, data, options = {}) {
+  const { retries = MAX_READ_RETRIES, silent = false } = options
+
+  const attemptRequest = async (attempt = 0) => {
+    const globalData = getGlobalData()
+    const baseUrl = ensureBaseUrl()
+    const token = globalData.token || ''
+    const header = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+
+    try {
+      return await new Promise((resolve, reject) => {
+        wx.request({
+          url: `${baseUrl}${API_PREFIX}${url}`,
+          method,
+          data,
+          header,
+          timeout: REQUEST_TIMEOUT,
+          success(res) {
+            if (res.statusCode === 401 && !isAuthEndpoint(url)) {
+              handleUnauthorized()
+              reject(createApiError({
+                code: 401,
+                message: '登录已失效，请重新登录',
+                data: res.data,
+                unauthorized: true,
+              }))
+              return
+            }
+
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(res.data)
+              return
+            }
+
+            reject(createApiError({
+              code: res.statusCode,
+              message: extractErrorMessage(res.data, '请求失败'),
+              data: res.data,
+            }))
+          },
+          fail(err) {
+            const isTimeout = String((err && err.errMsg) || '').toLowerCase().includes('timeout')
+            reject(createApiError({
+              code: isTimeout ? 408 : -1,
+              message: isTimeout ? '请求超时，请稍后重试' : '网络连接失败，请检查网络后重试',
+              detail: err,
+              network: !isTimeout,
+              timeout: isTimeout,
+            }))
+          },
+        })
+      })
+    } catch (error) {
+      if (shouldRetry(method, error, attempt, retries)) {
+        await wait(250 * (attempt + 1))
+        return attemptRequest(attempt + 1)
+      }
+
+      if (!silent && (error.network || error.timeout)) {
+        showNetworkToast(error.message)
+      }
+      throw error
+    }
+  }
+
+  return attemptRequest(0)
 }
 
-/**
- * 文件上传
- * @param {string} url - 上传接口路径
- * @param {string} filePath - 本地文件路径
- * @param {object} [formData] - 附加表单数据
- * @returns {Promise}
- */
+function get(url, data, options) {
+  return request(url, 'GET', data, options)
+}
+
+function post(url, data, options) {
+  return request(url, 'POST', data, options)
+}
+
+function put(url, data, options) {
+  return request(url, 'PUT', data, options)
+}
+
+function del(url, data, options) {
+  return request(url, 'DELETE', data, options)
+}
+
+async function getOptional(url, data, options) {
+  if (shouldSkipOptionalEndpoint(url)) {
+    return null
+  }
+
+  try {
+    return await get(url, data, { ...(options || {}), silent: true })
+  } catch (error) {
+    markOptionalEndpointUnsupported(url, error)
+    if (error && (error.code === 404 || error.code === 501)) {
+      return null
+    }
+    throw error
+  }
+}
+
+function safeParseUploadPayload(raw) {
+  if (!raw) return {}
+  if (typeof raw !== 'string') return raw
+  try {
+    return JSON.parse(raw)
+  } catch (error) {
+    return raw
+  }
+}
+
 function upload(url, filePath, formData) {
   return new Promise((resolve, reject) => {
-    const globalData = getGlobalData()
-    const baseUrl = globalData.baseUrl || ''
-    const token = globalData.token || ''
-
-    const header = {}
-
-    if (token) {
-      header['Authorization'] = `Bearer ${token}`
+    let baseUrl = ''
+    try {
+      baseUrl = ensureBaseUrl()
+    } catch (error) {
+      reject(error)
+      return
     }
+
+    const globalData = getGlobalData()
+    const token = globalData.token || ''
+    const header = token ? { Authorization: `Bearer ${token}` } : {}
 
     wx.uploadFile({
       url: `${baseUrl}${API_PREFIX}${url}`,
@@ -153,96 +258,130 @@ function upload(url, filePath, formData) {
       name: 'file',
       header,
       formData: formData || {},
+      timeout: REQUEST_TIMEOUT,
       success(res) {
         if (res.statusCode === 401 && !isAuthEndpoint(url)) {
           handleUnauthorized()
-          reject({ code: 401, message: '登录已过期，请重新登录' })
+          reject(createApiError({
+            code: 401,
+            message: '登录已失效，请重新登录',
+            unauthorized: true,
+          }))
           return
         }
 
-        // wx.uploadFile 的 res.data 是字符串，需要解析
-        let data = res.data
-        try {
-          data = JSON.parse(data)
-        } catch (e) {
-          // 解析失败则保留原始字符串
+        const payload = safeParseUploadPayload(res.data)
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(payload)
+          return
         }
 
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(data)
-        } else {
-          const errMsg = (data && data.message) || '上传失败'
-          reject({ code: res.statusCode, message: errMsg, data })
-        }
+        reject(createApiError({
+          code: res.statusCode,
+          message: extractErrorMessage(payload, '上传失败'),
+          data: payload,
+        }))
       },
       fail(err) {
-        wx.showToast({
-          title: '网络连接失败，请检查网络设置',
-          icon: 'none',
-          duration: 2000
+        const isTimeout = String((err && err.errMsg) || '').toLowerCase().includes('timeout')
+        const error = createApiError({
+          code: isTimeout ? 408 : -1,
+          message: isTimeout ? '上传超时，请稍后重试' : '网络连接失败，请检查网络后重试',
+          detail: err,
+          network: !isTimeout,
+          timeout: isTimeout,
         })
-        reject({ code: -1, message: '网络异常', detail: err })
-      }
+        showNetworkToast(error.message)
+        reject(error)
+      },
     })
   })
 }
 
 function getBaseApiUrl() {
-  const globalData = getGlobalData()
-  const baseUrl = globalData.baseUrl || ''
+  const baseUrl = ensureBaseUrl()
   return `${baseUrl}${API_PREFIX}`
 }
 
-/**
- * 上传语音文件并转录为文字
- * @param {string} filePath - 本地语音文件路径
- * @returns {Promise<{text: string, size: number}>}
- */
+function toWebSocketUrl(url) {
+  const value = String(url || '').trim()
+  if (!value) return ''
+  if (value.startsWith('https://')) return `wss://${value.slice(8)}`
+  if (value.startsWith('http://')) return `ws://${value.slice(7)}`
+  return value
+}
+
+function getRealtimeAsrSocketUrl() {
+  const baseUrl = ensureBaseUrl()
+  const globalData = getGlobalData()
+  const token = globalData.token || ''
+  if (!token) {
+    throw createApiError({
+      code: 401,
+      message: '登录已失效，请重新登录',
+      unauthorized: true,
+    })
+  }
+
+  const socketUrl = `${toWebSocketUrl(baseUrl)}${API_PREFIX}/agent/asr/realtime?token=${encodeURIComponent(token)}`
+  return socketUrl
+}
+
 function uploadAndTranscribe(filePath) {
   return new Promise((resolve, reject) => {
-    const globalData = getGlobalData()
-    const baseUrl = globalData.baseUrl || ''
-    const token = globalData.token || ''
-
-    const header = {}
-    if (token) {
-      header['Authorization'] = `Bearer ${token}`
+    let baseUrl = ''
+    try {
+      baseUrl = ensureBaseUrl()
+    } catch (error) {
+      reject(error)
+      return
     }
+
+    const globalData = getGlobalData()
+    const token = globalData.token || ''
+    const header = token ? { Authorization: `Bearer ${token}` } : {}
 
     wx.uploadFile({
       url: `${baseUrl}${API_PREFIX}/upload/transcribe`,
       filePath,
       name: 'file',
       header,
+      timeout: REQUEST_TIMEOUT,
       success(res) {
         if (res.statusCode === 401) {
           handleUnauthorized()
-          reject({ code: 401, message: '登录已过期，请重新登录' })
+          reject(createApiError({
+            code: 401,
+            message: '登录已失效，请重新登录',
+            unauthorized: true,
+          }))
           return
         }
 
-        let data = res.data
-        try {
-          data = JSON.parse(data)
-        } catch (e) {
-          // 解析失败则保留原始字符串
+        const payload = safeParseUploadPayload(res.data)
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(payload)
+          return
         }
 
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(data)
-        } else {
-          const errMsg = (data && data.detail) || data.message || '转录失败'
-          reject({ code: res.statusCode, message: errMsg, data })
-        }
+        reject(createApiError({
+          code: res.statusCode,
+          message: extractErrorMessage(payload, '转录失败'),
+          data: payload,
+        }))
       },
       fail(err) {
-        wx.showToast({
-          title: '网络连接失败，请检查网络设置',
-          icon: 'none',
-          duration: 2000
+        const isTimeout = String((err && err.errMsg) || '').toLowerCase().includes('timeout')
+        const error = createApiError({
+          code: isTimeout ? 408 : -1,
+          message: isTimeout ? '转录超时，请稍后重试' : '网络连接失败，请检查网络后重试',
+          detail: err,
+          network: !isTimeout,
+          timeout: isTimeout,
         })
-        reject({ code: -1, message: '网络异常', detail: err })
-      }
+        showNetworkToast(error.message)
+        reject(error)
+      },
     })
   })
 }
@@ -254,5 +393,30 @@ module.exports = {
   del,
   upload,
   uploadAndTranscribe,
-  getBaseApiUrl
+  getBaseApiUrl,
+  getRealtimeAsrSocketUrl,
+  getSafetyStatus(pairId) {
+    return getOptional(pairId ? `/insights/safety/status?pair_id=${pairId}` : '/insights/safety/status?mode=solo')
+  },
+  submitWeeklyAssessment(pairId, payload) {
+    return post(pairId ? `/insights/assessments/weekly?pair_id=${pairId}` : '/insights/assessments/weekly?mode=solo', payload)
+  },
+  getWeeklyAssessmentLatest(pairId) {
+    return getOptional(pairId ? `/insights/assessments/latest?pair_id=${pairId}` : '/insights/assessments/latest?mode=solo')
+  },
+  getWeeklyAssessmentTrend(pairId, limit = 4) {
+    return getOptional(pairId ? `/insights/assessments/trend?pair_id=${pairId}&limit=${limit}` : `/insights/assessments/trend?mode=solo&limit=${limit}`)
+  },
+  getPolicyDecisionAudit(pairId) {
+    return getOptional(pairId ? `/insights/plans/policy-audit?pair_id=${pairId}` : '/insights/plans/policy-audit?mode=solo')
+  },
+  getPrivacyStatus() {
+    return getOptional('/privacy/status')
+  },
+  createPrivacyDeleteRequest() {
+    return post('/privacy/delete-request')
+  },
+  cancelPrivacyDeleteRequest() {
+    return post('/privacy/delete-request/cancel')
+  },
 }
