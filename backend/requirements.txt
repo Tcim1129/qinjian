@@ -6,12 +6,12 @@ psycopg[binary]
 alembic==1.13.0
 pydantic>=2.12.5
 pydantic-settings==2.5.0
-PyJWT==2.12.0
+PyJWT==2.13.0
 bcrypt==4.2.0
-python-multipart==0.0.22
+python-multipart==0.0.30
 httpx==0.27.0
 openai==1.50.0
 aiofiles==24.1.0
 websockets==13.1
-pytest==8.3.5
+pytest==9.0.3
 redis==5.2.1

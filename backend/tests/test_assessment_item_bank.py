@@ -36,7 +36,7 @@ class DummyAsyncSession:
         return self.pair
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_build_weekly_assessment_pack_returns_fixed_ten_items():
     payload = await build_weekly_assessment_pack(
         DummyAsyncSession(),
@@ -83,7 +83,7 @@ def test_assessment_item_bank_expands_rotation_pool_for_all_dimensions():
     assert all(rotation_counts[dimension] >= 6 for dimension in DIMENSION_LABELS)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_build_weekly_assessment_pack_uses_friend_profile_copy():
     payload = await build_weekly_assessment_pack(
         DummyAsyncSession(pair=SimpleNamespace(type=PairType.FRIEND, is_long_distance=False)),
@@ -95,7 +95,7 @@ async def test_build_weekly_assessment_pack_uses_friend_profile_copy():
     assert "友情" in payload["items"][0]["prompt"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_build_weekly_assessment_pack_uses_long_distance_profile_copy():
     payload = await build_weekly_assessment_pack(
         DummyAsyncSession(pair=SimpleNamespace(type=PairType.COUPLE, is_long_distance=True)),
