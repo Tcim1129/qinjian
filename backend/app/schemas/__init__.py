@@ -1,10 +1,16 @@
 """Pydantic 请求/响应模型"""
 
+import re
 import uuid
 from datetime import date, datetime
 from typing import Any, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.invite_codes import (
+    INVITE_CODE_LENGTH,
+    INVITE_CODE_PATTERN,
+    normalize_invite_code,
+)
 from app.services.upload_access import to_client_upload_url
 
 
@@ -16,13 +22,15 @@ class RequestModel(BaseModel):
 
 
 class RegisterRequest(RequestModel):
-    email: str
+    account: str | None = Field(default=None, description="邮箱或手机号")
+    email: str | None = Field(default=None, description="兼容旧版邮箱字段")
     nickname: str
     password: str
 
 
 class LoginRequest(RequestModel):
-    email: str
+    account: str | None = Field(default=None, description="邮箱或手机号")
+    email: str | None = Field(default=None, description="兼容旧版邮箱字段")
     password: str
 
 
@@ -42,12 +50,118 @@ class PhoneLoginRequest(RequestModel):
     code: str
 
 
+class PasswordResetByPhoneRequest(RequestModel):
+    phone: str
+    code: str
+    new_password: str
+
+
+class ProfileUpdateCodeSendRequest(RequestModel):
+    field: Literal["email", "phone"]
+    value: str = Field(min_length=1, max_length=120)
+
+
+class ProfileUpdateCodeConfirmRequest(RequestModel):
+    field: Literal["email", "phone"]
+    value: str = Field(min_length=1, max_length=120)
+    code: str = Field(min_length=1, max_length=8)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
 
 # ── 用户 ──
+
+
+class AvatarPresentation(BaseModel):
+    focus_x: float = Field(default=50.0, ge=0.0, le=100.0)
+    focus_y: float = Field(default=50.0, ge=0.0, le=100.0)
+    scale: float = Field(default=1.0, ge=1.0, le=3.0)
+
+
+class TaskPlannerDefaultsResponse(BaseModel):
+    daily_ai_task_count: int = Field(ge=3, le=8)
+    reminder_enabled: bool = True
+    reminder_time: str
+    reminder_timezone: str
+
+
+class TaskPlannerDefaultsUpdateRequest(RequestModel):
+    daily_ai_task_count: int | None = Field(default=None, ge=3, le=8)
+    reminder_enabled: bool | None = None
+    reminder_time: str | None = None
+    reminder_timezone: str | None = Field(default=None, max_length=80)
+
+    @field_validator("reminder_time")
+    @classmethod
+    def _validate_reminder_time(cls, value: str | None):
+        if value is None:
+            return value
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value.strip()):
+            raise ValueError("提醒时间格式必须是 HH:MM")
+        return value.strip()
+
+    @field_validator("reminder_timezone")
+    @classmethod
+    def _normalize_reminder_timezone(cls, value: str | None):
+        if value is None:
+            return value
+        normalized = value.strip()
+        return normalized or None
+
+
+class PairTaskPlannerSettingsRequest(RequestModel):
+    daily_ai_task_count: int | None = Field(default=None, ge=3, le=8)
+    reminder_enabled: bool | None = None
+    reminder_time: str | None = None
+    reminder_timezone: str | None = Field(default=None, max_length=80)
+
+    @field_validator("reminder_time")
+    @classmethod
+    def _validate_pair_reminder_time(cls, value: str | None):
+        if value is None:
+            return value
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value.strip()):
+            raise ValueError("提醒时间格式必须是 HH:MM")
+        return value.strip()
+
+    @field_validator("reminder_timezone")
+    @classmethod
+    def _normalize_pair_reminder_timezone(cls, value: str | None):
+        if value is None:
+            return value
+        normalized = value.strip()
+        return normalized or None
+
+
+class PairTaskPlannerSettingsOverridesResponse(BaseModel):
+    daily_ai_task_count: int | None = None
+    reminder_enabled: bool | None = None
+    reminder_time: str | None = None
+    reminder_timezone: str | None = None
+
+
+class PairTaskPlannerSettingsResponse(BaseModel):
+    pair_id: uuid.UUID
+    overrides: PairTaskPlannerSettingsOverridesResponse = Field(
+        default_factory=PairTaskPlannerSettingsOverridesResponse
+    )
+    effective_settings: TaskPlannerDefaultsResponse
+
+
+class HabitProfile(RequestModel):
+    taboos: list[str] = Field(default_factory=list, max_length=16)
+    comfort_preferences: list[str] = Field(default_factory=list, max_length=16)
+    custom_notes: str = Field(default='', max_length=200)
+
+    @field_validator('taboos', 'comfort_preferences')
+    @classmethod
+    def validate_tag_lengths(cls, tags):
+        if any(len(tag.strip()) > 32 for tag in tags):
+            raise ValueError('每条相处偏好最多32个字')
+        return tags
 
 
 class UserResponse(BaseModel):
@@ -57,10 +171,30 @@ class UserResponse(BaseModel):
     nickname: str
     avatar_url: str | None = None
     wechat_avatar: str | None = None
+    testing_unrestricted: bool = False
     wechat_bound: bool = False
     ai_assist_enabled: bool = True
     privacy_mode: Literal["cloud", "local_first"] = "cloud"
     preferred_entry: Literal["daily", "emergency", "reflection"] = "daily"
+    preferred_language: Literal["zh", "en", "mixed"] = "zh"
+    tone_preference: Literal["gentle", "direct", "warm", "concise"] = "gentle"
+    response_length: Literal["short", "medium", "long"] = "medium"
+    habit_profile: HabitProfile = Field(default_factory=HabitProfile)
+    relationship_space_theme: Literal["classic", "stardust", "engine"] = "classic"
+    spiritual_support_enabled: bool = False
+    living_region: str = ""
+    selected_pair_id: str = ""
+    custom_mood_presets: list[str] = Field(default_factory=list)
+    hidden_default_moods: list[str] = Field(default_factory=list)
+    avatar_presentation: AvatarPresentation = Field(default_factory=AvatarPresentation)
+    task_planner_defaults: TaskPlannerDefaultsResponse = Field(
+        default_factory=lambda: TaskPlannerDefaultsResponse(
+            daily_ai_task_count=5,
+            reminder_enabled=True,
+            reminder_time="21:00",
+            reminder_timezone="Asia/Shanghai",
+        )
+    )
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -73,10 +207,36 @@ class UserResponse(BaseModel):
 
 class UserUpdateRequest(RequestModel):
     nickname: str | None = None
+    email: str | None = None
+    phone: str | None = None
     avatar_url: str | None = None
+    avatar_presentation: AvatarPresentation | None = None
     ai_assist_enabled: bool | None = None
     privacy_mode: Literal["cloud", "local_first"] | None = None
     preferred_entry: Literal["daily", "emergency", "reflection"] | None = None
+    preferred_language: Literal["zh", "en", "mixed"] | None = None
+    tone_preference: Literal["gentle", "direct", "warm", "concise"] | None = None
+    response_length: Literal["short", "medium", "long"] | None = None
+    habit_profile: HabitProfile | None = None
+    relationship_space_theme: Literal["classic", "stardust", "engine"] | None = None
+    spiritual_support_enabled: bool | None = None
+    living_region: str | None = Field(default=None, max_length=40)
+    selected_pair_id: str | None = Field(default=None, max_length=64)
+    custom_mood_presets: list[str] | None = None
+    hidden_default_moods: list[str] | None = None
+    task_planner_defaults: TaskPlannerDefaultsUpdateRequest | None = None
+
+
+class CrisisSupportChannelResponse(BaseModel):
+    id: str
+    label: str
+    use_when: str
+
+
+class CrisisSupportResponse(BaseModel):
+    urgent_message: str
+    channels: list[CrisisSupportChannelResponse] = Field(default_factory=list)
+    detected_categories: list[str] = Field(default_factory=list)
 
 
 class PasswordChangeRequest(RequestModel):
@@ -88,19 +248,119 @@ class PasswordChangeRequest(RequestModel):
 
 
 class PairCreateRequest(RequestModel):
-    type: str  # couple / spouse / bestfriend
+    type: Literal["couple", "friend", "spouse", "bestfriend", "parent"] | None = None
+
+
+class PairUpdateTypeRequest(RequestModel):
+    type: Literal["couple", "friend", "spouse", "bestfriend", "parent"]
+
+
+class PairBreakRequest(RequestModel):
+    allow_retention: bool
 
 
 class PairJoinRequest(RequestModel):
-    invite_code: str = Field(min_length=6, max_length=12)
+    invite_code: str = Field(
+        min_length=INVITE_CODE_LENGTH,
+        max_length=INVITE_CODE_LENGTH,
+        pattern=INVITE_CODE_PATTERN,
+    )
+
+    @field_validator("invite_code", mode="before")
+    @classmethod
+    def _normalize_invite_code(cls, value: str):
+        if isinstance(value, str):
+            return normalize_invite_code(value)
+        return value
+
+
+class PairJoinSubmitRequest(PairJoinRequest):
+    type: Literal["couple", "friend", "spouse", "bestfriend", "parent"]
+
+
+class PairChangeDecisionRequest(RequestModel):
+    decision: Literal["approve", "reject"]
+
+
+class PairBreakRetentionRequest(RequestModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class PairBreakMessageRequest(RequestModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class PairBreakRetentionDecisionRequest(RequestModel):
+    decision: Literal["accept", "reject"]
+
+
+class PairChangeRequestMessageResponse(BaseModel):
+    id: uuid.UUID
+    sender_user_id: uuid.UUID
+    sender_nickname: str | None = None
+    message: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PairChangeRequestResponse(BaseModel):
+    id: uuid.UUID
+    pair_id: uuid.UUID
+    kind: Literal["join_request", "type_change", "break_request"]
+    kind_label: str | None = None
+    status: Literal["pending", "approved", "rejected", "cancelled"]
+    status_label: str | None = None
+    requested_type: str | None = None
+    requested_type_label: str | None = None
+    requester_user_id: uuid.UUID
+    requester_nickname: str | None = None
+    approver_user_id: uuid.UUID
+    approver_nickname: str | None = None
+    requested_by_me: bool = False
+    waiting_for_me: bool = False
+    allow_retention: bool = False
+    phase: Literal["awaiting_timeout", "awaiting_retention_choice", "retaining"] | None = None
+    expires_at: datetime | None = None
+    resolution_reason: Literal[
+        "no_retention_timeout",
+        "partner_declined",
+        "choice_timeout",
+        "retention_rejected",
+        "retention_timeout",
+        "retention_accepted",
+        "requester_cancelled",
+    ] | None = None
+    messages: list[PairChangeRequestMessageResponse] = Field(default_factory=list)
+    created_at: datetime
+    decided_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PairJoinPreviewResponse(BaseModel):
+    pair_id: uuid.UUID
+    invite_code: str
+    inviter_user_id: uuid.UUID
+    inviter_nickname: str | None = None
+    current_status: str
+    current_status_label: str | None = None
+    pending_request: PairChangeRequestResponse | None = None
+
+
+class PairChangeRequestBundleResponse(BaseModel):
+    pair: "PairResponse"
+    request: PairChangeRequestResponse
 
 
 class PairResponse(BaseModel):
     id: uuid.UUID
     user_a_id: uuid.UUID
     user_b_id: uuid.UUID | None
-    type: str
+    type: str | None = None
+    type_label: str | None = None
     status: str
+    status_label: str | None = None
     invite_code: str
     unbind_requested_by: uuid.UUID | None = None
     unbind_requested_at: datetime | None = None
@@ -111,6 +371,8 @@ class PairResponse(BaseModel):
     partner_email: str | None = None
     partner_phone: str | None = None
     custom_partner_nickname: str | None = None  # 我给伴侣设置的备注名
+    pending_change_request: PairChangeRequestResponse | None = None
+    latest_change_request: PairChangeRequestResponse | None = None
 
     model_config = {"from_attributes": True}
 
@@ -128,7 +390,12 @@ class PairSummaryResponse(BaseModel):
 
 
 class UpdatePartnerNicknameRequest(RequestModel):
-    custom_nickname: str = Field(min_length=1, max_length=50)
+    custom_nickname: str = Field(max_length=50)
+
+    @field_validator("custom_nickname", mode="before")
+    @classmethod
+    def _normalize_custom_nickname(cls, value: object) -> str:
+        return str(value or "").strip()
 
 
 # ── 打卡 ──
@@ -146,6 +413,7 @@ class ClientContextPayload(RequestModel):
     client_tags: list[str] = Field(default_factory=list)
     device_meta: dict | None = None
     ai_assist_enabled: bool | None = None
+    archive_insight: dict | None = None
 
 
 class CheckinRequest(RequestModel):
@@ -185,8 +453,6 @@ class CheckinResponse(BaseModel):
     server_analysis: dict | None = None
     final_guidance: str | None = None
     safety_gate: bool = False
-    entry_index: int | None = None
-    daily_entry_limit: int | None = None
     checkin_date: date
     created_at: datetime
 
@@ -218,9 +484,25 @@ class ReportResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReportScopeOptionResponse(BaseModel):
+    pair_id: uuid.UUID
+    partner_label: str
+    pair_type: str | None = None
+    pair_type_label: str
+    sort_score: int
+    activity_score: int
+    dual_activity_score: int
+    health_score: int
+    latest_report_date: date | None = None
+    latest_signal_at: datetime | None = None
+    reason_tags: list[str] = Field(default_factory=list)
+
+
 class WeeklyAssessmentAnswerItem(RequestModel):
+    item_id: str | None = None
     dim: str
     score: int = Field(ge=0, le=100)
+    option_id: str | None = None
 
 
 class WeeklyAssessmentDimensionScoreResponse(BaseModel):
@@ -266,13 +548,42 @@ class WeeklyAssessmentTrendResponse(BaseModel):
     change_summary: str
 
 
+class WeeklyAssessmentOptionResponse(BaseModel):
+    id: str
+    label: str
+    score: int
+
+
+class WeeklyAssessmentItemResponse(BaseModel):
+    item_id: str
+    track: str
+    dimension: str
+    dimension_label: str
+    prompt: str
+    options: list[WeeklyAssessmentOptionResponse] = Field(default_factory=list)
+    rotation_group: str
+    active: bool = True
+    version: str = "v1"
+
+
+class WeeklyAssessmentPackResponse(BaseModel):
+    title: str
+    subtitle: str | None = None
+    latest_score: int | None = None
+    change_summary: str | None = None
+    items: list[WeeklyAssessmentItemResponse] = Field(default_factory=list)
+    generated_at: str
+
+
 class SafetyStatusResponse(BaseModel):
     risk_level: str
+    risk_level_label: str | None = None
     why_now: str
     evidence_summary: list[str] = Field(default_factory=list)
     limitation_note: str
     recommended_action: str
     handoff_recommendation: str | None = None
+    crisis_support: CrisisSupportResponse | None = None
 
 
 class PrivacyDeleteRequestResponse(BaseModel):
@@ -367,6 +678,8 @@ class PrivacyRetentionSweepResponse(BaseModel):
     dry_run: bool
     expired_privacy_events: int
     stale_temp_files: int
+    expired_raw_checkins: int = 0
+    deleted_raw_uploads: int = 0
     due_requests: int | None = None
     executed: int | None = None
     manual_review: int | None = None
@@ -379,9 +692,13 @@ class TaskResponse(BaseModel):
     id: uuid.UUID
     pair_id: uuid.UUID
     user_id: uuid.UUID | None = None
+    created_by_user_id: uuid.UUID | None = None
+    parent_task_id: uuid.UUID | None = None
     title: str
     description: str
     category: str
+    source: str = "system"
+    importance_level: Literal["low", "medium", "high"] = "medium"
     status: str
     due_date: date
     completed_at: datetime | None = None
@@ -390,18 +707,63 @@ class TaskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TaskCreateRequest(RequestModel):
+    title: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=400)
+    category: str = Field(default="activity", min_length=1, max_length=30)
+    target_scope: Literal["self", "both"] = "self"
+    due_date: date | None = None
+    parent_task_id: uuid.UUID | None = None
+    importance_level: Literal["low", "medium", "high"] = "medium"
+
+
+class TaskUpdateRequest(RequestModel):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=400)
+    category: str | None = Field(default=None, min_length=1, max_length=30)
+    target_scope: Literal["self", "both"] | None = None
+    due_date: date | None = None
+    importance_level: Literal["low", "medium", "high"] | None = None
+
+
 class TaskFeedbackRequest(RequestModel):
-    usefulness_score: int = Field(ge=1, le=5)
-    friction_score: int = Field(ge=1, le=5)
+    outcome: Literal["helped", "not_yet", "difficult", "uncertain"] | None = None
+    usefulness_score: int | None = Field(default=None, ge=1, le=5)
+    friction_score: int | None = Field(default=None, ge=1, le=5)
+    relationship_shift_score: int | None = Field(default=None, ge=-2, le=2)
     note: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def _require_feedback(self):
+        if self.outcome is None and not str(self.note or '').strip() and all(value is None for value in (
+            self.usefulness_score, self.friction_score, self.relationship_shift_score,
+        )):
+            raise ValueError("选一下实际感受，或补充一句")
+        return self
 
 
 class TaskFeedbackResponse(BaseModel):
     task_id: uuid.UUID
-    usefulness_score: int
-    friction_score: int
+    outcome: Literal["helped", "not_yet", "difficult", "uncertain"] | None = None
+    usefulness_score: int | None = None
+    friction_score: int | None = None
+    relationship_shift_score: int | None = None
     note: str | None = None
     submitted_at: datetime
+
+
+class TaskResultRequest(RequestModel):
+    status: Literal["pending", "completed"]
+    feedback: TaskFeedbackRequest | None
+
+    @model_validator(mode="after")
+    def _consistent_result(self):
+        if self.feedback is not None:
+            if self.status == 'completed' and self.feedback.outcome == 'not_yet':
+                raise ValueError('已完成的安排不能选择还没做')
+            if self.status == 'pending' and self.feedback.outcome not in {'not_yet', 'difficult'}:
+                raise ValueError('未完成的安排先记录实际进展')
+        return self
 
 
 # ── 依恋类型 ──
@@ -506,6 +868,7 @@ class RelationshipProfileSnapshotResponse(BaseModel):
     risk_summary: dict | None = None
     attachment_summary: dict | None = None
     suggested_focus: dict | None = None
+    behavior_summary: dict | None = None
     generated_from_event_at: datetime | None = None
     version: str
     created_at: datetime
@@ -560,6 +923,61 @@ class RelationshipTimelineResponse(BaseModel):
     events: list[RelationshipTimelineEventResponse] = Field(default_factory=list)
 
 
+class RelationshipTimelineArchiveRecordResponse(BaseModel):
+    content: str | None = None
+    mood_tags: list[str] = Field(default_factory=list)
+    sentiment_score: float | None = None
+    mood_score: int | None = None
+    interaction_freq: int | None = None
+    interaction_initiative: str | None = None
+    deep_conversation: bool | None = None
+    task_completed: bool | None = None
+    image: dict | None = None
+    voice: dict | None = None
+    archive_insight: dict | None = None
+    client_context_preview: dict | None = None
+
+
+class RelationshipTimelineArchiveReportResponse(BaseModel):
+    report_type: str
+    status: str
+    health_score: float | None = None
+    report_date: date
+    summary: str | None = None
+    recommendations: list[str] = Field(default_factory=list)
+    content: dict | None = None
+
+
+class RelationshipTimelineArchiveItemResponse(BaseModel):
+    id: uuid.UUID
+    item_type: str
+    occurred_at: datetime
+    local_date: date
+    title: str
+    summary: str
+    tags: list[str] = Field(default_factory=list)
+    visibility: str
+    locked_reason: str | None = None
+    has_raw_content: bool = False
+    has_image_original: bool = False
+    has_voice_original: bool = False
+    raw_retention_until: datetime | None = None
+    raw_deleted_at: datetime | None = None
+    download_available: bool = False
+    record: RelationshipTimelineArchiveRecordResponse | None = None
+    report: RelationshipTimelineArchiveReportResponse | None = None
+
+
+class RelationshipTimelineArchiveResponse(BaseModel):
+    scope: str
+    pair_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
+    item_count: int = 0
+    latest_item_at: datetime | None = None
+    next_before: str | None = None
+    items: list[RelationshipTimelineArchiveItemResponse] = Field(default_factory=list)
+
+
 class RelationshipTimelineMetricResponse(BaseModel):
     label: str
     value: str
@@ -596,20 +1014,41 @@ class MessageSimulationRequest(RequestModel):
     draft: str
 
 
+class DecisionFeedbackRequest(RequestModel):
+    feedback_type: str = Field(min_length=1, max_length=40)
+    note: str | None = Field(default=None, max_length=200)
+
+
 class MessageSimulationResponse(BaseModel):
+    event_id: uuid.UUID | None = None
     draft: str
     partner_view: str
     likely_impact: str
     risk_level: str
+    risk_level_label: str | None = None
     risk_reason: str
     safer_rewrite: str
     suggested_tone: str
     conversation_goal: str | None = None
     do_list: list[str] = Field(default_factory=list)
     avoid_list: list[str] = Field(default_factory=list)
+    algorithm_version: str | None = None
+    confidence: float | None = None
+    decision_trace: dict[str, Any] = Field(default_factory=dict)
+    focus_labels: list[str] = Field(default_factory=list)
+    risk_score: float | None = None
+    baseline_delta: float | None = None
+    fallback_reason: str | None = None
+    shadow_result: dict[str, Any] | None = None
+    feedback_status: str | None = None
+    baseline_match: str | None = None
+    deviation_score: float | None = None
+    deviation_reasons: list[str] = Field(default_factory=list)
+    reaction_shift: str | None = None
     evidence_summary: list[str] = Field(default_factory=list)
     limitation_note: str | None = None
     safety_handoff: str | None = None
+    crisis_support: CrisisSupportResponse | None = None
 
 
 class RepairProtocolStepResponse(BaseModel):
@@ -632,14 +1071,19 @@ class TheoryBasisResponse(BaseModel):
 
 class RepairProtocolResponse(BaseModel):
     protocol_type: str
+    protocol_type_label: str | None = None
     level: str
+    level_label: str | None = None
     title: str
     summary: str
     timing_hint: str | None = None
     active_plan_type: str | None = None
+    active_plan_type_label: str | None = None
     model_family: str | None = None
+    model_family_label: str | None = None
     clinical_disclaimer: str | None = None
     focus_tags: list[str] = Field(default_factory=list)
+    focus_tag_labels: list[str] = Field(default_factory=list)
     theory_basis: list[TheoryBasisResponse] = Field(default_factory=list)
     steps: list[RepairProtocolStepResponse] = Field(default_factory=list)
     do_not: list[str] = Field(default_factory=list)
@@ -1109,7 +1553,9 @@ class PlaybookHistoryResponse(BaseModel):
 
 class MethodologyResponse(BaseModel):
     system_name: str
+    system_name_label: str | None = None
     model_family: str
+    model_family_label: str | None = None
     measurement_model: list[str] = Field(default_factory=list)
     decision_model: list[str] = Field(default_factory=list)
     active_modules: list[str] = Field(default_factory=list)
@@ -1119,6 +1565,7 @@ class MethodologyResponse(BaseModel):
 
 
 class NarrativeAlignmentResponse(BaseModel):
+    event_id: uuid.UUID | None = None
     pair_id: uuid.UUID
     checkin_date: date
     user_a_label: str
@@ -1132,14 +1579,61 @@ class NarrativeAlignmentResponse(BaseModel):
     bridge_actions: list[str] = Field(default_factory=list)
     suggested_opening: str | None = None
     coach_note: str | None = None
+    algorithm_version: str | None = None
+    confidence: float | None = None
+    decision_trace: dict[str, Any] = Field(default_factory=dict)
+    focus_labels: list[str] = Field(default_factory=list)
+    risk_score: float | None = None
+    baseline_delta: float | None = None
+    fallback_reason: str | None = None
+    shadow_result: dict[str, Any] | None = None
+    feedback_status: str | None = None
+    reaction_shift: str | None = None
+    deviation_reasons: list[str] = Field(default_factory=list)
+    history_sufficiency: str | None = None
     current_risk_level: str | None = None
     active_plan_type: str | None = None
+    source: Literal["ai", "fallback"] = "ai"
+    is_fallback: bool = False
     generated_at: datetime
+
+
+class UserInteractionEventRequest(RequestModel):
+    pair_id: uuid.UUID | None = None
+    session_id: str | None = Field(default=None, max_length=80)
+    source: Literal["client", "server", "agent", "insights", "system"] = "client"
+    event_type: str = Field(min_length=1, max_length=80)
+    page: str | None = Field(default=None, max_length=80)
+    path: str | None = Field(default=None, max_length=255)
+    target_type: str | None = Field(default=None, max_length=50)
+    target_id: str | None = Field(default=None, max_length=80)
+    payload: dict | None = None
+
+
+class UserInteractionEventResponse(BaseModel):
+    event_id: uuid.UUID
+    accepted: bool = True
 
 
 class AgentSessionResponse(BaseModel):
     session_id: uuid.UUID
     has_extracted_checkin: bool
+    expires_at: datetime | None = None
+    reused: bool = False
+
+
+class AgentSessionListItemResponse(BaseModel):
+    session_id: uuid.UUID
+    pair_id: uuid.UUID | None = None
+    status: str
+    topic: str
+    last_message: str = ""
+    message_count: int = 0
+    has_extracted_checkin: bool = False
+    session_date: date
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime | None = None
 
 
 class AgentMessageResponse(BaseModel):
@@ -1149,15 +1643,97 @@ class AgentMessageResponse(BaseModel):
     payload: dict | None = None
 
 
+class AgentLabeledCodePayload(BaseModel):
+    code: str | None = None
+    label: str | None = None
+
+
+class VoiceEvidencePayload(RequestModel):
+    voice_url: str | None = None
+    transcript_text: str | None = None
+    duration_seconds: float | None = Field(default=None, ge=0)
+    source: Literal["realtime", "upload"]
+    voice_emotion: AgentLabeledCodePayload | None = None
+    content_emotion: dict[str, Any] | None = None
+    transcript_language: AgentLabeledCodePayload | None = None
+
+
+class AgentSceneContext(RequestModel):
+    source_label: str = Field(default="当前记录", max_length=100)
+    summary: str = Field(default="", max_length=3200)
+    intent: Literal["auto", "listen", "wording", "plan", "reflect"] = "auto"
+
+
 class AgentChatRequest(RequestModel):
-    content: str
+    content: str = ""
+    client_message_id: uuid.UUID | None = None
+    surface: Literal["chat", "checkin_assist"] = "checkin_assist"
+    voice_evidence: VoiceEvidencePayload | None = None
+    multi_agent: bool = False
+    scene_context: AgentSceneContext | None = None
+
+    @model_validator(mode="after")
+    def _validate_message_content(self):
+        content = str(self.content or "").strip()
+        transcript = str(
+            getattr(self.voice_evidence, "transcript_text", "") or ""
+        ).strip()
+        if content or transcript:
+            return self
+        raise ValueError("文字内容和语音转写至少填写一项")
+
+
+class AgentThoughtTraceResponse(BaseModel):
+    step_index: int
+    thought: str | None = None
+    tool_calls: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
+    duration_ms: float | None = None
 
 
 class AgentChatResponse(BaseModel):
     reply: str
     action: str
+    message_id: uuid.UUID | None = None
+    task_proposals: list[dict[str, Any]] = Field(default_factory=list)
+    trace: list[AgentThoughtTraceResponse] = []
+
+
+class AgentCheckupResponse(BaseModel):
+    """主动巡查 Agent 的产出：诊断报告 + 干预建议 + 采纳可执行的巡查动作。"""
+
+    report: str
+    health: int | None = Field(default=None, ge=0, le=100)
+    risk_level: str = "unknown"
+    risk_reason: str = ""
+    recommended_actions: list[str] = []
+    urgency: str = "monitor"
+    trace: list[AgentThoughtTraceResponse] = []
+    generated_at: datetime | None = None
 
 
 class AgentRealtimeTicketResponse(BaseModel):
     ticket: str
     expires_in: int
+
+
+class SwarmRoleStepResponse(BaseModel):
+    role: str
+    role_name: str
+    summary: str
+    status: str = "ok"
+    duration_ms: float | None = None
+
+
+class AgentSwarmResponse(BaseModel):
+    """多智能体协作产出：最终回复 + 每个角色的协作轨迹。"""
+
+    reply: str
+    action: str = "chat"
+    message_id: uuid.UUID | None = None
+    task_proposals: list[dict[str, Any]] = Field(default_factory=list)
+    swarm: list[SwarmRoleStepResponse] = []
+    trace: list[AgentThoughtTraceResponse] = []
+
+
+PairChangeRequestBundleResponse.model_rebuild()

@@ -1,4 +1,4 @@
-"""Seven-day relationship playbook builder."""
+"""基于关系的 7 天干预剧本生成模块"""
 
 import uuid
 from datetime import date
@@ -31,7 +31,7 @@ PLAYBOOK_TEMPLATES = {
                 "objective": "让交流回到真实而不是流程",
                 "action": "各自只说一句今天最真实的感受，不解释对错。",
                 "reduce_load": "只说“我今天最强的感受是……”。",
-                "deepen": "在感受后补一句“我最希望你怎么接住我”。",
+                "deepen": "在感受后补一句“我最希望你怎么回应我”。",
                 "stabilize": "如果有防御感，只说感受，不提要求。",
                 "success_signal": "出现至少一句不带指责的真感受。",
                 "checkin_prompt": "哪一句让你感觉更被看见？",
@@ -66,7 +66,7 @@ PLAYBOOK_TEMPLATES = {
                 "reduce_load": "如果今天难开口，就先发一句简短感谢。",
                 "deepen": "感谢之后补一句“这为什么对我重要”。",
                 "stabilize": "只说感谢，不夹带批评。",
-                "success_signal": "积极确认能被接住而不是被回避。",
+                "success_signal": "积极确认能被回应，而不是被回避。",
                 "checkin_prompt": "哪种确认最容易被你真正听进去？",
             },
             {
@@ -299,7 +299,7 @@ PLAYBOOK_TEMPLATES = {
             {
                 "title": "练习一个低压力表达",
                 "theme": "expression",
-                "objective": "把需求说得更容易被接住",
+                "objective": "把需求说得更容易听进去",
                 "action": "试着用一句低压力表达把今天的状态说出来。",
                 "reduce_load": "先用一句最短表达，不解释太多。",
                 "deepen": "说完后补一句你希望对方怎么回应。",

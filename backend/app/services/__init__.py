@@ -54,6 +54,10 @@ from app.services.playbook_runtime import (
     sync_active_playbook_runtime,
 )
 from app.services.relationship_playbook import build_relationship_playbook
+from app.services.interaction_events import (
+    build_interaction_payload,
+    record_user_interaction_event,
+)
 from app.services.task_adaptation import (
     adapt_daily_tasks,
     build_pair_task_adaptation,
@@ -91,6 +95,7 @@ __all__ = [
     "build_relationship_playbook",
     "build_task_adaptation_strategy",
     "build_privacy_status",
+    "build_interaction_payload",
     "build_feedback_preference_profile",
     "get_latest_privacy_benchmark_run",
     "build_safety_status",
@@ -113,6 +118,7 @@ __all__ = [
     "log_privacy_transcription",
     "privacy_audit_scope",
     "record_relationship_event",
+    "record_user_interaction_event",
     "refresh_profile_and_plan",
     "refresh_profile_snapshot",
     "run_privacy_text_benchmark",

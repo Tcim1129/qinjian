@@ -2,9 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# 系统依赖（使用官方源，兼容海外服务器）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用国内 apt 镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev postgresql-client && rm -rf /var/lib/apt/lists/*
+
+# 使用国内 pip 镜像源
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+RUN pip config set global.index-url ${PIP_INDEX_URL}
 
 # Python 依赖
 COPY requirements.txt .

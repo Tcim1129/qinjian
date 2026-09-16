@@ -1,10 +1,9 @@
-"""Relationship intelligence helpers.
+"""关系智能服务：基线指标、行为事件流与配置抓取。
 
-This module adds a lightweight event stream and profile-snapshot layer on top of
-the existing domain tables, so reports, tasks, and the agent can share the same
-derived understanding of a relationship instead of each re-deriving it ad hoc.
+该模块在现有业务表之上增加了一个轻量级的事件流和配置文件快照层，便于报告、任务和AI代理可以共享对一段关系的派生理解，而不是各自重新推导逻辑。
 """
 
+import hashlib
 import uuid
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
@@ -15,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import current_local_date
 from app.models import (
+    AgentChatMessage,
+    AgentChatSession,
     Checkin,
     CrisisAlert,
     InterventionPlan,
@@ -26,7 +27,18 @@ from app.models import (
     ReportStatus,
     TaskStatus,
     LongDistanceActivity,
+    User,
 )
+from app.services.privacy_sandbox import sanitize_event_payload
+from app.services.behavior_judgement import (
+    make_behavior_observation,
+    observation_from_payload,
+    summarize_behavior_profile,
+)
+from app.services.product_prefs import normalize_product_prefs
+
+
+RELATIONSHIP_EVENT_IDEMPOTENCY_KEY_MAX_LENGTH = 100
 
 
 def _utcnow() -> datetime:
@@ -45,6 +57,21 @@ def _require_uuid(value: uuid.UUID | None) -> uuid.UUID:
     if value is None:
         raise ValueError("expected normalized uuid")
     return value
+
+
+def normalize_relationship_event_idempotency_key(value: str | None) -> str | None:
+    """Keep deterministic event keys within the production VARCHAR(100) column."""
+
+    key = str(value or "").strip()
+    if not key:
+        return None
+    if len(key) <= RELATIONSHIP_EVENT_IDEMPOTENCY_KEY_MAX_LENGTH:
+        return key
+
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+    prefix_length = RELATIONSHIP_EVENT_IDEMPOTENCY_KEY_MAX_LENGTH - len(digest) - 1
+    prefix = key[:prefix_length].rstrip(":")
+    return f"{prefix}:{digest}"
 
 
 def _avg(values: Sequence[int | float]) -> float | None:
@@ -74,6 +101,63 @@ def _date_window(snapshot_date: date, window_days: int) -> tuple[date, date]:
     return start, snapshot_date
 
 
+def _checkin_observation(checkin: Checkin) -> dict[str, object]:
+    context = checkin.client_context or {}
+    return make_behavior_observation(
+        source="checkin",
+        event_type="checkin.created",
+        text=checkin.content,
+        occurred_at=checkin.created_at,
+        risk_level=context.get("risk_level"),
+        sentiment_hint=context.get("sentiment_hint") or checkin.sentiment_score,
+        metadata={
+            "checkin_id": str(checkin.id),
+            "pair_id": str(checkin.pair_id) if checkin.pair_id else None,
+        },
+    )
+
+
+def _message_observation(message: AgentChatMessage) -> dict[str, object]:
+    return make_behavior_observation(
+        source="agent_chat",
+        event_type="agent.chat.user_message",
+        text=message.content,
+        occurred_at=message.created_at,
+        metadata={"session_id": str(message.session_id)},
+    )
+
+
+def _deviation_from_event(event: RelationshipEvent) -> dict[str, object]:
+    payload = event.payload or {}
+    return {
+        "event_type": event.event_type,
+        "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
+        "baseline_match": payload.get("baseline_match"),
+        "baseline_match_label": payload.get("baseline_match_label"),
+        "reaction_shift": payload.get("reaction_shift"),
+        "deviation_reasons": list(payload.get("deviation_reasons") or [])[:3],
+        "summary": payload.get("text_preview")
+        or payload.get("draft")
+        or payload.get("summary")
+        or payload.get("shared_story"),
+    }
+
+
+def _behavior_summary_from_observations(
+    observations: list[dict[str, object]],
+    *,
+    explicit_preferences: dict[str, object] | None = None,
+    recent_deviations: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    summary = summarize_behavior_profile(
+        observations,
+        explicit_preferences=explicit_preferences,
+    )
+    if recent_deviations:
+        summary["recent_deviations"] = recent_deviations[:5]
+    return summary
+
+
 async def record_relationship_event(
     db: AsyncSession,
     *,
@@ -92,6 +176,9 @@ async def record_relationship_event(
     normalized_pair_id = _normalize_uuid(pair_id)
     normalized_user_id = _normalize_uuid(user_id)
     normalized_entity_id = str(entity_id) if entity_id is not None else None
+    normalized_idempotency_key = normalize_relationship_event_idempotency_key(
+        idempotency_key
+    )
 
     if (
         normalized_pair_id is None
@@ -100,10 +187,10 @@ async def record_relationship_event(
     ):
         raise ValueError("record_relationship_event requires pair_id or user_id")
 
-    if idempotency_key:
+    if normalized_idempotency_key:
         result = await db.execute(
             select(RelationshipEvent).where(
-                RelationshipEvent.idempotency_key == idempotency_key
+                RelationshipEvent.idempotency_key == normalized_idempotency_key
             )
         )
         existing = result.scalar_one_or_none()
@@ -117,8 +204,8 @@ async def record_relationship_event(
         entity_type=entity_type,
         entity_id=normalized_entity_id,
         source=source,
-        payload=payload,
-        idempotency_key=idempotency_key,
+        payload=sanitize_event_payload(payload),
+        idempotency_key=normalized_idempotency_key,
         occurred_at=occurred_at or _utcnow(),
     )
     db.add(event)
@@ -152,6 +239,7 @@ async def refresh_profile_snapshot(
             risk_summary,
             attachment_summary,
             suggested_focus,
+            behavior_summary,
         ) = await _build_pair_profile(
             db,
             pair_id=normalized_pair_id,
@@ -167,6 +255,7 @@ async def refresh_profile_snapshot(
             risk_summary,
             attachment_summary,
             suggested_focus,
+            behavior_summary,
         ) = await _build_user_profile(
             db,
             user_id=_require_uuid(normalized_user_id),
@@ -186,14 +275,20 @@ async def refresh_profile_snapshot(
             RelationshipProfileSnapshot.snapshot_date == resolved_snapshot_date,
             RelationshipProfileSnapshot.version == version,
         )
+        .order_by(
+            RelationshipProfileSnapshot.created_at.desc(),
+            RelationshipProfileSnapshot.id.desc(),
+        )
+        .limit(1)
     )
-    snapshot = result.scalar_one_or_none()
+    snapshot = result.scalars().first()
 
     if snapshot:
         snapshot.metrics_json = metrics
         snapshot.risk_summary = risk_summary
         snapshot.attachment_summary = attachment_summary
         snapshot.suggested_focus = {"items": suggested_focus}
+        snapshot.behavior_summary = behavior_summary
         snapshot.generated_from_event_at = latest_event_at
     else:
         snapshot = RelationshipProfileSnapshot(
@@ -205,6 +300,7 @@ async def refresh_profile_snapshot(
             risk_summary=risk_summary,
             attachment_summary=attachment_summary,
             suggested_focus={"items": suggested_focus},
+            behavior_summary=behavior_summary,
             generated_from_event_at=latest_event_at,
             version=version,
         )
@@ -371,7 +467,7 @@ async def _build_pair_profile(
     start_date: date,
     end_date: date,
     window_days: int,
-) -> tuple[dict, dict, dict, list[str]]:
+) -> tuple[dict, dict, dict, list[str], dict]:
     pair = await db.get(Pair, pair_id)
     if not pair:
         raise ValueError("pair not found for profile snapshot")
@@ -452,6 +548,23 @@ async def _build_pair_profile(
         .order_by(RelationshipEvent.occurred_at.asc())
     )
     alignments = alignment_result.scalars().all()
+
+    behavior_observations = [_checkin_observation(checkin) for checkin in checkins]
+    for event in message_simulations:
+        observation = observation_from_payload(
+            source="relationship_event",
+            event_type=event.event_type,
+            payload=event.payload or {},
+            occurred_at=event.occurred_at,
+        )
+        if observation:
+            behavior_observations.append(observation)
+
+    recent_deviations = [
+        _deviation_from_event(event)
+        for event in [*reversed(message_simulations), *reversed(alignments)]
+        if (event.payload or {}).get("baseline_match")
+    ][:5]
 
     checkins_a = [c for c in checkins if str(c.user_id) == str(pair.user_a_id)]
     checkins_b = [c for c in checkins if str(c.user_id) == str(pair.user_b_id)]
@@ -613,7 +726,12 @@ async def _build_pair_profile(
     if pair.is_long_distance and metrics["long_distance_activity_rate"] < 0.2:
         suggested_focus.append("distance_compensation")
 
-    return metrics, risk_summary, attachment_summary, suggested_focus[:3]
+    behavior_summary = _behavior_summary_from_observations(
+        behavior_observations,
+        recent_deviations=recent_deviations,
+    )
+
+    return metrics, risk_summary, attachment_summary, suggested_focus[:3], behavior_summary
 
 
 async def _build_user_profile(
@@ -623,7 +741,7 @@ async def _build_user_profile(
     start_date: date,
     end_date: date,
     window_days: int,
-) -> tuple[dict, dict, dict, list[str]]:
+) -> tuple[dict, dict, dict, list[str], dict]:
     checkin_result = await db.execute(
         select(Checkin)
         .where(
@@ -649,6 +767,35 @@ async def _build_user_profile(
         .order_by(Report.report_date.asc())
     )
     reports = report_result.scalars().all()
+
+    message_result = await db.execute(
+        select(AgentChatMessage)
+        .join(AgentChatSession, AgentChatSession.id == AgentChatMessage.session_id)
+        .where(
+            AgentChatSession.user_id == user_id,
+            AgentChatMessage.role == "user",
+            func.date(AgentChatMessage.created_at) >= start_date,
+            func.date(AgentChatMessage.created_at) <= end_date,
+        )
+        .order_by(AgentChatMessage.created_at.asc())
+    )
+    user_messages = message_result.scalars().all()
+
+    event_result = await db.execute(
+        select(RelationshipEvent)
+        .where(
+            RelationshipEvent.user_id == user_id,
+            func.date(RelationshipEvent.occurred_at) >= start_date,
+            func.date(RelationshipEvent.occurred_at) <= end_date,
+            RelationshipEvent.event_type.in_([
+                "message.simulated",
+                "alignment.generated",
+                "attachment.analyzed",
+            ]),
+        )
+        .order_by(RelationshipEvent.occurred_at.asc())
+    )
+    behaviour_events = event_result.scalars().all()
 
     moods = [
         checkin.mood_score for checkin in checkins if checkin.mood_score is not None
@@ -690,11 +837,36 @@ async def _build_user_profile(
         "crisis_events_window": 0,
         "trend": trend,
     }
+    latest_attachment_event = next(
+        (
+            event
+            for event in reversed(behaviour_events)
+            if event.event_type == "attachment.analyzed"
+        ),
+        None,
+    )
+    attachment_payload = (latest_attachment_event.payload or {}) if latest_attachment_event else {}
+    latest_attachment = attachment_payload.get("my_attachment") or {}
+
     attachment_summary = {
         "attachment_a": "unknown",
         "attachment_b": "unknown",
         "is_long_distance": False,
     }
+    if latest_attachment:
+        attachment_summary.update(
+            {
+                "attachment_a": str(latest_attachment.get("type") or "unknown"),
+                "analysis": latest_attachment.get("analysis"),
+                "growth_suggestion": latest_attachment.get("growth_suggestion"),
+                "confidence": latest_attachment.get("confidence"),
+                "updated_at": (
+                    latest_attachment_event.occurred_at.isoformat()
+                    if latest_attachment_event and latest_attachment_event.occurred_at
+                    else attachment_payload.get("analyzed_at")
+                ),
+            }
+        )
 
     suggested_focus: list[str] = []
     if mood_avg is not None and mood_avg < 4.5:
@@ -702,4 +874,40 @@ async def _build_user_profile(
     if metrics["deep_conversation_rate"] < 0.3:
         suggested_focus.append("practice_honest_reflection")
 
-    return metrics, risk_summary, attachment_summary, suggested_focus[:3]
+    user = await db.get(User, user_id)
+    prefs = normalize_product_prefs(getattr(user, "product_prefs", None))
+    explicit_preferences = {
+        "preferred_language": prefs.get("preferred_language", "zh"),
+        "tone_preference": prefs.get("tone_preference", "gentle"),
+        "response_length": prefs.get("response_length", "medium"),
+        "spiritual_support_enabled": bool(
+            prefs.get("spiritual_support_enabled", False)
+        ),
+        "living_region": str(prefs.get("living_region") or ""),
+    }
+
+    behavior_observations = [_checkin_observation(checkin) for checkin in checkins]
+    behavior_observations.extend(_message_observation(message) for message in user_messages)
+    for event in behaviour_events:
+        observation = observation_from_payload(
+            source="relationship_event",
+            event_type=event.event_type,
+            payload=event.payload or {},
+            occurred_at=event.occurred_at,
+        )
+        if observation:
+            behavior_observations.append(observation)
+
+    recent_deviations = [
+        _deviation_from_event(event)
+        for event in reversed(behaviour_events)
+        if (event.payload or {}).get("baseline_match")
+    ][:5]
+
+    behavior_summary = _behavior_summary_from_observations(
+        behavior_observations,
+        explicit_preferences=explicit_preferences,
+        recent_deviations=recent_deviations,
+    )
+
+    return metrics, risk_summary, attachment_summary, suggested_focus[:3], behavior_summary

@@ -1,5 +1,6 @@
 """危机预警接口：关系危机分级预警 + 差异化干预方案 + CrisisAlert CRUD"""
 
+import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, desc
@@ -29,13 +30,26 @@ from app.schemas import (
     InterventionSchema,
     RepairProtocolResponse,
 )
-from app.services.relationship_intelligence import (
-    record_relationship_event,
-    refresh_profile_snapshot,
-)
 from app.services.repair_protocol import build_repair_protocol
+from app.services.relationship_intelligence import refresh_profile_snapshot
+from app.services.safety_summary import build_safety_status
+from app.services.repair_protocol import build_solo_repair_protocol
 
 router = APIRouter(prefix="/crisis", tags=["危机预警"])
+
+
+def _as_uuid(
+    value: uuid.UUID | str,
+    *,
+    detail: str,
+    status_code: int,
+) -> uuid.UUID:
+    if isinstance(value, uuid.UUID):
+        return value
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 # ── 危机状态 ──
@@ -43,18 +57,18 @@ router = APIRouter(prefix="/crisis", tags=["危机预警"])
 
 @router.get("/status/{pair_id}", response_model=CrisisStatusResponse)
 async def get_crisis_status(
-    pair_id: str,
+    pair_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取当前危机等级 — 优先从 CrisisAlert 表读取，回退到 Report.content"""
-    await validate_pair_access(pair_id, user, db, require_active=True)
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     # 优先查 CrisisAlert 表（active 状态）
     result = await db.execute(
         select(CrisisAlert)
         .where(
-            CrisisAlert.pair_id == pair_id,
+            CrisisAlert.pair_id == pair.id,
             CrisisAlert.status.in_(
                 [CrisisAlertStatus.ACTIVE.value, CrisisAlertStatus.ACKNOWLEDGED.value]
             ),
@@ -85,7 +99,7 @@ async def get_crisis_status(
     # 回退：从最近报告的 content 中提取（兼容旧数据）
     result = await db.execute(
         select(Report)
-        .where(Report.pair_id == pair_id, Report.content.isnot(None))
+        .where(Report.pair_id == pair.id, Report.content.isnot(None))
         .order_by(desc(Report.created_at))
         .limit(1)
     )
@@ -116,20 +130,20 @@ async def get_crisis_status(
 
 @router.get("/history/{pair_id}", response_model=CrisisHistoryResponse)
 async def get_crisis_history(
-    pair_id: str,
+    pair_id: uuid.UUID,
     limit: int = 30,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取危机等级历史趋势 — 合并 CrisisAlert 记录 + Report.content"""
-    await validate_pair_access(pair_id, user, db, require_active=True)
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     history = []
 
     # 从 CrisisAlert 表获取历史记录
     result = await db.execute(
         select(CrisisAlert)
-        .where(CrisisAlert.pair_id == pair_id)
+        .where(CrisisAlert.pair_id == pair.id)
         .order_by(desc(CrisisAlert.created_at))
         .limit(limit)
     )
@@ -156,7 +170,7 @@ async def get_crisis_history(
         result = await db.execute(
             select(Report)
             .where(
-                Report.pair_id == pair_id,
+                Report.pair_id == pair.id,
                 Report.content.isnot(None),
                 Report.type.in_([ReportType.DAILY, ReportType.WEEKLY]),
             )
@@ -187,7 +201,7 @@ async def get_crisis_history(
     history.sort(key=lambda x: x["date"], reverse=True)
     history = history[:limit]
 
-    return CrisisHistoryResponse(pair_id=pair_id, history=history)
+    return CrisisHistoryResponse(pair_id=str(pair.id), history=history)
 
 
 # ── 预警列表 ──
@@ -195,16 +209,16 @@ async def get_crisis_history(
 
 @router.get("/alerts/{pair_id}", response_model=list[CrisisAlertResponse])
 async def get_crisis_alerts(
-    pair_id: str,
+    pair_id: uuid.UUID,
     status: str | None = None,
     limit: int = 20,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取预警记录列表（可按状态筛选）"""
-    await validate_pair_access(pair_id, user, db, require_active=True)
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
-    query = select(CrisisAlert).where(CrisisAlert.pair_id == pair_id)
+    query = select(CrisisAlert).where(CrisisAlert.pair_id == pair.id)
     if status:
         try:
             status_enum = CrisisAlertStatus(status)
@@ -217,16 +231,57 @@ async def get_crisis_alerts(
     return result.scalars().all()
 
 
-@router.get("/protocol/{pair_id}", response_model=RepairProtocolResponse)
-async def get_repair_protocol(
-    pair_id: str,
+@router.get("/protocol", response_model=RepairProtocolResponse)
+async def get_solo_repair_protocol(
+    mode: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取当前关系状态下的冲突修复协议。"""
+    """获取单人模式下的缓和准备方案。"""
+    if mode != "solo":
+        raise HTTPException(status_code=400, detail="缺少配对ID")
+
+    snapshot = await refresh_profile_snapshot(db, user_id=user.id, window_days=7)
+    await db.commit()
+
+    plan_result = await db.execute(
+        select(InterventionPlan)
+        .where(
+            InterventionPlan.pair_id.is_(None),
+            InterventionPlan.user_id == user.id,
+            InterventionPlan.status == "active",
+        )
+        .order_by(InterventionPlan.created_at.desc())
+        .limit(1)
+    )
+    active_plan = plan_result.scalar_one_or_none()
+
+    safety_status = await build_safety_status(
+        db,
+        pair_id=None,
+        user_id=user.id,
+    )
+    crisis_level = safety_status.get("risk_level") or "none"
+
+    protocol = build_solo_repair_protocol(
+        crisis_level=crisis_level,
+        active_plan=active_plan,
+        snapshot=snapshot,
+    )
+
+    return RepairProtocolResponse(**protocol)
+
+
+@router.get("/protocol/{pair_id}", response_model=RepairProtocolResponse)
+async def get_repair_protocol(
+    pair_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前关系状态下的冲突修复方案。"""
     pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
-    status_payload = await get_crisis_status(pair_id=pair_id, user=user, db=db)
+    status_payload = await get_crisis_status(pair_id=pair.id, user=user, db=db)
     crisis_level = status_payload.crisis_level or "none"
 
     snapshot_result = await db.execute(
@@ -243,8 +298,6 @@ async def get_repair_protocol(
         .limit(1)
     )
     snapshot = snapshot_result.scalar_one_or_none()
-    if not snapshot:
-        snapshot = await refresh_profile_snapshot(db, pair_id=pair.id, window_days=7)
 
     plan_result = await db.execute(
         select(InterventionPlan)
@@ -265,18 +318,6 @@ async def get_repair_protocol(
         snapshot=snapshot,
     )
 
-    await record_relationship_event(
-        db,
-        event_type="repair_protocol.requested",
-        pair_id=pair.id,
-        user_id=user.id,
-        entity_type="repair_protocol",
-        payload={
-            "level": crisis_level,
-            "protocol_type": protocol.get("protocol_type"),
-        },
-    )
-
     return RepairProtocolResponse(**protocol)
 
 
@@ -285,7 +326,7 @@ async def get_repair_protocol(
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=CrisisAlertResponse)
 async def acknowledge_alert(
-    alert_id: str,
+    alert_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -295,7 +336,7 @@ async def acknowledge_alert(
         raise HTTPException(status_code=404, detail="预警记录不存在")
 
     # 验证权限
-    await validate_pair_access(str(alert.pair_id), user, db, require_active=True)
+    await validate_pair_access(alert.pair_id, user, db, require_active=True)
 
     if alert.status not in (CrisisAlertStatus.ACTIVE,):
         raise HTTPException(status_code=400, detail="该预警已处理")
@@ -310,7 +351,7 @@ async def acknowledge_alert(
 
 @router.post("/alerts/{alert_id}/resolve", response_model=CrisisAlertResponse)
 async def resolve_alert(
-    alert_id: str,
+    alert_id: uuid.UUID,
     req: CrisisResolveRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -320,7 +361,7 @@ async def resolve_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="预警记录不存在")
 
-    await validate_pair_access(str(alert.pair_id), user, db, require_active=True)
+    await validate_pair_access(alert.pair_id, user, db, require_active=True)
 
     if alert.status == CrisisAlertStatus.RESOLVED:
         raise HTTPException(status_code=400, detail="该预警已解决")
@@ -335,7 +376,7 @@ async def resolve_alert(
 
 @router.post("/alerts/{alert_id}/escalate", response_model=CrisisAlertResponse)
 async def escalate_alert(
-    alert_id: str,
+    alert_id: uuid.UUID,
     req: CrisisEscalateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -345,7 +386,7 @@ async def escalate_alert(
     if not alert:
         raise HTTPException(status_code=404, detail="预警记录不存在")
 
-    await validate_pair_access(str(alert.pair_id), user, db, require_active=True)
+    await validate_pair_access(alert.pair_id, user, db, require_active=True)
 
     alert.status = CrisisAlertStatus.ESCALATED
     alert.resolve_note = (

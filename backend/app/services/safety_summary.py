@@ -16,6 +16,8 @@ from app.models import (
     Report,
     ReportStatus,
 )
+from app.services.display_labels import plan_type_label, risk_level_label, translate_inline_codes
+from app.services.guidance_policy import build_crisis_support
 
 RISK_ORDER = {
     "none": 0,
@@ -141,10 +143,10 @@ def _build_evidence_summary(
         evidence.append(f"风险趋势当前显示为“{trend}”，系统会用它来决定是保持、减压还是转介。")
 
     if active_plan:
-        goal = (active_plan.goal_json or {}).get("primary_goal") or active_plan.plan_type
+        goal = (active_plan.goal_json or {}).get("primary_goal") or plan_type_label(active_plan.plan_type)
         evidence.append(f"当前仍有一条激活中的干预计划，主要目标是：{goal}。")
 
-    return evidence[:4]
+    return [translate_inline_codes(item) for item in evidence[:4]]
 
 
 def _build_why_now(
@@ -172,7 +174,7 @@ def _build_why_now(
         return "当前仍有未解除的风险提醒，所以所有建议都会附带边界说明。"
     if active_plan:
         return (
-            f"系统仍在执行“{active_plan.plan_type}”这一阶段的计划，"
+            f"系统仍在执行“{plan_type_label(active_plan.plan_type)}”这一阶段的计划，"
             "所以会优先给与当前策略一致的下一步动作。"
         )
     if trend:
@@ -193,11 +195,11 @@ def _build_recommended_action(
     if risk_level == "severe":
         return "先停止升级性沟通，保证安全，再联系可信任的人或专业支持。"
     if risk_level == "moderate":
-        return "先按修复协议降温，避免继续争辩，把目标放在重新建立可沟通窗口。"
+        return "先按修复方案降温，避免继续争辩，把目标放在重新建立可沟通窗口。"
     if active_plan:
         goal = (active_plan.goal_json or {}).get("primary_goal")
         if goal:
-            return f"继续沿当前计划推进，先完成与“{goal}”最相关的一个小动作。"
+            return translate_inline_codes(f"继续沿当前计划推进，先完成与“{goal}”最相关的一个小动作。")
     if latest_report and latest_report.content:
         suggestion = (
             latest_report.content.get("suggestion")
@@ -359,9 +361,14 @@ async def build_safety_status(
         active_plan=active_plan,
         latest_report=latest_report,
     )
+    crisis_support = build_crisis_support(
+        scope_type="pair" if scope_is_pair else "solo",
+        risk_level=risk_level,
+    )
 
     return {
         "risk_level": risk_level,
+        "risk_level_label": risk_level_label(risk_level),
         "why_now": _build_why_now(
             scope_is_pair=scope_is_pair,
             risk_level=risk_level,
@@ -381,5 +388,6 @@ async def build_safety_status(
             scope_is_pair=scope_is_pair,
             risk_level=risk_level,
         ),
+        "crisis_support": crisis_support,
         "generated_at": datetime.utcnow().isoformat(),
     }

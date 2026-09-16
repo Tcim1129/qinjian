@@ -19,6 +19,7 @@ def test_summarize_feedback_map_aggregates_scores():
         "feedback_count": 2,
         "usefulness_avg": 3.5,
         "friction_avg": 2.5,
+        "relationship_shift_avg": None,
     }
 
 

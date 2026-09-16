@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>亲健 · 样例演示</title>
+    <link rel="icon" type="image/jpeg" href="/qinjian-logo.jpg?v=20260418" />
+  </head>
+  <body>
+    <script>
+      const params = new URLSearchParams(window.location.search)
+      const route = params.get('route') || '/relationship-agent'
+      const safeRoute = route.startsWith('/') && !route.startsWith('//') ? route : '/'
+
+      window.sessionStorage.setItem('qj_token', 'demo-mode')
+      window.localStorage.setItem('qj_current_pair', '22222222-2222-4222-8222-222222222222')
+      window.location.replace(safeRoute)
+    </script>
+  </body>
+</html>

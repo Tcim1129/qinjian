@@ -1,5 +1,7 @@
 """Shared helpers for relationship insight routes."""
 
+import uuid
+
 from fastapi import HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,35 +37,49 @@ async def resolve_scope(
     return pair_id, None
 
 
+def _scope_uuid(value: str | uuid.UUID | None) -> uuid.UUID | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
+
+
 def profile_scope_query(pair_id: str | None, user_id: str | None):
+    pair_uuid = _scope_uuid(pair_id)
+    user_uuid = _scope_uuid(user_id)
     if pair_id:
         return [
-            RelationshipProfileSnapshot.pair_id == pair_id,
+            RelationshipProfileSnapshot.pair_id == pair_uuid,
             RelationshipProfileSnapshot.user_id.is_(None),
         ]
     return [
-        RelationshipProfileSnapshot.user_id == user_id,
+        RelationshipProfileSnapshot.user_id == user_uuid,
         RelationshipProfileSnapshot.pair_id.is_(None),
     ]
 
 
 def plan_scope_query(pair_id: str | None, user_id: str | None):
+    pair_uuid = _scope_uuid(pair_id)
+    user_uuid = _scope_uuid(user_id)
     if pair_id:
         return [
-            InterventionPlan.pair_id == pair_id,
+            InterventionPlan.pair_id == pair_uuid,
             InterventionPlan.user_id.is_(None),
         ]
     return [
-        InterventionPlan.user_id == user_id,
+        InterventionPlan.user_id == user_uuid,
         InterventionPlan.pair_id.is_(None),
     ]
 
 
 def event_scope_query(pair_id: str | None, user_id: str | None):
+    pair_uuid = _scope_uuid(pair_id)
+    user_uuid = _scope_uuid(user_id)
     if pair_id:
-        return [RelationshipEvent.pair_id == pair_id]
+        return [RelationshipEvent.pair_id == pair_uuid]
     return [
-        RelationshipEvent.user_id == user_id,
+        RelationshipEvent.user_id == user_uuid,
         RelationshipEvent.pair_id.is_(None),
     ]
 
@@ -91,8 +107,12 @@ def repair_protocol_type_for_level(level: str) -> str:
 
 
 def timeline_category_for_event(event_type: str) -> str:
+    if event_type.startswith("pair."):
+        return "action"
     if event_type.startswith("client."):
         return "client"
+    if event_type.startswith("privacy."):
+        return "privacy"
     if event_type.startswith("checkin."):
         return "checkin"
     if event_type.startswith("report."):
@@ -117,6 +137,7 @@ def timeline_category_for_event(event_type: str) -> str:
 def timeline_category_label(category: str) -> str:
     return {
         "client": "端侧",
+        "privacy": "隐私",
         "checkin": "记录",
         "report": "洞察",
         "risk": "风险",
@@ -130,6 +151,10 @@ def timeline_category_label(category: str) -> str:
 
 
 def timeline_tone_for_event(event_type: str, payload: dict) -> str:
+    if event_type in {"pair.join_approved", "pair.type_change_approved"}:
+        return "progress"
+    if event_type in {"pair.join_requested", "pair.type_change_requested"}:
+        return "movement"
     if event_type in {"crisis.raised", "crisis.updated"}:
         return "warning"
     if event_type in {"client.risk.flagged", "safety.crisis_gate_opened"}:
@@ -160,14 +185,34 @@ def timeline_tone_label(tone: str) -> str:
 
 def timeline_event_label(event_type: str) -> str:
     labels = {
+        "pair.join_requested": "加入请求待确认",
+        "pair.join_approved": "关系已确认建立",
+        "pair.join_rejected": "加入请求未被确认",
+        "pair.type_change_requested": "关系类型切换待确认",
+        "pair.type_change_approved": "关系类型已切换",
+        "pair.type_change_rejected": "关系类型切换未被确认",
+        "pair.request_cancelled": "关系请求已撤回",
         "client.precheck.completed": "端侧预检已完成",
         "client.risk.flagged": "端侧发现了风险信号",
+        "privacy.ai.chat.logged": "记录了一次智能文本调用",
+        "privacy.ai.transcription.logged": "记录了一次语音转写调用",
+        "privacy.upload.created": "保存了一份私有上传文件",
+        "privacy.upload.access_denied": "拦截了一次超出范围的文件访问",
+        "privacy.status.viewed": "查看了隐私保护状态",
+        "privacy.delete.requested": "发起了删除请求",
+        "privacy.delete.cancelled": "撤回了删除请求",
+        "privacy.delete.executed": "执行了隐私删除流程",
+        "privacy.delete.manual_review": "删除请求进入人工复核",
+        "privacy.delete.rejected": "删除请求被驳回",
+        "privacy.retention.purged": "执行了一次隐私保留清扫",
+        "privacy.benchmark.ran": "完成了一次文本隐私代理评测",
         "checkin.created": "完成了一次记录",
         "checkin.local_saved": "记录先保存在本地",
         "checkin.synced": "本地记录已同步到云端",
         "checkin.analyzed": "记录分析已更新",
         "report.completed": "新简报生成完成",
         "safety.crisis_gate_opened": "安全边界已被触发",
+        "safety.status_viewed": "查看安全状态",
         "crisis.raised": "风险信号被抬升",
         "crisis.updated": "风险状态已刷新",
         "crisis.resolved": "风险信号已回落",
@@ -177,6 +222,9 @@ def timeline_event_label(event_type: str) -> str:
         "playbook.transitioned": "七天剧本切换分支",
         "message.simulated": "聊天前预演已完成",
         "alignment.generated": "双视角对齐已生成",
+        "message.feedback_submitted": "消息判断反馈已提交",
+        "alignment.feedback_submitted": "双视角反馈已提交",
+        "decision.feedback_submitted": "判断反馈已提交",
         "plan.evaluation_snapshot": "干预评估快照已更新",
     }
     if event_type in labels:
@@ -185,7 +233,7 @@ def timeline_event_label(event_type: str) -> str:
         return "一个节点已完成"
     if event_type.endswith(".generated"):
         return "系统生成了新的输出"
-    return event_type.replace(".", " / ")
+    return event_type.replace(".", " / ").replace("_", " ")
 
 
 def format_timeline_summary(event: RelationshipEvent) -> tuple[str, str | None]:
@@ -202,10 +250,76 @@ def format_timeline_summary(event: RelationshipEvent) -> tuple[str, str | None]:
             detail = f"{detail}，标签：{'，'.join(str(item) for item in tags[:3])}"
         return summary, detail
 
+    if event_type == "pair.join_requested":
+        requested_type = payload.get("requested_type_label") or "待确认关系"
+        actor_name = payload.get("actor_nickname") or "对方"
+        return (
+            f"{actor_name} 提交了加入请求",
+            f"希望按“{requested_type}”建立，等待另一方确认",
+        )
+
+    if event_type == "pair.join_approved":
+        requested_type = payload.get("requested_type_label") or "当前关系"
+        actor_name = payload.get("actor_nickname") or "对方"
+        return (
+            f"{actor_name} 确认了这次加入请求",
+            f"这段关系现在按“{requested_type}”生效",
+        )
+
+    if event_type == "pair.join_rejected":
+        actor_name = payload.get("actor_nickname") or "对方"
+        return f"{actor_name} 暂未确认这次加入请求", "这次加入未生效，可以稍后重新发起"
+
+    if event_type == "pair.type_change_requested":
+        requested_type = payload.get("requested_type_label") or "新关系类型"
+        actor_name = payload.get("actor_nickname") or "对方"
+        previous_type = payload.get("previous_type_label")
+        detail = f"希望切换成“{requested_type}”"
+        if previous_type:
+            detail = f"从“{previous_type}”切到“{requested_type}”"
+        return f"{actor_name} 发起了关系类型切换", detail
+
+    if event_type == "pair.type_change_approved":
+        actor_name = payload.get("actor_nickname") or "对方"
+        requested_type = payload.get("requested_type_label") or "新关系类型"
+        return f"{actor_name} 确认了关系类型切换", f"系统之后会按“{requested_type}”处理这段关系"
+
+    if event_type == "pair.type_change_rejected":
+        actor_name = payload.get("actor_nickname") or "对方"
+        return f"{actor_name} 暂未确认这次关系类型切换", "系统仍按原关系类型处理"
+
+    if event_type == "pair.request_cancelled":
+        actor_name = payload.get("actor_nickname") or "对方"
+        kind_label = payload.get("request_kind_label") or "关系请求"
+        return f"{actor_name} 撤回了这次{kind_label}", "这条待确认请求已经结束"
+
     if event_type == "client.risk.flagged":
         hits = payload.get("risk_hits") or []
         summary = f"端侧捕捉到 {payload.get('risk_level') or 'watch'} 风险信号"
         return summary, f"命中关键词：{'，'.join(str(item) for item in hits[:4])}" if hits else None
+
+    if event_type == "privacy.ai.chat.logged":
+        status = str(payload.get("status") or "").strip().lower()
+        if status in {"error", "failed"}:
+            error_code = payload.get("error_code")
+            return (
+                "记录了一次失败的智能文本调用",
+                f"错误类型：{error_code}" if error_code else None,
+            )
+        return "记录了一次智能文本调用", None
+
+    if event_type == "privacy.ai.transcription.logged":
+        status = str(payload.get("status") or "").strip().lower()
+        detail_parts: list[str] = []
+        audio_info = payload.get("audio_info") or {}
+        if audio_info.get("language_label"):
+            detail_parts.append(f"语言：{audio_info.get('language_label')}")
+        if payload.get("input_summary_redacted"):
+            detail_parts.append(f"文件：{payload.get('input_summary_redacted')}")
+        if status in {"error", "failed"} and payload.get("error_code"):
+            detail_parts.insert(0, f"错误类型：{payload.get('error_code')}")
+            return "记录了一次失败的语音转写调用", "，".join(detail_parts) if detail_parts else None
+        return "记录了一次语音转写调用", "，".join(detail_parts) if detail_parts else None
 
     if event_type == "checkin.created":
         mode = "个人" if payload.get("mode") == "solo" else "关系"
@@ -223,11 +337,11 @@ def format_timeline_summary(event: RelationshipEvent) -> tuple[str, str | None]:
 
     if event_type == "checkin.local_saved":
         policy = payload.get("upload_policy") or "full"
-        return "这条记录先留在了本地", f"隐私模式：{payload.get('privacy_mode') or 'local_first'} · 上传策略：{policy}"
+        return "历史本地记录已保留", f"上传策略：{policy}"
 
     if event_type == "checkin.synced":
         policy = payload.get("upload_policy") or "full"
-        return "本地记录已同步进入系统", f"上传策略：{policy}"
+        return "历史记录已进入系统", f"上传策略：{policy}"
 
     if event_type == "safety.crisis_gate_opened":
         hits = payload.get("risk_hits") or []
@@ -286,18 +400,50 @@ def format_timeline_summary(event: RelationshipEvent) -> tuple[str, str | None]:
     if event_type == "message.simulated":
         risk_level = payload.get("risk_level")
         summary = "系统完成了一次发言预演"
-        return summary, f"预演风险等级：{risk_level}" if risk_level else None
+        detail_parts = []
+        if risk_level:
+            detail_parts.append(f"预演风险等级：{risk_level}")
+        if payload.get("baseline_match_label"):
+            detail_parts.append(f"基线判断：{payload.get('baseline_match_label')}")
+        if payload.get("algorithm_version"):
+            detail_parts.append(f"版本：{payload.get('algorithm_version')}")
+        if payload.get("confidence") is not None:
+            detail_parts.append(f"置信度 {payload.get('confidence')}")
+        return summary, "，".join(detail_parts) if detail_parts else None
 
     if event_type == "alignment.generated":
         score = payload.get("alignment_score")
         summary = "系统整理出了一版双视角对齐"
-        return summary, f"对齐分 {score}" if score is not None else None
+        detail_parts = []
+        if score is not None:
+            detail_parts.append(f"对齐分 {score}")
+        if payload.get("history_sufficiency"):
+            detail_parts.append(f"样本：{payload.get('history_sufficiency')}")
+        if payload.get("algorithm_version"):
+            detail_parts.append(f"版本：{payload.get('algorithm_version')}")
+        return summary, "，".join(detail_parts) if detail_parts else None
+
+    if event_type in {"message.feedback_submitted", "alignment.feedback_submitted", "decision.feedback_submitted"}:
+        feedback_label = payload.get("feedback_label") or payload.get("feedback_type")
+        summary = "系统收到了一条纠错反馈"
+        detail = f"反馈类型：{feedback_label}" if feedback_label else None
+        if payload.get("note"):
+            detail = f"{detail}，备注已记录" if detail else "备注已记录"
+        return summary, detail
 
     if event_type == "plan.evaluation_snapshot":
         verdict = payload.get("verdict_label") or payload.get("verdict")
         recommendation = payload.get("recommendation_label")
         summary = f"干预效果快照已刷新{f'：{verdict}' if verdict else ''}"
         return summary, recommendation
+
+    payload_summary = str(payload.get("summary") or "").strip()
+    if payload_summary:
+        return payload_summary, None
+
+    payload_label = str(payload.get("event_label") or "").strip()
+    if payload_label:
+        return payload_label, None
 
     return timeline_event_label(event_type), None
 
@@ -314,6 +460,11 @@ def timeline_tags_for_event(event: RelationshipEvent) -> list[str]:
         "report_type",
         "intent",
         "upload_policy",
+        "baseline_match",
+        "reaction_shift",
+        "history_sufficiency",
+        "algorithm_version",
+        "feedback_status",
     ):
         value = payload.get(key)
         if value:
@@ -326,11 +477,14 @@ def serialize_timeline_event(event: RelationshipEvent) -> dict:
     category = timeline_category_for_event(event.event_type)
     tone = timeline_tone_for_event(event.event_type, payload)
     summary, detail = format_timeline_summary(event)
+    label = str(payload.get("event_label") or "").strip() or timeline_event_label(
+        event.event_type
+    )
     return {
         "id": event.id,
         "occurred_at": event.occurred_at,
         "event_type": event.event_type,
-        "label": timeline_event_label(event.event_type),
+        "label": label,
         "summary": summary,
         "detail": detail,
         "category": category,

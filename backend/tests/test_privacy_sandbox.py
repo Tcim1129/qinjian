@@ -2,7 +2,12 @@ import asyncio
 from types import SimpleNamespace
 
 import app.ai as ai_module
+from app.ai.asr import _extract_audio_info
 from app.api.v1 import auth
+from app.services.ai_context import (
+    format_context_pack_message,
+    get_current_input_context,
+)
 from app.schemas import PhoneSendCodeRequest
 from app.services.privacy_audit import privacy_audit_scope
 from app.services.privacy_benchmark import run_privacy_text_benchmark_locally
@@ -10,6 +15,7 @@ from app.services.privacy_sandbox import (
     mask_phone,
     redact_message_payload,
     redact_sensitive_text,
+    sanitize_event_payload,
 )
 from app.services.privacy_text_proxy import proxy_message_payload, rehydrate_content
 
@@ -62,6 +68,42 @@ def test_redact_message_payload_preserves_image_url_and_masks_text():
     assert redacted[0]["content"][1]["image_url"]["url"] == "data:image/png;base64,AAAA"
 
 
+def test_sanitize_event_payload_redacts_text_but_keeps_ids():
+    payload = sanitize_event_payload(
+        {
+            "draft": "公司资料 CANARY_PRIVACY_CASE，联系 13800138000",
+            "checkin_a_id": "123e4567-e89b-12d3-a456-426614174000",
+            "nested": {
+                "reply_preview": "邮箱 tester@example.com",
+                "session_id": "session-123",
+            },
+        }
+    )
+
+    assert payload["draft"] != "公司资料 CANARY_PRIVACY_CASE，联系 13800138000"
+    assert "CANARY_PRIVACY_CASE" not in payload["draft"]
+    assert "13800138000" not in payload["draft"]
+    assert payload["checkin_a_id"] == "123e4567-e89b-12d3-a456-426614174000"
+    assert payload["nested"]["reply_preview"] == "邮箱 t***@example.com"
+    assert payload["nested"]["session_id"] == "session-123"
+
+
+def test_extract_audio_info_from_qwen_annotations():
+    message = SimpleNamespace(
+        annotations=[
+            {"type": "audio_info", "language": "zh", "emotion": "fearful"},
+        ]
+    )
+
+    audio_info = _extract_audio_info(message)
+
+    assert audio_info == {
+        "type": "audio_info",
+        "language": "zh",
+        "emotion": "fearful",
+    }
+
+
 def test_create_chat_completion_redacts_messages_before_provider(monkeypatch):
     captured = {}
 
@@ -93,7 +135,9 @@ def test_create_chat_completion_emits_metadata_only_privacy_audit(monkeypatch):
     async def fake_create(**kwargs):
         provider_calls.update(kwargs)
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="请改成温和一点的说法"))]
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content="请改成温和一点的说法"))
+            ]
         )
 
     async def fake_log_privacy_ai_chat(db, **kwargs):
@@ -127,13 +171,88 @@ def test_create_chat_completion_emits_metadata_only_privacy_audit(monkeypatch):
     assert audit_calls["raw_output"] == "请改成温和一点的说法"
 
 
+def test_create_chat_completion_retries_configured_fallback_model(monkeypatch):
+    provider_calls = []
+    audit_calls = []
+
+    async def fake_create(**kwargs):
+        provider_calls.append(kwargs)
+        if len(provider_calls) == 1:
+            raise RuntimeError("primary unavailable")
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="fallback ok"))]
+        )
+
+    async def fake_log_privacy_ai_chat(db, **kwargs):
+        audit_calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr(ai_module.client.chat.completions, "create", fake_create)
+    monkeypatch.setattr(ai_module, "log_privacy_ai_chat", fake_log_privacy_ai_chat)
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_MODEL", "primary-model")
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_FALLBACK_MODEL", "fallback-model")
+
+    response = asyncio.run(
+        ai_module.create_chat_completion(
+            model="primary-model",
+            messages=[{"role": "user", "content": "你好"}],
+            temperature=0.2,
+        )
+    )
+
+    assert response.choices[0].message.content == "fallback ok"
+    assert [call["model"] for call in provider_calls] == [
+        "primary-model",
+        "fallback-model",
+    ]
+    assert [call["status"] for call in audit_calls] == ["error", "completed"]
+    assert audit_calls[1]["model"] == "fallback-model"
+    assert audit_calls[1]["proxy_metrics"] == {"fallback_from_model": "primary-model"}
+
+
+def test_create_chat_completion_does_not_retry_bad_request(monkeypatch):
+    provider_calls = []
+
+    class BadRequestLikeError(Exception):
+        status_code = 400
+
+    async def fake_create(**kwargs):
+        provider_calls.append(kwargs)
+        raise BadRequestLikeError("bad request")
+
+    async def fake_log_privacy_ai_chat(db, **kwargs):
+        return None
+
+    monkeypatch.setattr(ai_module.client.chat.completions, "create", fake_create)
+    monkeypatch.setattr(ai_module, "log_privacy_ai_chat", fake_log_privacy_ai_chat)
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_MODEL", "primary-model")
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_FALLBACK_MODEL", "fallback-model")
+
+    try:
+        asyncio.run(
+            ai_module.create_chat_completion(
+                model="primary-model",
+                messages=[{"role": "user", "content": "你好"}],
+                temperature=0.2,
+            )
+        )
+    except BadRequestLikeError:
+        pass
+    else:
+        raise AssertionError("bad request should be raised")
+
+    assert [call["model"] for call in provider_calls] == ["primary-model"]
+
+
 def test_proxy_message_payload_uses_placeholders_and_can_rehydrate():
     bundle = proxy_message_payload(
         [{"role": "user", "content": "请联系 13800138000，邮箱 tester@example.com"}]
     )
 
     proxied = bundle.messages[0]["content"]
-    restored = rehydrate_content("请联系 [PHONE_1]，邮箱 [EMAIL_1]", bundle.placeholder_map)
+    restored = rehydrate_content(
+        "请联系 [PHONE_1]，邮箱 [EMAIL_1]", bundle.placeholder_map
+    )
 
     assert "[PHONE_1]" in proxied
     assert "[EMAIL_1]" in proxied
@@ -141,14 +260,16 @@ def test_proxy_message_payload_uses_placeholders_and_can_rehydrate():
     assert bundle.metrics()["replacement_count"] >= 2
 
 
-def test_create_chat_completion_local_first_rehydrates_provider_output(monkeypatch):
+def test_create_chat_completion_ignores_legacy_local_first_mode(monkeypatch):
     captured = {}
     audit_calls = {}
 
     async def fake_create(**kwargs):
         captured.update(kwargs)
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="请联系 [PHONE_1]"))]
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content="请联系 [PHONE_1]"))
+            ]
         )
 
     async def fake_log_privacy_ai_chat(db, **kwargs):
@@ -177,11 +298,84 @@ def test_create_chat_completion_local_first_rehydrates_provider_output(monkeypat
 
     response = asyncio.run(_run())
 
-    assert captured["messages"][0]["content"] == "请联系 [PHONE_1]"
-    assert response.choices[0].message.content == "请联系 13800138000"
-    assert audit_calls["privacy_mode"] == "local_first"
-    assert audit_calls["proxy_strategy"] == "local_text_proxy"
-    assert audit_calls["proxy_metrics"]["replacement_count"] >= 1
+    assert captured["messages"][0]["content"] == "请联系 138****8000"
+    assert response.choices[0].message.content == "请联系 [PHONE_1]"
+    assert audit_calls["privacy_mode"] == "cloud"
+    assert audit_calls["proxy_strategy"] == "redact_only"
+    assert audit_calls["proxy_metrics"] == {}
+
+
+def test_create_chat_completion_injects_context_pack(monkeypatch):
+    captured = {}
+
+    async def fake_create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+        )
+
+    async def fake_build_context_pack(db, **kwargs):
+        return {
+            "stable_profile": {"preferred_language": "zh"},
+            "risk": {"risk_level": "none"},
+        }
+
+    async def fake_log_privacy_ai_chat(db, **kwargs):
+        return None
+
+    monkeypatch.setattr(ai_module.client.chat.completions, "create", fake_create)
+    monkeypatch.setattr(ai_module, "build_context_pack", fake_build_context_pack)
+    monkeypatch.setattr(ai_module, "log_privacy_ai_chat", fake_log_privacy_ai_chat)
+    monkeypatch.setattr(ai_module.settings, "PRIVACY_SANDBOX_ENABLED", True)
+    monkeypatch.setattr(ai_module.settings, "PRIVACY_REDACT_LLM_INPUT", True)
+
+    class _FakeDB:
+        async def get(self, model, obj_id):
+            return None
+
+    async def _run():
+        with privacy_audit_scope(
+            db=_FakeDB(),
+            user_id="123e4567-e89b-12d3-a456-426614174000",
+            scope="solo",
+            run_type="unit_test",
+        ):
+            await ai_module.create_chat_completion(
+                model="test-model",
+                messages=[{"role": "user", "content": "我今天有点累"}],
+                temperature=0.2,
+            )
+
+    asyncio.run(_run())
+
+    assert captured["messages"][0]["role"] == "system"
+    assert "preferred_language" in captured["messages"][0]["content"]
+
+
+def test_context_pack_message_redacts_sensitive_text():
+    message = format_context_pack_message(
+        {
+            "stable_profile": {"preferred_language": "zh"},
+            "retrieved_memories": [
+                {"summary": "联系 13800138000", "event_type": "checkin.created"}
+            ],
+        }
+    )
+
+    assert "13800138000" not in message["content"]
+    assert "138****8000" in message["content"]
+
+
+def test_get_current_input_context_extracts_last_user_message():
+    context = get_current_input_context(
+        [
+            {"role": "system", "content": "ignore"},
+            {"role": "user", "content": "今天有点累，也有点担心回复太慢"},
+        ]
+    )
+
+    assert context["text"] == "今天有点累，也有点担心回复太慢"
+    assert "emotion" in context["keywords"]
 
 
 def test_run_privacy_text_benchmark_locally_reports_zero_leakage():
@@ -198,6 +392,7 @@ def test_send_phone_code_logs_masked_phone_without_raw_code(monkeypatch, caplog)
     monkeypatch.setattr(auth, "_resolve_phone_code_store", lambda: store)
     monkeypatch.setattr(auth, "_generate_phone_code", lambda: "123456")
     monkeypatch.setattr(auth.settings, "DEBUG", True)
+    monkeypatch.setattr(auth.settings, "PHONE_CODE_TEST_POPUP_ENABLED", False)
     monkeypatch.setattr(auth.settings, "PHONE_CODE_DEBUG_RETURN", False)
     monkeypatch.setattr(auth.settings, "PRIVACY_SANDBOX_ENABLED", True)
     monkeypatch.setattr(auth.settings, "PRIVACY_MASK_LOGS", True)

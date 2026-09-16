@@ -72,6 +72,15 @@ def _date_end(value: date) -> datetime:
     return datetime.combine(value + timedelta(days=1), time.min)
 
 
+def describe_task_feedback(payload: dict) -> str:
+    outcome = {'helped': '有帮助', 'not_yet': '还没做', 'difficult': '不太顺', 'uncertain': '还说不准'}.get(payload.get('outcome'), '')
+    parts = [str(payload.get('title') or '')[:100], outcome, str(payload.get('note') or '')[:200]]
+    for key, label in [('usefulness_score', '有用度'), ('friction_score', '费劲程度'), ('relationship_shift_score', '关系变化')]:
+        if payload.get(key) is not None:
+            parts.append(f'{label} {payload[key]}')
+    return '；'.join(part for part in parts if part)
+
+
 def summarize_feedback_map(feedback_map: dict[str, dict]) -> dict:
     feedbacks = list(feedback_map.values())
     if not feedbacks:
@@ -79,6 +88,7 @@ def summarize_feedback_map(feedback_map: dict[str, dict]) -> dict:
             "feedback_count": 0,
             "usefulness_avg": None,
             "friction_avg": None,
+            "relationship_shift_avg": None,
         }
 
     usefulness_values = [
@@ -91,6 +101,11 @@ def summarize_feedback_map(feedback_map: dict[str, dict]) -> dict:
         for item in feedbacks
         if item.get("friction_score") is not None
     ]
+    relationship_shift_values = [
+        int(item["relationship_shift_score"])
+        for item in feedbacks
+        if item.get("relationship_shift_score") is not None
+    ]
     usefulness_avg = (
         round(sum(usefulness_values) / len(usefulness_values), 2)
         if usefulness_values
@@ -101,10 +116,16 @@ def summarize_feedback_map(feedback_map: dict[str, dict]) -> dict:
         if friction_values
         else None
     )
+    relationship_shift_avg = (
+        round(sum(relationship_shift_values) / len(relationship_shift_values), 2)
+        if relationship_shift_values
+        else None
+    )
     return {
         "feedback_count": len(feedbacks),
         "usefulness_avg": usefulness_avg,
         "friction_avg": friction_avg,
+        "relationship_shift_avg": relationship_shift_avg,
     }
 
 
@@ -172,6 +193,7 @@ async def build_feedback_preference_profile(
             "copy_feedback_count": 0,
             "usefulness_avg": None,
             "friction_avg": None,
+            "relationship_shift_avg": None,
         }
 
     result = await db.execute(
@@ -195,6 +217,7 @@ async def build_feedback_preference_profile(
             "copy_feedback_count": 0,
             "usefulness_avg": None,
             "friction_avg": None,
+            "relationship_shift_avg": None,
         }
 
     feedback_map: dict[str, dict] = {}
@@ -243,6 +266,7 @@ async def build_feedback_preference_profile(
             "copy_feedback_count": scoped_summary["feedback_count"],
             "usefulness_avg": scoped_summary["usefulness_avg"],
             "friction_avg": scoped_summary["friction_avg"],
+            "relationship_shift_avg": scoped_summary["relationship_shift_avg"],
         }
 
     return {
@@ -250,6 +274,7 @@ async def build_feedback_preference_profile(
         "copy_feedback_count": feedback_summary["feedback_count"],
         "usefulness_avg": feedback_summary["usefulness_avg"],
         "friction_avg": feedback_summary["friction_avg"],
+        "relationship_shift_avg": feedback_summary["relationship_shift_avg"],
         "category_preferences": category_preferences,
     }
 
@@ -300,8 +325,10 @@ async def get_latest_task_feedback_map(
             "feedback_event_id": str(event.id),
             "submitted_by_user_id": str(event.user_id) if event.user_id else None,
             "submitted_at": event.occurred_at.isoformat() if event.occurred_at else None,
+            "outcome": payload.get("outcome"),
             "usefulness_score": payload.get("usefulness_score"),
             "friction_score": payload.get("friction_score"),
+            "relationship_shift_score": payload.get("relationship_shift_score"),
             "note": payload.get("note"),
         }
     return feedback_map

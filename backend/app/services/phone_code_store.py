@@ -1,4 +1,4 @@
-"""Configurable storage for phone verification codes."""
+"""手机验证码存储服务（支持内存/Redis）"""
 
 from __future__ import annotations
 
@@ -122,8 +122,11 @@ def build_phone_code_store(*, settings_obj=settings):
     redis_prefix = str(
         getattr(settings_obj, "PHONE_CODE_REDIS_PREFIX", "qinjian:phone-code:") or "qinjian:phone-code:"
     )
+    debug_enabled = bool(getattr(settings_obj, "DEBUG", True))
 
     if backend != "redis":
+        if not debug_enabled:
+            raise ValueError("Redis is required when DEBUG is disabled for PHONE_CODE_STORE")
         return MemoryPhoneCodeStore()
 
     if not redis_url:

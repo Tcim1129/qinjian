@@ -2,6 +2,7 @@
 
 import json
 from app.ai import chat_completion
+from app.ai.policy import compose_relationship_system_prompt
 from app.core.config import settings
 
 
@@ -85,7 +86,12 @@ async def analyze_attachment_style(
         content_summary=content_summary[:200],
     )
     messages = [
-        {"role": "system", "content": "你是依恋理论研究专家。严格以JSON格式输出分析结果。"},
+        {
+            "role": "system",
+            "content": compose_relationship_system_prompt(
+                "你是依恋理论研究专家。严格以JSON格式输出分析结果。"
+            ),
+        },
         {"role": "user", "content": prompt},
     ]
     result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.4)
@@ -109,7 +115,12 @@ async def generate_combination_tasks(
         type_b=type_b,
     )
     messages = [
-        {"role": "system", "content": "你是亲密关系改善专家。严格以JSON格式输出任务建议。"},
+        {
+            "role": "system",
+            "content": compose_relationship_system_prompt(
+                "你是亲密关系改善专家。严格以JSON格式输出任务建议。"
+            ),
+        },
         {"role": "user", "content": prompt},
     ]
     result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.7)

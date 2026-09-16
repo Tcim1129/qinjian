@@ -1,4 +1,6 @@
-"""Privacy sandbox helpers for log masking and outbound AI redaction."""
+"""隐私沙盒服务
+提供日志脱敏与网络请求 AI 脱敏保护。
+"""
 
 from __future__ import annotations
 
@@ -16,6 +18,27 @@ UUID_PATTERN = re.compile(
 )
 JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 LONG_NUMBER_PATTERN = re.compile(r"(?<!\d)\d{15,19}(?!\d)")
+CONFIDENTIAL_TOKEN_PATTERN = re.compile(
+    r"(?<!\[)\b(?:CANARY_[A-Z0-9_]+|[A-Z0-9_]*SECRET[A-Z0-9_]*|[A-Z0-9_]*TOKEN[A-Z0-9_]*|[A-Z0-9_]*API_KEY[A-Z0-9_]*)\b(?!\])",
+    re.IGNORECASE,
+)
+SECRET_LABEL_PATTERN = re.compile(
+    r"(?i)\b(api(?:[_ -]?key)?|secret|token|password|passwd|口令|密钥|凭证)\b\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9_\-]{3,})"
+)
+BUSINESS_LABEL_PATTERN = re.compile(
+    r"(?i)\b(公司|客户|项目|合同号|工号|学号|内部资料|测试资料|机密|保密)\b\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9_\-]{3,})"
+)
+
+
+def _extra_sensitive_terms() -> tuple[str, ...]:
+    raw = (settings.PRIVACY_EXTRA_SENSITIVE_TERMS or "").replace(";", ",")
+    terms = [item.strip() for item in raw.split(",") if item.strip()]
+    return tuple(dict.fromkeys(terms))
+
+
+EXTRA_SENSITIVE_PATTERNS = tuple(
+    re.compile(re.escape(term), re.IGNORECASE) for term in _extra_sensitive_terms()
+)
 
 
 def privacy_sandbox_enabled() -> bool:
@@ -69,6 +92,11 @@ def redact_sensitive_text(text: str) -> str:
     redacted = UUID_PATTERN.sub("[UUID]", redacted)
     redacted = JWT_PATTERN.sub("[TOKEN]", redacted)
     redacted = LONG_NUMBER_PATTERN.sub("[LONG_NUMBER]", redacted)
+    redacted = SECRET_LABEL_PATTERN.sub(lambda match: f"{match.group(1)} [SENSITIVE]", redacted)
+    redacted = BUSINESS_LABEL_PATTERN.sub(lambda match: f"{match.group(1)} [SENSITIVE]", redacted)
+    redacted = CONFIDENTIAL_TOKEN_PATTERN.sub("[CONFIDENTIAL_TOKEN]", redacted)
+    for pattern in EXTRA_SENSITIVE_PATTERNS:
+        redacted = pattern.sub("[CONFIDENTIAL_TERM]", redacted)
     return redacted
 
 
@@ -83,6 +111,15 @@ def sanitize_log_value(value: str | None, *, kind: str = "text") -> str:
     if kind == "token":
         return mask_token(value)
     return redact_sensitive_text(value or "")
+
+
+def sanitize_event_payload(payload: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if payload is None:
+        return None
+    return {
+        str(key): _sanitize_event_value(value, key=str(key))
+        for key, value in payload.items()
+    }
 
 
 def redact_message_payload(
@@ -117,3 +154,34 @@ def _sanitize_value(value: Any, *, key: str | None = None) -> Any:
         return [_sanitize_value(item) for item in value]
 
     return copy.deepcopy(value)
+
+
+def _sanitize_event_value(value: Any, *, key: str | None = None) -> Any:
+    if isinstance(value, str):
+        if _preserve_event_string(key):
+            return value
+        return redact_sensitive_text(value)
+
+    if isinstance(value, Mapping):
+        return {
+            str(item_key): _sanitize_event_value(item_value, key=str(item_key))
+            for item_key, item_value in value.items()
+        }
+
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray, str)):
+        return [_sanitize_event_value(item, key=key) for item in value]
+
+    return copy.deepcopy(value)
+
+
+def _preserve_event_string(key: str | None) -> bool:
+    normalized = str(key or "").strip().lower()
+    if not normalized:
+        return False
+    if normalized == "url":
+        return True
+    if normalized in {"id", "ids", "input_hash", "output_hash", "idempotency_key"}:
+        return True
+    if normalized.endswith("_id") or normalized.endswith("_ids"):
+        return True
+    return False

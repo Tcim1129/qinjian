@@ -5,6 +5,8 @@ from attachment/communication/behavioral science ideas, which are simply
 engineering heuristics, and where the current boundaries are.
 """
 
+from app.services.display_labels import model_family_label, translate_inline_codes
+
 THEORY_LIBRARY = {
     "attachment_theory": {
         "name": "依恋理论",
@@ -24,7 +26,7 @@ THEORY_LIBRARY = {
         "name": "非暴力沟通结构",
         "evidence_level": "practice",
         "evidence_label": "实践支持",
-        "summary": "把表达拆成事实、感受、需要、请求，能降低指责感并提高被接住的概率。",
+        "summary": "把表达拆成事实、感受、需要、请求，能降低指责感，也更容易让对方听进去。",
         "boundary": "它是沟通结构，不保证对方一定配合，也不能单独解决长期结构性问题。",
     },
     "emotion_regulation": {
@@ -178,11 +180,11 @@ def build_repair_protocol_theory_basis(
     cards: list[dict] = [
         _theory_card(
             "emotion_regulation",
-            "修复协议的第一优先级是把冲突强度降下来，再进入理解和修复。",
+            "修复方案的第一优先级是把冲突强度降下来，再进入理解和修复。",
         ),
         _theory_card(
             "nvc",
-            "协议里的核心动作会尽量引导到事实、感受、需要和请求，而不是标签化指责。",
+            "方案里的核心动作会尽量引导到事实、感受、需要和请求，而不是标签化指责。",
         ),
         _theory_card(
             "gottman_repair",
@@ -194,7 +196,7 @@ def build_repair_protocol_theory_basis(
         cards.append(
             _theory_card(
                 "attachment_theory",
-                "当关系主问题是疏离感时，修复协议会优先恢复被接住和被回应的体验。",
+                "当关系主问题是疏离感时，缓和建议会优先恢复被听见和被回应的体验。",
             )
         )
 
@@ -257,7 +259,7 @@ def build_methodology_summary(
 ) -> dict:
     active_modules = ["事件流", "画像快照", "干预评分卡", "剧本运行态"]
     if is_pair:
-        active_modules.extend(["冲突修复协议", "双人任务调度"])
+        active_modules.extend(["冲突修复方案", "双人任务调度"])
     else:
         active_modules.append("自我调节任务调度")
 
@@ -271,22 +273,26 @@ def build_methodology_summary(
         focus = ["先稳住状态", "再识别触发点", "最后练习边界与表达"]
 
     return {
-        "system_name": "关系行为干预系统 v1",
-        "model_family": "规则引擎 + 反馈闭环",
+        "system_name": "relationship_intervention_system_v1",
+        "system_name_label": "关系行为干预系统第一版",
+        "model_family": "rule_engine_with_feedback_loop",
+        "model_family_label": model_family_label("rule_engine_with_feedback_loop"),
         "measurement_model": [
             "每日打卡与情绪/互动指标",
             "关系任务完成率",
             "主观有用度与执行摩擦",
             "风险等级与健康分趋势",
+            "消息模拟与双视角的纠错反馈",
         ],
         "decision_model": [
-            "先做风险分层，再决定是否降温",
+            "先抽取稳定信号，再进入评分层",
+            "只让文案层组织表达，不改核心分层",
             "根据完成率和反馈切剧本分支",
             "根据计划类型切换任务与修复策略",
         ],
         "active_modules": active_modules,
-        "current_focus": focus,
-        "disclaimer": "当前系统是基于关系心理学和行为科学启发的工程化决策系统，不是医学诊断、临床治疗或正式心理测评工具。",
+        "current_focus": [translate_inline_codes(item) for item in focus],
+        "disclaimer": "当前系统是基于关系心理学和行为科学启发的工程化决策系统，不是医学诊断、临床治疗或正式心理测评工具。当前判断支持版本化回放与反馈闭环，但仍需结合人工复核。",
     }
 
 

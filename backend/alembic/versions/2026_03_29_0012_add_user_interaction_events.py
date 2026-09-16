@@ -1,4 +1,4 @@
-"""add user interaction events
+"""新增用户交互事件表
 
 Revision ID: 0012
 Revises: 0011
@@ -13,7 +13,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 
-# revision identifiers, used by Alembic.
+# Alembic 版本标识
 revision: str = "0012"
 down_revision: Union[str, None] = "0011"
 branch_labels: Union[str, Sequence[str], None] = None

@@ -1,251 +1,172 @@
-# 亲健 - 青年亲密关系健康管理平台
+# 亲健
 
-## 技术架构
+基于生成式 AI 的泛亲密关系智能感知与维系平台。
 
-### 后端框架
-- FastAPI 0.135.1 + Uvicorn 0.30.0
-- SQLAlchemy 2.0 (异步ORM)
-- PostgreSQL / SQLite
-- Pydantic v2 数据验证
-- JWT认证
+## 核心能力
 
-### AI服务配置
-| 功能 | 模型 | 服务商 |
-|------|------|--------|
-| 语音识别 | qwen3-asr-flash | 阿里云DashScope |
-| 实时语音 | qwen3-asr-flash-realtime-2026-02-10 | 阿里云DashScope |
-| 文本分析 | Pro/deepseek-ai/DeepSeek-V3.2 | 硅基流动 |
-| 多模态 | moonshot/kimi-k2.5 | 硅基流动 |
+- 多身份入口：支持账号密码、手机号验证码、资料更新与演示模式入口。
+- 关系空间协作：支持创建邀请、加入预览、待确认加入请求、关系类型切换、备注名、关系树能量收集与解绑挽留留痕。
+- 多模态记录与简报：围绕文字、图片、语音记录生成日报/周报/月报，并沉淀趋势回看。
+- 智能陪伴与干预：提供助手会话、消息预演、双视角叙事对齐、修复协议、实时语音转写与会话记忆。
+- 任务与回看：支持系统任务、手动任务、任务优先级、刷新冷却、反馈回收和时间轴归档。
+- 多场景扩展：覆盖单人整理、朋友关系、异地关系、里程碑、关系体检、依恋类型、社群提示等延伸功能。
+- 隐私与安全：内置隐私中心、删除申请、审计留痕、签名访问、上传归属校验、隐私运行时与基础安全响应头。
+- 答辩演示友好：前端内置独立样例数据和 `demo` 入口，适合现场快速演示关系空间、简报、预演、修复、回看与隐私链路。
 
-### 前端
-- HTML5 / CSS3 / JavaScript
-- 移动端优先响应式设计
-- 无框架原生实现
+## 技术栈
 
-### 部署架构
-- Docker Compose容器化
-- Nginx反向代理
-- Cloudflare CDN加速
+- 前端：Vue 3 + Vite + Vue Router + Pinia
+- 后端：FastAPI + SQLAlchemy + Pydantic v2
+- 数据层：PostgreSQL / SQLite
+- 部署：Docker Compose + Nginx
+
+## 默认模型配置
+
+| 功能 | 默认模型 | 服务商 |
+| --- | --- | --- |
+| 语音识别 | `qwen3-asr-flash` | 阿里云 DashScope |
+| 实时语音 | `qwen3-asr-flash-realtime` | 阿里云 DashScope |
+| 文本 / Agent | `deepseek-v4.1-flash` | 阿里云 MaaS 兼容网关 |
+| 多模态 | `qwen3.7-plus-2026-05-26`，备用 `qwen3.7-plus` | 阿里云 MaaS 兼容网关 |
+
+以上默认值与 [docker-compose.yml](docker-compose.yml)、[backend/app/core/config.py](backend/app/core/config.py)、[.env.example](.env.example) 保持一致，并允许通过环境变量覆盖。
 
 ## 目录结构
 
-```
+```text
 qinjian/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/           # API路由模块
-│   │   │   ├── auth.py       # 认证接口
-│   │   │   ├── pairs.py      # 配对接口
-│   │   │   ├── checkins.py   # 打卡接口
-│   │   │   ├── reports.py    # 报告接口
-│   │   │   ├── upload.py     # 文件上传
-│   │   │   ├── agent.py      # AI对话
-│   │   │   └── ws.py         # WebSocket
-│   │   ├── core/
-│   │   │   ├── config.py     # 配置管理
-│   │   │   ├── security.py   # 安全模块
-│   │   │   └── database.py   # 数据库连接
-│   │   ├── models/           # SQLAlchemy模型
-│   │   ├── schemas/          # Pydantic模型
-│   │   ├── services/         # 业务逻辑层
-│   │   └── ai/
-│   │       ├── asr.py        # 语音识别
-│   │       ├── reporter.py   # 报告生成
-│   │       └── __init__.py   # AI服务入口
-│   ├── alembic/              # 数据库迁移
-│   ├── tests/                # 测试用例
-│   └── requirements.txt      # Python依赖
-├── web/
-│   ├── index.html            # 主页面
-│   ├── js/
-│   │   ├── app.js            # 主逻辑
-│   │   └── api.js            # API调用
-│   └── css/
-│       └── style.css         # 样式
-├── docker-compose.yml        # 容器编排
-├── nginx.conf                # Nginx配置
-└── deploy.sh                 # 部署脚本
+├── backend/                    # FastAPI 后端与测试
+│   ├── app/                    # 应用代码（API、模型、服务）
+│   ├── alembic/                # 数据库迁移
+│   └── tests/                  # 自动化测试
+├── web-vue3/                   # Vue 3 前端源码
+│   ├── src/                    # 页面、组件、状态管理
+│   ├── public/                 # 静态资源（含演示入口）
+│   └── dist/                   # Vite 构建产物（本地构建生成，不入库）
+├── docker-compose.yml          # 容器编排
+├── nginx.conf                  # Nginx 反向代理与安全响应头
+└── .env.example                # Docker / 服务器环境变量模板
 ```
-
-## 核心模块说明
-
-### 1. 认证模块 (app/api/v1/auth.py)
-- 邮箱注册/登录
-- 手机号验证码登录
-- JWT Token生成与验证
-- 密码加密存储
-
-### 2. 配对模块 (app/api/v1/pairs.py)
-- 创建关系配对
-- 生成邀请码
-- 配对绑定/解绑
-- 配对状态管理
-
-### 3. 打卡模块 (app/api/v1/checkins.py)
-- 每日打卡提交
-- 情绪标签记录
-- 互动频率统计
-- 后台情感分析
-
-### 4. 报告模块 (app/api/v1/reports.py)
-- 日报/周报生成
-- AI情感分析
-- 关系健康评分
-- 趋势分析
-
-### 5. 语音模块 (app/ai/asr.py)
-- 语音文件上传转写
-- 实时语音流识别
-- 支持DashScope和讯飞两种Provider
-
-### 6. AI服务 (app/ai/__init__.py)
-- chat_completion(): 文本对话
-- analyze_sentiment(): 情感分析
-- transcribe_audio(): 语音转文字
-
-### 7. 智能对话 (app/api/v1/agent.py)
-- AI伴侣对话
-- 情绪引导
-- 打卡信息提取
 
 ## 本地开发
 
-### 环境要求
-- Python 3.11+
-- PostgreSQL 15+ (可选,默认SQLite)
+### 1. 启动后端
 
-### 后端启动
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
+copy .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 前端启动
+### 2. 启动前端
+
 ```bash
-cd web
-python -m http.server 3000
-# 或直接用浏览器打开 index.html
+cd web-vue3
+npm install
+npm run dev
 ```
 
-## 配置说明
+默认前端开发地址为 `http://localhost:3001`。如需临时改用其他端口，可执行 `npm run dev -- --port 5173`。后端放行来源可在 `backend/.env` 中设置：
 
-### 必需环境变量
 ```bash
-# 安全配置
-SECRET_KEY=your-secret-key-min-32-chars
-
-# 数据库
-DATABASE_URL=postgresql+psycopg://user:pass@host:5432/qinjian
-
-# 前端域名
-FRONTEND_ORIGIN=https://your-domain.com
-
-# AI服务
-AI_API_KEY=your-api-key
-AI_BASE_URL=https://api.siliconflow.cn/v1
-
-# 语音识别
-QWEN_ASR_API_KEY=your-dashscope-key
-ASR_PROVIDER=qwen3
+FRONTEND_ORIGIN=http://localhost:3001
+ADDITIONAL_FRONTEND_ORIGINS=http://localhost:3000
 ```
 
-### 模型配置
+### 3. 本地全栈容器运行
+
 ```bash
-# 语音模型
-QWEN_ASR_FILE_MODEL=qwen3-asr-flash
-QWEN_ASR_REALTIME_MODEL=qwen3-asr-flash-realtime-2026-02-10
-
-# 文本模型
-AI_TEXT_MODEL=Pro/deepseek-ai/DeepSeek-V3.2
-AI_MULTIMODAL_MODEL=moonshot/kimi-k2.5
-```
-
-## 部署说明
-
-### 服务器路径
-项目统一部署到: /root/qinjian
-
-### 部署方式
-```bash
-# 方式一: 使用部署脚本
-python deploy_current_workspace.py --host <ip> --username root --password <pwd>
-
-# 方式二: 手动部署
-ssh root@<server>
-cd /root/qinjian
-git pull
+copy .env.example .env
+cd web-vue3
+npm install
+npm run build
+cd ..
 docker compose up -d --build
 ```
 
-### 服务管理
-```bash
-cd /root/qinjian
+启动后：
 
-# 查看状态
-docker compose ps
+- Web：`http://localhost`
+- API 健康检查：`http://localhost/api/health`
 
-# 查看日志
-docker compose logs -f backend
+## 演示模式
 
-# 重启服务
-docker compose restart
+项目内置了独立样例数据，适合答辩或汇报时避开真实账号与实时生成波动。
 
-# 停止服务
-docker compose down
-```
+- 页面入口：`http://localhost:3001/preview-demo.html?route=/`
+- 关系管理入口：`http://localhost:3001/preview-demo.html?route=/pair`
+- 关系空间详情：`http://localhost:3001/preview-demo.html?route=/relationship-space/22222222-2222-4222-8222-222222222222`
+- 指定页面直达：`http://localhost:3001/preview-demo.html?route=/report`
+- 消息预演入口：`http://localhost:3001/preview-demo.html?route=/message-simulation`
 
-## API文档
+演示模式会自动注入 `demo-mode` token 和样例关系数据，可直接展示关系空间、今日安排、简报、双视角、修复协议、时间轴归档与隐私安全页面。
 
-启动后访问:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- 健康检查: http://localhost:8000/api/health
+## 工程验证
 
-## 测试
+- 后端当前复核 `pytest -q` 为 `227/227` 条自动化测试通过。
+- 前端工具层当前复核 `npm test` 为 `109/109` 自动化测试通过。
+- 前端生产构建当前复核 `npm run build` 通过，可生成正式部署产物。
 
-```bash
-cd backend
+## 环境变量
 
-# 运行所有测试
-pytest tests/ -v
+### 根目录 `.env`
 
-# 运行情感分析测试
-pytest tests/test_sentiment.py -v
+用于 Docker Compose 和服务器部署，模板见 [.env.example](.env.example)。
 
-# 运行安全测试
-pytest tests/test_auth_security.py -v
-```
-
-## 运维命令
+关键项：
 
 ```bash
-# 查看服务状态
-docker compose ps
-
-# 实时日志
-docker compose logs -f backend
-
-# 重启后端
-docker compose restart backend
-
-# 更新部署
-git pull && docker compose up -d --build
-
-# 进入容器
-docker compose exec backend bash
-
-# 数据库迁移
-docker compose exec backend alembic upgrade head
+DB_PASSWORD=your_secure_password_here
+SECRET_KEY=your_random_secret_key_min_32_chars
+FRONTEND_ORIGIN=https://your-domain.com
+AI_API_KEY=
+AI_BASE_URL=https://llm-ipplpz10dpd82u07.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+SILICONFLOW_API_KEY=
+QWEN_ASR_API_KEY=
+AI_TEXT_MODEL=deepseek-v4.1-flash
+AI_TEXT_FALLBACK_MODEL=deepseek-v4.1-flash
+AI_MULTIMODAL_MODEL=qwen3.7-plus-2026-05-26
+AI_MULTIMODAL_FALLBACK_MODEL=qwen3.7-plus
+QWEN_ASR_FILE_MODEL=qwen3-asr-flash
+QWEN_ASR_REALTIME_MODEL=qwen3-asr-flash-realtime
 ```
 
-## 版本信息
+### `backend/.env`
 
-- 版本: 2026.03
-- Python: 3.11+
-- FastAPI: 0.135.1
-- 最后更新: 2026-05-16
+用于本地直接运行 FastAPI，模板见 [backend/.env.example](backend/.env.example)。
+
+## 安全与隐私
+
+- 上传目录默认不对公网直接暴露，Nginx 会拦截 `/uploads/` 直链访问。
+- 本地上传文件通过签名访问接口发放短期访问地址，而不是裸露静态资源路径。
+- Web 层默认附带基础安全响应头，包括 `X-Content-Type-Options`、`X-Frame-Options` 和 `Content-Security-Policy`。
+- 隐私审计、删除申请与留存治理能力已经进入后端接口与测试链路。
+
+## 系统边界
+
+- 系统用于关系记录、风险提示和沟通辅助，不替代真实沟通。
+- 模型输出属于辅助建议，不作为医疗、法律或心理诊断依据。
+- 遇到高风险冲突、持续升级或安全顾虑时，应优先暂停冲突、联系可信支持网络，并转向专业帮助。
+
+## 部署
+
+使用 Docker Compose 一键运行全栈：
+
+```bash
+copy .env.example .env    # 填入 DB_PASSWORD、SECRET_KEY 与 AI API Key
+cd web-vue3
+npm install
+npm run build
+cd ..
+docker compose up -d --build
+```
+
+启动后：
+
+- Web：`http://localhost`
+- API 健康检查：`http://localhost/api/health`
+
+服务说明：PostgreSQL 提供数据存储，Redis 支撑验证码与登录风控，Nginx 挂载 `web-vue3/dist` 静态产物并代理 `/api` 到后端，配置见 [docker-compose.yml](docker-compose.yml) 与 [nginx.conf](nginx.conf)。

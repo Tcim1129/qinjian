@@ -82,9 +82,9 @@ async def build_privacy_status(
         "private_upload_access": not bool(settings.UPLOAD_PUBLIC_ACCESS_ENABLED),
         "audit_enabled": bool(settings.PRIVACY_AUDIT_ENABLED),
         "text_proxy_enabled": bool(settings.PRIVACY_TEXT_PROXY_ENABLED),
-        "text_proxy_strategy": "local_text_proxy"
-        if settings.PRIVACY_TEXT_PROXY_ENABLED
-        else "redact_only",
+        # 真实 LLM 出口统一执行 redact_only 脱敏；占位符回填代理仅用于离线基准测试，
+        # 尚未接入运行时调用链，因此这里始终如实上报 redact_only。
+        "text_proxy_strategy": "redact_only",
         "audio_pipeline_mode": str(
             settings.PRIVACY_AUDIO_PIPELINE_MODE or "cloud_transcription"
         ),

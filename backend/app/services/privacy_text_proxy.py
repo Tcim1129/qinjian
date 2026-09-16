@@ -1,4 +1,4 @@
-"""Local-first text proxy helpers for low-memory privacy protection."""
+"""低内存场景下的本地文本隐私代理。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.services.privacy_sandbox import (
+    CONFIDENTIAL_TOKEN_PATTERN,
     EMAIL_PATTERN,
+    EXTRA_SENSITIVE_PATTERNS,
     JWT_PATTERN,
     LONG_NUMBER_PATTERN,
     PHONE_PATTERN,
@@ -23,6 +25,8 @@ PROXY_PATTERN_SPECS = (
     ("EMAIL", EMAIL_PATTERN),
     ("UUID", UUID_PATTERN),
     ("LONG", LONG_NUMBER_PATTERN),
+    ("CONFIDENTIAL_TOKEN", CONFIDENTIAL_TOKEN_PATTERN),
+    *(("CONFIDENTIAL_TERM", pattern) for pattern in EXTRA_SENSITIVE_PATTERNS),
 )
 
 
@@ -105,7 +109,7 @@ def proxy_message_payload(
     proxied_messages = [
         _proxy_mapping(dict(message), accumulator=accumulator) for message in messages
     ]
-    # Run the existing redaction pass after placeholder replacement as a second guardrail.
+    # 占位替换后再跑一遍脱敏，作为第二道保护。
     sanitized_messages = redact_message_payload(proxied_messages, enabled=True)
     return accumulator.build_bundle(sanitized_messages)
 

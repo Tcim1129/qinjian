@@ -4,28 +4,30 @@ import json
 import base64
 import os
 from app.ai import chat_completion, create_chat_completion
+from app.ai.policy import compose_relationship_system_prompt
 from app.core.config import settings
 
 
 # ── 专业心理学系统 Prompt ──
 
-SYSTEM_PROMPT = """你是亲见平台的AI关系健康顾问，具备循证心理学专业背景。
+SYSTEM_PROMPT = compose_relationship_system_prompt("""你是亲健平台的AI关系健康顾问，具备循证心理学专业背景。
 你的分析框架基于以下权威理论：
 - 约翰·戈特曼 (John Gottman) 的亲密关系理论，尤其是「末日四骑士」模型（批评、蔑视、防御、冷暴力）
 - 鲍尔比 (Bowlby) 的依恋理论（安全型、焦虑型、回避型、混乱型）
 - 积极心理学中的「5:1 积极互动比」原则
 
-请严格按照JSON格式输出，不要包含其他文字。"""
+请严格按照JSON格式输出，不要包含其他文字。""")
 
 
 # ── Prompt 模板 ──
 
 DAILY_REPORT_PROMPT = """以下是一对{pair_type}今天的打卡记录。请基于戈特曼理论与依恋理论框架进行分析。
+请在所有面向用户的描述里只使用“双方 / 一方 / 对方”这类称呼，不要写 A方 / B方。
 
-【A方视角】
+【第一份记录】
 {content_a}
 
-【B方视角】
+【第二份记录】
 {content_b}
 
 请从以下维度分析，并以 JSON 格式输出（不要包含其他内容）：
@@ -69,6 +71,7 @@ SOLO_REPORT_PROMPT = """以下是一位用户（处于{pair_type}关系中）今
 }}"""
 
 WEEKLY_REPORT_PROMPT = """以下是一对{pair_type}过去7天的打卡记录摘要。请基于戈特曼理论进行纵向趋势分析。
+请在所有面向用户的描述里只使用“双方 / 一方 / 对方”这类称呼，不要写 A方 / B方。
 
 {daily_summaries}
 
@@ -95,6 +98,7 @@ WEEKLY_REPORT_PROMPT = """以下是一对{pair_type}过去7天的打卡记录摘
 }}"""
 
 MONTHLY_REPORT_PROMPT = """以下是一对{pair_type}过去30天的周报摘要。请基于依恋理论与戈特曼模型进行深度月度分析。
+请在所有面向用户的描述里只使用“双方 / 一方 / 对方”这类称呼，不要写 A方 / B方。
 
 {weekly_summaries}
 
@@ -104,8 +108,8 @@ MONTHLY_REPORT_PROMPT = """以下是一对{pair_type}过去30天的周报摘要�
     "monthly_trend": "improving/stable/declining",
     "executive_summary": "月度关系总结（结合理论框架，150字内）",
     "emotional_patterns": {{
-        "a_pattern": "A方情绪模式分析（参考依恋类型，80字内）",
-        "b_pattern": "B方情绪模式分析（参考依恋类型，80字内）",
+        "a_pattern": "第一份记录呈现的情绪模式分析（参考依恋类型，80字内）",
+        "b_pattern": "第二份记录呈现的情绪模式分析（参考依恋类型，80字内）",
         "interaction_pattern": "互动模式分析（参考末日四骑士，80字内）"
     }},
     "strengths": ["关系优势1", "关系优势2"],
@@ -246,9 +250,17 @@ async def generate_monthly_report(pair_type: str, weekly_reports: list[dict]) ->
 
 
 async def analyze_image(image_path: str, context: str = "") -> dict:
-    """多模态图片分析（用 Kimi K2.5 多模态模型）"""
+    """多模态图片分析（用 SiliconFlow Kimi K2.6 多模态模型）"""
     try:
-        abs_path = os.path.join(settings.UPLOAD_DIR, image_path.lstrip("/uploads/"))
+        relative_path = str(image_path or "").strip()
+        if relative_path.startswith("/uploads/"):
+            relative_path = relative_path.removeprefix("/uploads/")
+        else:
+            relative_path = relative_path.lstrip("/\\")
+        abs_path = os.path.join(
+            settings.UPLOAD_DIR,
+            relative_path.replace("/", os.sep),
+        )
         with open(abs_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode("utf-8")
 
@@ -265,14 +277,37 @@ async def analyze_image(image_path: str, context: str = "") -> dict:
         messages = [
             {
                 "role": "system",
-                "content": "你是亲密关系分析师。分析图片中的情感线索和社交信号。",
+                "content": "你是亲密关系分析师。请识别图片中的情绪线索、互动关系、风险提示与隐私敏感度，并严格输出 JSON。",
             },
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": f'分析这张图片在亲密关系语境下的情感含义。{f"背景信息：{context}" if context else ""}\n\n请以JSON输出：{{"mood": "情绪", "social_signal": "社交信号描述", "score": 1-10}}',
+                        "text": (
+                            "请分析这张图片在亲密关系语境下透露出的信息。"
+                            f'{f"背景信息：{context}" if context else ""}\n\n'
+                            '请只输出 JSON，对应结构为：'
+                            '{"scene_summary":"一句话描述画面发生了什么",'
+                            '"mood":"整体情绪氛围",'
+                            '"mood_tags":["系统完整情绪标签，可多于3个"],'
+                            '"display_mood_tags":["给用户看的2到3个关键情绪标签"],'
+                            '"primary_mood":"最主要的情绪",'
+                            '"secondary_moods":["其他重要但不一定展示给用户的情绪"],'
+                            '"emotion_weights":[{"tag":"情绪标签","score":0到1之间的小数,"tone":"positive/negative/protective/neutral"}],'
+                            '"emotion_blend_summary":"一句话说明几种情绪怎样缠在一起，语气温和不诊断",'
+                            '"relationship_stage":"如冲突中/修复中/日常靠近/疏离观察",'
+                            '"interaction_signal":"一句话说明双方互动状态",'
+                            '"social_signal":"详细说明亲密互动、修复信号或防御信号",'
+                            '"risk_level":"none/watch/high",'
+                            '"risk_flags":["最多3条风险提醒"],'
+                            '"care_points":["最多3条值得记录的线索"],'
+                            '"privacy_sensitivity":"low/medium/high",'
+                            '"privacy_reasons":["最多3条隐私原因"],'
+                            '"retention_recommendation":"persist/analysis_only",'
+                            '"retention_reason":"说明为什么建议这样保存",'
+                            '"score":1-10}'
+                        ),
                     },
                     {
                         "type": "image_url",
@@ -290,13 +325,49 @@ async def analyze_image(image_path: str, context: str = "") -> dict:
         return _parse_ai_json(
             response.choices[0].message.content,
             {
-                "mood": "neutral",
+                "scene_summary": "暂时还没看清这张图里发生了什么",
+                "mood": "暂未识别",
+                "mood_tags": [],
+                "display_mood_tags": [],
+                "primary_mood": "待判断",
+                "secondary_moods": [],
+                "emotion_weights": [],
+                "emotion_blend_summary": "图片线索还不够稳定，先只保留最基础的观察。",
+                "relationship_stage": "待判断",
+                "interaction_signal": "暂时无法确认双方互动状态",
                 "social_signal": "无法分析",
+                "risk_level": "none",
+                "risk_flags": [],
+                "care_points": [],
+                "privacy_sensitivity": "medium",
+                "privacy_reasons": ["建议先确认图片里是否含有人脸、聊天记录或位置信息"],
+                "retention_recommendation": "analysis_only",
+                "retention_reason": "当前更适合先保留分析结果，不急着长期保存原图。",
                 "score": 5,
             },
         )
     except Exception as e:
-        return {"mood": "unknown", "social_signal": str(e), "score": 5}
+        return {
+            "scene_summary": "图片分析暂不可用",
+            "mood": "unknown",
+            "mood_tags": [],
+            "display_mood_tags": [],
+            "primary_mood": "待判断",
+            "secondary_moods": [],
+            "emotion_weights": [],
+            "emotion_blend_summary": "图片分析失败，系统不会强行判断情绪。",
+            "relationship_stage": "待判断",
+            "interaction_signal": "暂时无法确认双方互动状态",
+            "social_signal": str(e),
+            "risk_level": "none",
+            "risk_flags": [],
+            "care_points": [],
+            "privacy_sensitivity": "medium",
+            "privacy_reasons": ["当前未完成分析，建议先谨慎处理原图"],
+            "retention_recommendation": "analysis_only",
+            "retention_reason": "图片分析失败时，默认不建议长期保存原图。",
+            "score": 5,
+        }
 
 
 MILESTONE_REPORT_PROMPT = """以下是一对{pair_type}关系的里程碑回顾。里程碑类型：{milestone_type}，标题：{milestone_title}。

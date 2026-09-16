@@ -1,4 +1,4 @@
-"""Synthetic benchmark helpers for the lightweight privacy text proxy."""
+"""轻量文本隐私代理的合成基准测试。"""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ async def run_privacy_text_benchmark(
         entity_type="privacy_benchmark",
         payload=payload,
         summary=(
-            "文本隐私代理 benchmark 完成，"
+            "文本隐私代理基准测试完成，"
             f"泄露下降 {payload['summary']['leak_reduction_pct']}%，"
             f"语义保留 {payload['summary']['avg_utility_pct']}%。"
         ),

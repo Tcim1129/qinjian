@@ -8,10 +8,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, desc, func, or_, select
+from sqlalchemy import and_, delete, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.time import current_local_date, utc_naive_to_local_datetime
 from app.models import (
     AgentChatMessage,
     AgentChatSession,
@@ -28,6 +29,11 @@ from app.models import (
     InterventionPlan,
 )
 from app.services.privacy_audit import log_privacy_event
+from app.services.timeline_archive import (
+    RAW_RETENTION_DAYS,
+    archive_retention_policy,
+    ensure_checkin_archive_fields,
+)
 from app.services.upload_access import is_local_upload_path, resolve_upload_file_path
 
 
@@ -50,6 +56,35 @@ def _safe_remove_local_upload(upload_path: str | None) -> bool:
         os.remove(file_path)
         return True
     return False
+
+
+def _record_checkin_raw_deletion_snapshot(
+    checkin: Checkin,
+    *,
+    reference_now: datetime,
+) -> None:
+    context = dict(checkin.client_context or {})
+    archive_insight = dict((context.get("archive_insight") or {}))
+    archive_insight["raw_deletion_snapshot"] = {
+        "deleted_at": reference_now.isoformat(),
+        "deleted_at_local": (
+            utc_naive_to_local_datetime(reference_now).isoformat()
+            if utc_naive_to_local_datetime(reference_now)
+            else None
+        ),
+        "timezone": settings.APP_TIMEZONE,
+        "policy": archive_retention_policy(),
+        "had_raw_content": bool(str(checkin.content or "").strip()),
+        "had_image_original": bool(checkin.image_url),
+        "had_voice_original": bool(checkin.voice_url),
+        "raw_retention_until": (
+            checkin.raw_retention_until.isoformat()
+            if isinstance(checkin.raw_retention_until, datetime)
+            else None
+        ),
+    }
+    context["archive_insight"] = archive_insight
+    checkin.client_context = context
 
 
 async def _user_has_shared_pair_data(db: AsyncSession, user_id: uuid.UUID) -> bool:
@@ -300,6 +335,54 @@ def _list_stale_temp_files(reference_now: datetime) -> list[Path]:
     return stale_files
 
 
+async def _purge_expired_checkin_raw_data(
+    db: AsyncSession,
+    *,
+    reference_now: datetime,
+    dry_run: bool,
+) -> dict[str, int]:
+    fallback_cutoff_local = current_local_date(reference_now) - timedelta(
+        days=RAW_RETENTION_DAYS
+    )
+    stmt = select(Checkin).where(
+        Checkin.raw_deleted_at.is_(None),
+        or_(
+            Checkin.image_url.is_not(None),
+            Checkin.voice_url.is_not(None),
+        ),
+        or_(
+            and_(
+                Checkin.raw_retention_until.is_not(None),
+                Checkin.raw_retention_until <= reference_now,
+            ),
+            and_(
+                Checkin.raw_retention_until.is_(None),
+                Checkin.checkin_date <= fallback_cutoff_local,
+            ),
+        ),
+    )
+    result = await db.execute(stmt)
+    rows = list(result.scalars().all())
+
+    stats = {
+        "expired_raw_checkins": len(rows),
+        "deleted_raw_uploads": 0,
+    }
+    if dry_run:
+        return stats
+
+    for checkin in rows:
+        ensure_checkin_archive_fields(checkin)
+        _record_checkin_raw_deletion_snapshot(checkin, reference_now=reference_now)
+        stats["deleted_raw_uploads"] += int(_safe_remove_local_upload(checkin.image_url))
+        stats["deleted_raw_uploads"] += int(_safe_remove_local_upload(checkin.voice_url))
+        checkin.image_url = None
+        checkin.voice_url = None
+        checkin.raw_deleted_at = reference_now
+
+    return stats
+
+
 async def run_privacy_retention_sweep(
     db: AsyncSession,
     *,
@@ -320,11 +403,17 @@ async def run_privacy_retention_sweep(
     )
     expired_event_count = int(event_count_result.scalar_one() or 0)
     stale_temp_files = _list_stale_temp_files(reference_now)
+    raw_data_summary = await _purge_expired_checkin_raw_data(
+        db,
+        reference_now=reference_now,
+        dry_run=dry_run,
+    )
 
     summary = {
         "dry_run": dry_run,
         "expired_privacy_events": expired_event_count,
         "stale_temp_files": len(stale_temp_files),
+        **raw_data_summary,
     }
 
     if not dry_run and expired_event_count:

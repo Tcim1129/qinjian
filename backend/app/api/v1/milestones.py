@@ -1,6 +1,7 @@
 """关系里程碑接口：关键节点专属服务"""
 
 import logging
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @router.post("/")
 async def create_milestone(
-    pair_id: str,
+    pair_id: uuid.UUID,
     milestone_type: str,  # anniversary / proposal / wedding / friendship_day / custom
     title: str,
     milestone_date: str,  # YYYY-MM-DD
@@ -25,16 +26,16 @@ async def create_milestone(
     db: AsyncSession = Depends(get_db),
 ):
     """创建关系里程碑"""
-    await validate_pair_access(pair_id, user, db, require_active=True)
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     from datetime import date
     try:
         m_date = date.fromisoformat(milestone_date)
     except ValueError:
-        raise HTTPException(status_code=400, detail="日期格式错误，应为 YYYY-MM-DD")
+        raise HTTPException(status_code=400, detail="日期格式不对，请按 2026-03-21 这样的格式填写")
 
     milestone = Milestone(
-        pair_id=pair_id,
+        pair_id=pair.id,
         type=milestone_type,
         title=title,
         date=m_date,
@@ -53,16 +54,16 @@ async def create_milestone(
 
 @router.get("/{pair_id}")
 async def get_milestones(
-    pair_id: str,
+    pair_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取里程碑列表"""
-    await validate_pair_access(pair_id, user, db, require_active=True)
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
 
     result = await db.execute(
         select(Milestone)
-        .where(Milestone.pair_id == pair_id)
+        .where(Milestone.pair_id == pair.id)
         .order_by(Milestone.date.desc())
     )
     milestones = result.scalars().all()
@@ -86,7 +87,7 @@ async def get_milestones(
 
 @router.post("/{milestone_id}/generate-review")
 async def generate_review(
-    milestone_id: str,
+    milestone_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -96,12 +97,12 @@ async def generate_review(
     if not milestone:
         raise HTTPException(status_code=404, detail="里程碑不存在")
 
-    pair = await validate_pair_access(str(milestone.pair_id), user, db, require_active=True)
+    pair = await validate_pair_access(milestone.pair_id, user, db, require_active=True)
 
     # 获取该里程碑期间的报告数据
     result = await db.execute(
         select(Report)
-        .where(Report.pair_id == str(milestone.pair_id), Report.content.isnot(None))
+        .where(Report.pair_id == milestone.pair_id, Report.content.isnot(None))
         .order_by(desc(Report.created_at))
         .limit(30)
     )
@@ -125,7 +126,7 @@ async def generate_review(
             report_summaries=report_summaries,
         )
         return {
-            "milestone_id": milestone_id,
+            "milestone_id": str(milestone.id),
             "review": review,
             "message": "关系成长回顾已生成 🎉",
         }

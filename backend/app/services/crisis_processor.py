@@ -36,6 +36,12 @@ CRISIS_LEVEL_SEVERITY = {
 }
 
 
+def _as_uuid(value: uuid.UUID | str | None) -> uuid.UUID | None:
+    if value is None or isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
+
+
 async def process_crisis_from_report(
     db: AsyncSession,
     report: Report,
@@ -57,7 +63,7 @@ async def process_crisis_from_report(
     # 如果是 none 级别，不创建预警记录（节省存储）
     # 但如果之前有 active 预警且现在恢复正常，则自动标记为 resolved
     if crisis_level_str == "none":
-        await _auto_resolve_active_alerts(db, str(report.pair_id))
+        await _auto_resolve_active_alerts(db, report.pair_id)
         return None
 
     # 获取最近一条 active 预警，看是否需要升级/降级
@@ -166,11 +172,12 @@ async def process_crisis_from_report(
     return alert
 
 
-async def _auto_resolve_active_alerts(db: AsyncSession, pair_id: str):
+async def _auto_resolve_active_alerts(db: AsyncSession, pair_id: uuid.UUID | str):
     """当 crisis_level 恢复 none 时，自动将所有 active 预警标记为 resolved"""
+    pair_uuid = _as_uuid(pair_id)
     result = await db.execute(
         select(CrisisAlert).where(
-            CrisisAlert.pair_id == pair_id,
+            CrisisAlert.pair_id == pair_uuid,
             CrisisAlert.status == CrisisAlertStatus.ACTIVE,
         )
     )
@@ -183,7 +190,7 @@ async def _auto_resolve_active_alerts(db: AsyncSession, pair_id: str):
         await record_relationship_event(
             db,
             event_type="crisis.resolved",
-            pair_id=pair_id,
+            pair_id=pair_uuid,
             entity_type="crisis_alert",
             entity_id=alert.id,
             payload={

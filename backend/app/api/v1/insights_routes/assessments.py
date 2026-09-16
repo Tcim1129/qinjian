@@ -8,9 +8,11 @@ from app.core.database import get_db
 from app.models import User
 from app.schemas import (
     WeeklyAssessmentLatestResponse,
+    WeeklyAssessmentPackResponse,
     WeeklyAssessmentSubmitRequest,
     WeeklyAssessmentTrendResponse,
 )
+from app.services.assessment_item_bank import build_weekly_assessment_pack
 from app.services.weekly_assessments import (
     get_latest_weekly_assessment,
     get_weekly_assessment_trend,
@@ -20,6 +22,27 @@ from app.services.weekly_assessments import (
 from .shared import resolve_scope
 
 router = APIRouter(tags=["关系智能"])
+
+
+@router.get(
+    "/assessments/weekly-pack",
+    response_model=WeeklyAssessmentPackResponse,
+)
+async def get_weekly_assessment_pack_entry(
+    pair_id: str | None = None,
+    mode: str | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    pair_scope_id, user_scope_id = await resolve_scope(
+        pair_id=pair_id, mode=mode, user=user, db=db
+    )
+    payload = await build_weekly_assessment_pack(
+        db,
+        pair_id=pair_scope_id,
+        user_id=user_scope_id,
+    )
+    return WeeklyAssessmentPackResponse(**payload)
 
 
 @router.post(
@@ -90,4 +113,3 @@ async def get_weekly_assessment_trend_entry(
         limit=limit,
     )
     return WeeklyAssessmentTrendResponse(**payload)
-

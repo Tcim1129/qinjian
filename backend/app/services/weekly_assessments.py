@@ -53,6 +53,8 @@ def _normalize_answers(raw_answers: list[dict]) -> list[dict]:
     normalized: list[dict] = []
     for entry in raw_answers or []:
         dim = str(entry.get("dim") or entry.get("dimension") or "").strip()
+        item_id = str(entry.get("item_id") or "").strip()
+        option_id = str(entry.get("option_id") or "").strip()
         score = entry.get("score")
         if not dim:
             continue
@@ -60,14 +62,24 @@ def _normalize_answers(raw_answers: list[dict]) -> list[dict]:
             numeric_score = max(0, min(100, int(score)))
         except (TypeError, ValueError):
             continue
-        normalized.append({"dim": dim, "score": numeric_score})
+        payload = {"dim": dim, "score": numeric_score}
+        if item_id:
+            payload["item_id"] = item_id
+        if option_id:
+            payload["option_id"] = option_id
+        normalized.append(payload)
     return normalized
 
 
 def _build_dimension_scores(answers: list[dict]) -> list[dict]:
     buckets: dict[str, list[int]] = defaultdict(list)
     for answer in answers:
-        group = QUESTION_DIMENSION_MAP.get(answer["dim"], "vitality")
+        dimension_key = str(answer.get("dim") or "").strip()
+        group = (
+            dimension_key
+            if dimension_key in DIMENSION_LABELS
+            else QUESTION_DIMENSION_MAP.get(dimension_key, "vitality")
+        )
         buckets[group].append(int(answer["score"]))
 
     dimension_scores: list[dict] = []
@@ -101,6 +113,14 @@ def _build_change_summary(current_score: int, previous_score: int | None) -> str
     return "和上一轮接近，说明当前状态更像是在平台期，需要看细分维度而不只看总分。"
 
 
+def _profile_signal(current_score: int, previous_score: int | None) -> str | None:
+    if previous_score is None:
+        return None
+    if abs(current_score - previous_score) <= 3:
+        return "stable_band"
+    return None
+
+
 def _serialize_assessment_payload(
     *,
     scope: str,
@@ -117,6 +137,7 @@ def _serialize_assessment_payload(
         "dimension_scores": dimension_scores,
         "submitted_at": submitted_at.isoformat(),
         "change_summary": _build_change_summary(total_score, previous_score),
+        "profile_signal": _profile_signal(total_score, previous_score),
     }
 
 
@@ -201,6 +222,26 @@ async def submit_weekly_assessment(
         payload=payload,
         occurred_at=occurred_at,
     )
+    if payload.get("profile_signal") == "stable_band":
+        await record_relationship_event(
+            db,
+            event_type="assessment.weekly_stable_band_detected",
+            pair_id=normalized_pair_id,
+            user_id=normalized_user_id,
+            entity_type="weekly_assessment_profile_signal",
+            payload={
+                "summary": "最近两次关系体检总分接近，当前更像平台期，建议优先看最低分维度。",
+                "profile_signal": "stable_band",
+                "current_score": total_score,
+                "previous_score": previous_score,
+                "change_summary": payload["change_summary"],
+                "risk_level": "none",
+            },
+            occurred_at=occurred_at,
+            idempotency_key=(
+                f"assessment:stable-band:{normalized_pair_id or normalized_user_id}:{occurred_at.isoformat()}"
+            ),
+        )
     await refresh_profile_and_plan(
         db,
         pair_id=normalized_pair_id,

@@ -1,138 +1,74 @@
 # 亲健 - Git 忽略文件
-# 防止敏感信息和临时文件上传到 GitHub
 
-# === 环境变量和配置文件（包含密码/密钥） ===
+# 环境变量和本地配置
 .env
 .env.local
 .env.*.local
-.env.production
-.env.development
 *.env
+web/js/config.local.js
 
-# === Python ===
+# Python 缓存和虚拟环境
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+.pytest_cache/
+.coverage
+htmlcov/
 venv/
-ENV/
-env/
-.venv
+.venv/
 
-# === 日志和临时文件 ===
+# Node/Vite 产物
+node_modules/
+dist/
+!web-vue3/
+!web-vue3/**
+web-vue3/node_modules/
+web-vue3/dist/
+web-vue3.*backup*/
+
+# 运行时数据和临时文件
+uploads/
+screenshots/
 *.log
 *.tmp
 *.temp
 *.bak
-*.swp
-*.swo
-*~
+*.orig
 .DS_Store
 Thumbs.db
-frontend_out.log
-playwright-*.txt
-voice-click-console.txt
-
-# === IDE 和编辑器 ===
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
-*.code-workspace
-
-# === 上传的文件和用户数据 ===
-uploads/
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.wav
-*.pdf
-*.doc
-*.docx
-!images/*.png
-!images/*.jpg
-
-# === 数据库 ===
 *.db
 *.sqlite
 *.sqlite3
-pgdata/
 
-# === 小程序私有配置 ===
-project.config.json
-project.private.config.json
-miniprogram/project.config.json
-miniprogram/project.private.config.json
-miniprogram/config.js
-web/js/config.local.js
-qinjian-app/qingjian app/utils/config.local.js
-qinjian-app/qingjian app/src/utils/config.local.js
-qinjian-app/qingjian app/.hbuilderx/
-
-# === 依赖目录 ===
-node_modules/
-
-# === 部署和运维（可能包含敏感信息） ===
+# 本地部署覆盖和密钥
+docker-compose.override.yml
+deploy.sh
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
 secrets/
- credentials/
+credentials/
 
-# === 测试和覆盖率 ===
-htmlcov/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# === 打包文件 ===
-*.tar.gz
-*.zip
-*.rar
-*.7z
-
-# === 其他 ===
-docker-compose.override.yml
+# 临时输出
 .deploy/
-artifacts/
 output/
-screenshots/
 tmp/
 tmp_playwright/
-web-vue-dist/
-*_codex_*.png
-home-*.png
-timeline-*.png
+outputs/
+backend/.venv*
+backend/.test-dbs/
+backend/.pytest-tmp-*/
+backend/.codex-test-logs/
 
-# === 部署脚本（可能包含硬编码密钥） ===
-deploy-server.sh
-deploy.sh
-deploy*.py
-setup-cn-mirrors.sh
-fetch_logs.py
-sync_and_deploy_agent.py
-temp_deploy.py
+# AI/可视化回归产物（截图、回滚备份）
+artifacts/
+!artifacts/auth-warm-palette.png
+qinjian-ui-preview/
+*.patch
+*.tar.gz
+
+# 打包/分享产物
+*.zip
+*.mp4
+*.docx

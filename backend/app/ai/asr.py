@@ -11,10 +11,12 @@ import mimetypes
 import os
 import shutil
 import subprocess
+import tempfile
 import uuid
 import wave
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from urllib.parse import quote, urlencode, urlparse
 
 from openai import AsyncOpenAI
@@ -32,6 +34,7 @@ class ASRTranscriptionResult:
     text: str
     provider: str
     model: str
+    audio_info: dict[str, Any] | None = None
 
 
 def _normalized_provider() -> str:
@@ -52,7 +55,7 @@ def _normalized_realtime_provider(provider: str | None = None) -> str:
 def _resolve_qwen_api_key() -> str:
     api_key = settings.QWEN_ASR_API_KEY or settings.AI_API_KEY
     if not api_key:
-        raise RuntimeError("未配置 Qwen ASR API Key")
+        raise RuntimeError("未配置语音转写密钥")
     return api_key
 
 
@@ -134,13 +137,27 @@ def _build_xfyun_signature(params: dict[str, str]) -> str:
 def _resolve_legacy_api_key() -> str:
     api_key = settings.AI_API_KEY or settings.SILICONFLOW_API_KEY
     if not api_key:
-        raise RuntimeError("未配置兼容网关 API Key")
+        raise RuntimeError("未配置语音转写网关密钥")
     return api_key
 
 
 def _resolve_legacy_base_url() -> str | None:
     base_url = (settings.AI_BASE_URL or settings.SILICONFLOW_BASE_URL or "").strip()
     return base_url.rstrip("/") if base_url else None
+
+
+def _resolve_openai_compatible_asr_model() -> str:
+    model = str(getattr(settings, "OPENAI_COMPATIBLE_ASR_MODEL", "") or "").strip()
+    return model or "whisper-1"
+
+
+def _resolve_file_asr_model(provider: str | None = None) -> str:
+    resolved_provider = str(provider or _normalized_provider()).strip().lower()
+    if resolved_provider == "qwen3":
+        return settings.QWEN_ASR_FILE_MODEL
+    if resolved_provider in {"whisper", "openai", "openai-compatible"}:
+        return _resolve_openai_compatible_asr_model()
+    return ""
 
 
 _qwen_chat_client: AsyncOpenAI | None = None
@@ -267,6 +284,50 @@ def _extract_message_text(content) -> str:
     return str(content or "").strip()
 
 
+def _extract_transcription_text(response: Any) -> str:
+    if isinstance(response, str):
+        return response.strip()
+    text = getattr(response, "text", None)
+    if isinstance(text, str):
+        return text.strip()
+    if isinstance(response, dict):
+        text = response.get("text")
+        if isinstance(text, str):
+            return text.strip()
+    return str(response or "").strip()
+
+
+def _model_to_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        try:
+            dumped = value.model_dump()
+        except Exception:
+            return {}
+        return dumped if isinstance(dumped, dict) else {}
+    return {}
+
+
+def _extract_audio_info(message: Any) -> dict[str, Any]:
+    annotations = getattr(message, "annotations", None)
+    if annotations is None and isinstance(message, dict):
+        annotations = message.get("annotations")
+    if not isinstance(annotations, list):
+        return {}
+
+    for item in annotations:
+        payload = _model_to_dict(item)
+        if payload.get("type") != "audio_info":
+            continue
+        return {
+            key: payload[key]
+            for key in ("type", "language", "emotion")
+            if payload.get(key) is not None
+        }
+    return {}
+
+
 async def _transcribe_with_qwen(
     file_path: str,
     *,
@@ -298,24 +359,28 @@ async def _transcribe_with_qwen(
             }
         },
     )
-    text = _extract_message_text(response.choices[0].message.content)
+    message = response.choices[0].message
+    text = _extract_message_text(message.content)
+    audio_info = _extract_audio_info(message)
     return ASRTranscriptionResult(
         text=text,
         provider="qwen3",
         model=settings.QWEN_ASR_FILE_MODEL,
+        audio_info=audio_info or None,
     )
 
 
 async def _transcribe_with_legacy_whisper(file_path: str) -> ASRTranscriptionResult:
     client = _get_legacy_audio_client()
+    model = _resolve_openai_compatible_asr_model()
     with open(file_path, "rb") as audio_file:
         response = await client.audio.transcriptions.create(
-            model="whisper-1", file=audio_file, language="zh", response_format="text"
+            model=model, file=audio_file, language="zh", response_format="text"
         )
     return ASRTranscriptionResult(
-        text=str(response),
+        text=_extract_transcription_text(response),
         provider="openai-compatible",
-        model="whisper-1",
+        model=model,
     )
 
 
@@ -329,7 +394,7 @@ async def transcribe_file(
         return await _transcribe_with_qwen(file_path, content_type=content_type)
     if provider in {"whisper", "openai", "openai-compatible"}:
         return await _transcribe_with_legacy_whisper(file_path)
-    raise RuntimeError(f"不支持的 ASR_PROVIDER：{provider}")
+    raise RuntimeError("不支持的语音转写服务配置")
 
 
 class QwenRealtimeASRClient:
@@ -416,6 +481,119 @@ class QwenRealtimeASRClient:
         if "event_id" not in payload:
             payload = {"event_id": f"evt_{uuid.uuid4().hex}", **payload}
         await self._ws.send(json.dumps(payload, ensure_ascii=False))
+
+
+class BatchRealtimeASRClient:
+    """Record browser PCM chunks and transcribe them with the configured file ASR."""
+
+    def __init__(
+        self,
+        *,
+        model: str | None = None,
+        language: str = "zh",
+        sample_rate: int = 16000,
+        input_audio_format: str = "pcm",
+    ) -> None:
+        del language
+        self.sample_rate = int(sample_rate or 16000)
+        self.input_audio_format = str(input_audio_format or "pcm").strip().lower()
+        self.provider = _normalized_provider()
+        self.model = model or _resolve_file_asr_model(self.provider)
+        self._audio_chunks: list[bytes] = []
+        self._pending_events: list[dict] = []
+        self._event = asyncio.Event()
+        self._closed = False
+
+    async def connect(self) -> None:
+        return None
+
+    async def start_session(self) -> None:
+        self._audio_chunks = []
+        self._pending_events = []
+        self._event.clear()
+        self._closed = False
+
+    async def send_audio_chunk(self, audio_base64: str) -> None:
+        if self._closed:
+            raise RuntimeError("批量语音会话已关闭")
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("音频片段格式无效") from exc
+        if audio_bytes:
+            self._audio_chunks.append(audio_bytes)
+
+    async def stop_session(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if not self._audio_chunks:
+            self._enqueue(
+                {
+                    "type": "error",
+                    "code": "empty_audio",
+                    "message": "没有收到可转写的录音内容",
+                }
+            )
+            return
+
+        temp_path = ""
+        try:
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            temp_path = temp_file.name
+            temp_file.close()
+            with wave.open(temp_path, "wb") as audio_file:
+                audio_file.setnchannels(1)
+                audio_file.setsampwidth(2)
+                audio_file.setframerate(self.sample_rate)
+                audio_file.writeframes(b"".join(self._audio_chunks))
+
+            transcription = await transcribe_file(temp_path, content_type="audio/wav")
+            audio_info = dict(transcription.audio_info or {})
+            text = str(transcription.text or "").strip()
+            if text:
+                self._enqueue(
+                    {
+                        "type": "conversation.item.input_audio_transcription.completed",
+                        "transcript": text,
+                        "audio_info": audio_info or None,
+                    }
+                )
+            self._enqueue(
+                {
+                    "type": "session.finished",
+                    "transcript": text,
+                    "audio_info": audio_info or None,
+                }
+            )
+        except Exception as exc:
+            self._enqueue(
+                {
+                    "type": "error",
+                    "code": "batch_provider_error",
+                    "message": str(exc) or "录音转写失败，请稍后重试",
+                }
+            )
+        finally:
+            if temp_path:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
+    async def recv_event(self) -> dict:
+        while not self._pending_events:
+            self._event.clear()
+            await self._event.wait()
+        return self._pending_events.pop(0)
+
+    async def close(self) -> None:
+        self._closed = True
+        self._event.set()
+
+    def _enqueue(self, payload: dict) -> None:
+        self._pending_events.append(payload)
+        self._event.set()
 
 
 class XFYunRealtimeASRClient:
@@ -591,6 +769,13 @@ def create_realtime_asr_client(
     input_audio_format: str = "pcm",
 ):
     resolved_provider = _normalized_realtime_provider(provider)
+    if resolved_provider in {"batch", "file", "sync", "whisper", "openai", "openai-compatible"}:
+        return BatchRealtimeASRClient(
+            model=model,
+            language=language,
+            sample_rate=sample_rate,
+            input_audio_format=input_audio_format,
+        )
     if resolved_provider in {"xfyun", "iflytek"}:
         return XFYunRealtimeASRClient(
             language=language,
@@ -604,4 +789,4 @@ def create_realtime_asr_client(
             sample_rate=sample_rate,
             input_audio_format=input_audio_format,
         )
-    raise RuntimeError(f"不支持的实时 ASR provider：{resolved_provider}")
+    raise RuntimeError("不支持的实时语音转写服务配置")

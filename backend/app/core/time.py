@@ -1,6 +1,6 @@
-"""Application-local time helpers for business-date calculations."""
+"""应用本地时区工具。"""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.core.config import settings
@@ -25,3 +25,23 @@ def current_local_datetime(now: datetime | None = None) -> datetime:
 
 def current_local_date(now: datetime | None = None) -> date:
     return current_local_datetime(now).date()
+
+
+def utc_naive_to_local_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(app_timezone())
+
+
+def local_datetime_to_utc_naive(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=app_timezone())
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def local_date_cutoff_to_utc_naive(local_day: date, *, hour: int) -> datetime:
+    bounded_hour = min(max(int(hour), 0), 23)
+    local_dt = datetime.combine(local_day, time(bounded_hour, 0, 0), tzinfo=app_timezone())
+    return local_datetime_to_utc_naive(local_dt)

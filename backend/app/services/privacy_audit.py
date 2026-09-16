@@ -1,9 +1,10 @@
-"""Privacy audit helpers built on top of the relationship event stream."""
+"""隐私审计记录服务"""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models import RelationshipEvent
-from app.services.privacy_sandbox import redact_sensitive_text
+from app.services.privacy_sandbox import redact_sensitive_text, sanitize_event_payload
 from app.services.relationship_intelligence import record_relationship_event
 
 _PRIVACY_AUDIT_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
@@ -23,7 +24,7 @@ _PRIVACY_AUDIT_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
 )
 
 PRIVACY_EVENT_LABELS = {
-    "privacy.ai.chat.logged": "记录了一次 AI 文本调用",
+    "privacy.ai.chat.logged": "记录了一次智能文本调用",
     "privacy.ai.transcription.logged": "记录了一次语音转录调用",
     "privacy.upload.created": "保存了一份私有上传文件",
     "privacy.upload.access_denied": "拦截了一次超出范围的文件访问",
@@ -115,6 +116,16 @@ def summarize_text_redacted(value: Any) -> str:
     if value is None:
         return ""
     return _truncate_text(redact_sensitive_text(str(value)))
+
+
+def _safe_transcription_file_label(file_name: str) -> str:
+    raw = str(file_name or "").strip()
+    if not raw:
+        return "[audio_file]"
+    if raw.startswith("[") and raw.endswith("]"):
+        return raw
+    normalized = raw.replace("\\", "/")
+    return os.path.basename(normalized) or "[audio_file]"
 
 
 def count_redaction_hits(raw_value: Any, redacted_value: Any) -> int:
@@ -251,10 +262,12 @@ async def log_privacy_transcription(
     latency_ms: int | None = None,
     status: str = "completed",
     error_code: str | None = None,
+    audio_info: dict[str, Any] | None = None,
 ) -> RelationshipEvent | None:
     if not db or not privacy_audit_enabled():
         return None
 
+    safe_audio_info = sanitize_event_payload(audio_info) if audio_info else {}
     payload = {
         "scope": scope,
         "user_id": _normalize_uuid_str(user_id),
@@ -266,11 +279,14 @@ async def log_privacy_transcription(
         "redaction_hits": count_redaction_hits(raw_output or "", summarize_text_redacted(raw_output)),
         "input_hash": _hash_value({"file_name": file_name}),
         "output_hash": _hash_value(raw_output) if raw_output not in (None, "") else None,
-        "input_summary_redacted": summarize_text_redacted(file_name),
+        "input_summary_redacted": summarize_text_redacted(
+            _safe_transcription_file_label(file_name)
+        ),
         "output_summary_redacted": summarize_text_redacted(raw_output),
         "latency_ms": latency_ms,
         "status": status,
         "error_code": error_code,
+        "audio_info": safe_audio_info,
     }
     return await log_privacy_event(
         db,
@@ -304,6 +320,7 @@ def serialize_privacy_audit_entry(event: RelationshipEvent) -> dict[str, Any]:
             "privacy_mode": payload.get("privacy_mode"),
             "proxy_strategy": payload.get("proxy_strategy"),
             "proxy_metrics": payload.get("proxy_metrics"),
+            "audio_info": payload.get("audio_info"),
         },
     }
 

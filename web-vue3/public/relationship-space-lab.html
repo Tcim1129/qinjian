@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>关系空间 · 科幻方向实验室</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7efe6;
+        --panel: rgba(255, 250, 244, 0.68);
+        --ink: #5d473c;
+        --muted: rgba(93, 71, 60, 0.72);
+        --warm: #f0b874;
+        --warm-deep: #c98148;
+        --cool: #9fd8e4;
+        --line: rgba(232, 199, 154, 0.46);
+        --border: rgba(116, 82, 60, 0.1);
+        --shadow: 0 18px 42px rgba(151, 96, 64, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top, rgba(255, 233, 206, 0.78), transparent 36%),
+          linear-gradient(180deg, #fbf5ee 0%, #f6ede3 100%);
+      }
+
+      .lab {
+        width: min(1240px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 44px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 10px;
+        padding: 0 6px 22px;
+      }
+
+      .eyebrow {
+        color: #b46a41;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(30px, 4vw, 46px);
+        line-height: 1.15;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 820px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .concept {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 30px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .concept__top {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        gap: 8px;
+        padding: 20px 20px 14px;
+      }
+
+      .concept__label {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 28px;
+        align-items: center;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 248, 240, 0.42);
+        color: rgba(93, 71, 60, 0.86);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      .concept h2 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+
+      .concept__desc {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .scene {
+        position: relative;
+        min-height: 520px;
+        padding: 18px 20px 20px;
+      }
+
+      .scene__shell {
+        position: relative;
+        height: 360px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .scene canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        opacity: 0.9;
+      }
+
+      .ring,
+      .orbit {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      .ring {
+        width: 340px;
+        height: 176px;
+        border: 1px solid rgba(255, 228, 198, 0.24);
+        box-shadow: inset 0 0 24px rgba(255, 239, 221, 0.08);
+      }
+
+      .ring::after {
+        content: "";
+        position: absolute;
+        inset: -18px;
+        border: 1px dashed rgba(255, 236, 209, 0.16);
+        border-radius: inherit;
+      }
+
+      .node {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        font-weight: 900;
+        box-shadow: 0 10px 24px rgba(72, 52, 43, 0.12);
+      }
+
+      .node--self {
+        width: 92px;
+        height: 92px;
+        background: radial-gradient(circle at 35% 30%, #fff5e5 0%, #f0ba76 58%, #bf7442 100%);
+        color: #6b381c;
+      }
+
+      .node--focus {
+        width: 112px;
+        height: 112px;
+        background: radial-gradient(circle at 35% 28%, #eefcff 0%, #b6ecf4 54%, #6ab8c9 100%);
+        color: #274d58;
+      }
+
+      .node--outer {
+        width: 46px;
+        height: 46px;
+        background: radial-gradient(circle at 35% 30%, rgba(240, 249, 252, 0.98), rgba(192, 225, 235, 0.94) 62%, rgba(119, 165, 177, 0.88));
+        color: rgba(57, 88, 97, 0.84);
+        font-size: 14px;
+      }
+
+      .name {
+        position: absolute;
+        bottom: -26px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(255, 245, 233, 0.82);
+      }
+
+      .center {
+        position: absolute;
+        left: 50%;
+        top: 52%;
+        width: 280px;
+        height: 144px;
+        transform: translate(-50%, -50%);
+      }
+
+      .center__beam {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 144px;
+        height: 8px;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+      }
+
+      .center__beam::before,
+      .center__beam::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 56px;
+        height: 20px;
+        border-radius: 999px;
+        transform: translateY(-50%);
+        filter: blur(12px);
+      }
+
+      .center__beam::before {
+        left: -8px;
+      }
+
+      .center__beam::after {
+        right: -8px;
+      }
+
+      .trail {
+        position: absolute;
+        height: 2px;
+        transform-origin: left center;
+        opacity: 0.54;
+      }
+
+      .trail span {
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 245, 233, 0.7);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .hud {
+        position: absolute;
+        inset: 18px;
+        border-radius: 24px;
+        pointer-events: none;
+      }
+
+      .hud::before,
+      .hud::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+      }
+
+      .stats {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .stats__card {
+        display: grid;
+        gap: 5px;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .stats__card span {
+        color: rgba(93, 71, 60, 0.68);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .stats__card strong {
+        font-size: 16px;
+      }
+
+      .recommend {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 34px;
+        align-items: center;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(223, 113, 70, 0.96), rgba(229, 155, 101, 0.96));
+        color: #fff6ef;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+      }
+
+      .note {
+        margin-top: 10px;
+        color: rgba(93, 71, 60, 0.7);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .concept[data-theme="stardust"] .scene__shell {
+        background:
+          radial-gradient(circle at 50% 12%, rgba(255, 221, 184, 0.38), transparent 32%),
+          linear-gradient(180deg, rgba(48, 35, 47, 0.78), rgba(38, 28, 46, 0.92));
+      }
+
+      .concept[data-theme="stardust"] .ring {
+        border-color: rgba(255, 217, 170, 0.16);
+      }
+
+      .concept[data-theme="stardust"] .center__beam {
+        background: linear-gradient(90deg, rgba(255, 190, 132, 0.82), rgba(255, 228, 204, 0.92), rgba(162, 228, 240, 0.9));
+        box-shadow: 0 0 18px rgba(255, 193, 138, 0.32);
+      }
+
+      .concept[data-theme="stardust"] .center__beam::before,
+      .concept[data-theme="stardust"] .center__beam::after {
+        background: rgba(255, 210, 167, 0.72);
+      }
+
+      .concept[data-theme="stardust"] .trail {
+        background: linear-gradient(90deg, rgba(255, 207, 156, 0.72), rgba(157, 220, 238, 0.16));
+      }
+
+      .concept[data-theme="stardust"] .hud::before {
+        inset: 44px 82px;
+        border: 1px solid rgba(255, 223, 186, 0.12);
+      }
+
+      .concept[data-theme="engine"] .scene__shell {
+        background:
+          radial-gradient(circle at 50% 34%, rgba(255, 202, 128, 0.26), transparent 22%),
+          radial-gradient(circle at 82% 18%, rgba(127, 232, 255, 0.2), transparent 24%),
+          linear-gradient(180deg, rgba(16, 23, 39, 0.92), rgba(18, 27, 45, 0.96));
+      }
+
+      .concept[data-theme="engine"] .ring {
+        width: 368px;
+        height: 200px;
+        border-color: rgba(127, 232, 255, 0.22);
+        box-shadow:
+          inset 0 0 26px rgba(127, 232, 255, 0.08),
+          0 0 36px rgba(127, 232, 255, 0.08);
+      }
+
+      .concept[data-theme="engine"] .center__beam {
+        width: 172px;
+        height: 10px;
+        background: linear-gradient(90deg, rgba(255, 166, 92, 0.82), rgba(255, 233, 210, 1), rgba(93, 220, 255, 0.94));
+        box-shadow:
+          0 0 20px rgba(93, 220, 255, 0.28),
+          0 0 34px rgba(255, 166, 92, 0.24);
+      }
+
+      .concept[data-theme="engine"] .center__beam::before,
+      .concept[data-theme="engine"] .center__beam::after {
+        background: rgba(121, 223, 249, 0.76);
+      }
+
+      .concept[data-theme="engine"] .trail {
+        height: 3px;
+        background: linear-gradient(90deg, rgba(102, 226, 255, 0.68), rgba(255, 170, 98, 0.22));
+      }
+
+      .concept[data-theme="engine"] .trail span {
+        background: rgba(10, 22, 44, 0.5);
+        color: rgba(204, 241, 255, 0.84);
+      }
+
+      .concept[data-theme="engine"] .hud::before {
+        left: 18px;
+        top: 18px;
+        width: 118px;
+        height: 118px;
+        border: 1px solid rgba(93, 220, 255, 0.16);
+        border-right-color: transparent;
+        border-bottom-color: transparent;
+      }
+
+      .concept[data-theme="engine"] .hud::after {
+        right: 18px;
+        bottom: 18px;
+        width: 136px;
+        height: 136px;
+        border: 1px solid rgba(255, 182, 114, 0.14);
+        border-left-color: transparent;
+        border-top-color: transparent;
+      }
+
+      .concept[data-theme="hud"] .scene__shell {
+        background:
+          radial-gradient(circle at 50% 50%, rgba(76, 218, 245, 0.18), transparent 30%),
+          linear-gradient(180deg, rgba(13, 28, 44, 0.95), rgba(8, 18, 31, 0.98));
+      }
+
+      .concept[data-theme="hud"] .ring {
+        width: 344px;
+        height: 196px;
+        border-color: rgba(118, 228, 255, 0.22);
+      }
+
+      .concept[data-theme="hud"] .center__beam {
+        background: linear-gradient(90deg, rgba(118, 228, 255, 0.88), rgba(244, 255, 255, 1), rgba(118, 228, 255, 0.88));
+        box-shadow: 0 0 18px rgba(118, 228, 255, 0.34);
+      }
+
+      .concept[data-theme="hud"] .center__beam::before,
+      .concept[data-theme="hud"] .center__beam::after {
+        background: rgba(118, 228, 255, 0.72);
+      }
+
+      .concept[data-theme="hud"] .trail {
+        background: linear-gradient(90deg, rgba(118, 228, 255, 0.76), rgba(118, 228, 255, 0.08));
+      }
+
+      .concept[data-theme="hud"] .trail span {
+        background: rgba(9, 24, 42, 0.66);
+        color: rgba(193, 242, 255, 0.9);
+      }
+
+      .concept[data-theme="hud"] .hud::before {
+        inset: 28px;
+        border: 1px solid rgba(118, 228, 255, 0.12);
+      }
+
+      .concept[data-theme="hud"] .hud::after {
+        left: 50%;
+        top: 50%;
+        width: 210px;
+        height: 210px;
+        transform: translate(-50%, -50%);
+        border: 1px dashed rgba(118, 228, 255, 0.12);
+      }
+
+      .pick {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+      }
+
+      .pick a {
+        display: inline-flex;
+        min-height: 38px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(116, 82, 60, 0.12);
+        background: rgba(255, 250, 244, 0.78);
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      @media (max-width: 1080px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .scene {
+          min-height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="lab">
+      <section class="hero">
+        <span class="eyebrow">Relationship Space Lab</span>
+        <h1>关系空间 · 科幻效果方向实验室</h1>
+        <p>
+          这页不是正式页面，是专门给你看气质差异的。三版都保留你现在要的双核聚焦逻辑：
+          一开始你在中心，点一个人后变成中间双圆一线，外围关系缩小外退。区别主要在能量质感、粒子方向和“引擎感”强弱。
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="concept" data-theme="stardust">
+          <div class="concept__top">
+            <span class="concept__label">A. 温柔星尘</span>
+            <h2>暖雾星轨</h2>
+            <div class="concept__desc">更像会呼吸的关系宇宙。粒子柔、光晕散、很有温度，适合“靠近彼此”的主题。</div>
+          </div>
+
+          <div class="scene">
+            <div class="scene__shell">
+              <canvas data-particles="stardust"></canvas>
+              <div class="hud"></div>
+              <div class="ring"></div>
+              <div class="center">
+                <div class="center__beam"></div>
+                <div class="node node--self" style="left: 34px; top: 28px;">我<div class="name">陈一</div></div>
+                <div class="node node--focus" style="right: 22px; top: 18px;">周<div class="name">周宁</div></div>
+              </div>
+
+              <div class="trail" style="left: 110px; top: 140px; width: 92px; transform: rotate(24deg);"><span>闺蜜</span></div>
+              <div class="trail" style="left: 178px; top: 168px; width: 80px; transform: rotate(62deg);"><span>朋友</span></div>
+              <div class="trail" style="left: 198px; top: 194px; width: 88px; transform: rotate(120deg);"><span>搭子</span></div>
+              <div class="trail" style="left: 154px; top: 184px; width: 88px; transform: rotate(214deg);"><span>姐妹</span></div>
+
+              <div class="node node--outer" style="left: 66px; top: 136px;">顾<div class="name">顾遥</div></div>
+              <div class="node node--outer" style="left: 162px; top: 86px;">林<div class="name">林夏</div></div>
+              <div class="node node--outer" style="right: 58px; top: 126px;">苏<div class="name">苏和</div></div>
+              <div class="node node--outer" style="left: 132px; bottom: 58px;">沈<div class="name">沈念</div></div>
+            </div>
+
+            <div class="stats">
+              <div class="recommend">推荐给关系修复主题</div>
+              <div class="stats__card"><span>感受</span><strong>高级、温柔、发光，但不冰冷</strong></div>
+              <div class="stats__card"><span>动态</span><strong>漂浮粒子 + 缓慢呼吸光晕 + 星尘回流</strong></div>
+            </div>
+            <div class="note">如果你想要“有美感、有故事感、像关系在宇宙里慢慢靠近”，这版最稳。</div>
+          </div>
+        </article>
+
+        <article class="concept" data-theme="engine">
+          <div class="concept__top">
+            <span class="concept__label">B. 能量引擎</span>
+            <h2>双核推进</h2>
+            <div class="concept__desc">更强的引擎感和推进感。中间像两颗被系统锁定的核心，外围关系被推力场向外抛开。</div>
+          </div>
+
+          <div class="scene">
+            <div class="scene__shell">
+              <canvas data-particles="engine"></canvas>
+              <div class="hud"></div>
+              <div class="ring"></div>
+              <div class="center">
+                <div class="center__beam"></div>
+                <div class="node node--self" style="left: 16px; top: 22px;">我<div class="name">陈一</div></div>
+                <div class="node node--focus" style="right: 6px; top: 10px;">周<div class="name">周宁</div></div>
+              </div>
+
+              <div class="trail" style="left: 114px; top: 108px; width: 104px; transform: rotate(-42deg);"><span>旧同学</span></div>
+              <div class="trail" style="left: 248px; top: 104px; width: 108px; transform: rotate(-12deg);"><span>搭子</span></div>
+              <div class="trail" style="left: 236px; top: 188px; width: 112px; transform: rotate(36deg);"><span>同事</span></div>
+              <div class="trail" style="left: 142px; top: 216px; width: 108px; transform: rotate(146deg);"><span>朋友</span></div>
+              <div class="trail" style="left: 82px; top: 192px; width: 92px; transform: rotate(210deg);"><span>家人</span></div>
+
+              <div class="node node--outer" style="left: 82px; top: 72px;">许</div>
+              <div class="node node--outer" style="right: 38px; top: 82px;">季</div>
+              <div class="node node--outer" style="right: 42px; top: 204px;">程</div>
+              <div class="node node--outer" style="left: 108px; bottom: 54px;">安</div>
+              <div class="node node--outer" style="left: 34px; top: 206px;">乔</div>
+            </div>
+
+            <div class="stats">
+              <div class="recommend">我更推荐这版</div>
+              <div class="stats__card"><span>感受</span><strong>最像“系统启动后的关系引擎”</strong></div>
+              <div class="stats__card"><span>动态</span><strong>喷射粒子 + 横向能量束 + 外圈磁场漂移</strong></div>
+            </div>
+            <div class="note">如果你想要更科幻、更有“点中一个人就进入推进模式”的感觉，这版最贴你刚刚说的效果。</div>
+          </div>
+        </article>
+
+        <article class="concept" data-theme="hud">
+          <div class="concept__top">
+            <span class="concept__label">C. 全息 HUD</span>
+            <h2>关系中枢</h2>
+            <div class="concept__desc">更像系统面板或未来雷达，科技感最强，但会更冷、更偏界面化。</div>
+          </div>
+
+          <div class="scene">
+            <div class="scene__shell">
+              <canvas data-particles="hud"></canvas>
+              <div class="hud"></div>
+              <div class="ring"></div>
+              <div class="center">
+                <div class="center__beam"></div>
+                <div class="node node--self" style="left: 36px; top: 26px;">我<div class="name">陈一</div></div>
+                <div class="node node--focus" style="right: 26px; top: 16px;">周<div class="name">周宁</div></div>
+              </div>
+
+              <div class="trail" style="left: 128px; top: 94px; width: 104px; transform: rotate(-54deg);"><span>闺蜜</span></div>
+              <div class="trail" style="left: 244px; top: 116px; width: 100px; transform: rotate(-14deg);"><span>朋友</span></div>
+              <div class="trail" style="left: 240px; top: 204px; width: 106px; transform: rotate(44deg);"><span>搭子</span></div>
+              <div class="trail" style="left: 126px; top: 214px; width: 100px; transform: rotate(152deg);"><span>家人</span></div>
+
+              <div class="node node--outer" style="left: 98px; top: 62px;">洛</div>
+              <div class="node node--outer" style="right: 48px; top: 92px;">宁</div>
+              <div class="node node--outer" style="right: 54px; top: 208px;">衡</div>
+              <div class="node node--outer" style="left: 102px; bottom: 46px;">言</div>
+            </div>
+
+            <div class="stats">
+              <div class="recommend">适合偏产品科技线</div>
+              <div class="stats__card"><span>感受</span><strong>冷静、未来、控制台感强</strong></div>
+              <div class="stats__card"><span>动态</span><strong>扫描粒子 + HUD 描边 + 网格脉冲</strong></div>
+            </div>
+            <div class="note">如果你更想做“高科技关系系统”，这版会很帅；但它没有 B 那么有人情温度。</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="pick">
+        <a href="http://127.0.0.1:5173/pair">回正式关系空间</a>
+      </section>
+    </main>
+
+    <script>
+      const THEMES = {
+        stardust: { count: 42, hue: ["255,206,144", "160,225,239"], drift: 0.24, size: [0.7, 2.6] },
+        engine: { count: 58, hue: ["255,164,89", "95,226,255"], drift: 0.58, size: [0.8, 2.8] },
+        hud: { count: 54, hue: ["118,228,255", "226,250,255"], drift: 0.42, size: [0.7, 2.2] },
+      }
+
+      for (const canvas of document.querySelectorAll("canvas[data-particles]")) {
+        const theme = THEMES[canvas.dataset.particles] || THEMES.stardust
+        const ctx = canvas.getContext("2d")
+        const particles = []
+
+        function resize() {
+          const rect = canvas.getBoundingClientRect()
+          const dpr = window.devicePixelRatio || 1
+          canvas.width = rect.width * dpr
+          canvas.height = rect.height * dpr
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+          particles.length = 0
+          for (let i = 0; i < theme.count; i += 1) {
+            particles.push({
+              x: Math.random() * rect.width,
+              y: Math.random() * rect.height,
+              r: theme.size[0] + Math.random() * (theme.size[1] - theme.size[0]),
+              vx: (Math.random() - 0.5) * theme.drift,
+              vy: (Math.random() - 0.5) * theme.drift,
+              hue: theme.hue[i % theme.hue.length],
+              alpha: 0.22 + Math.random() * 0.56,
+              pulse: Math.random() * Math.PI * 2,
+            })
+          }
+        }
+
+        function draw(time) {
+          const rect = canvas.getBoundingClientRect()
+          ctx.clearRect(0, 0, rect.width, rect.height)
+
+          for (const p of particles) {
+            p.x += p.vx
+            p.y += p.vy
+            p.pulse += 0.014
+
+            if (p.x < -20) p.x = rect.width + 20
+            if (p.x > rect.width + 20) p.x = -20
+            if (p.y < -20) p.y = rect.height + 20
+            if (p.y > rect.height + 20) p.y = -20
+
+            const radius = p.r + Math.sin(time * 0.001 + p.pulse) * 0.55
+            const alpha = p.alpha + Math.sin(time * 0.0014 + p.pulse) * 0.12
+            const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 5.6)
+            glow.addColorStop(0, `rgba(${p.hue}, ${Math.max(0.08, alpha)})`)
+            glow.addColorStop(1, `rgba(${p.hue}, 0)`)
+
+            ctx.beginPath()
+            ctx.fillStyle = glow
+            ctx.arc(p.x, p.y, radius * 5.6, 0, Math.PI * 2)
+            ctx.fill()
+
+            ctx.beginPath()
+            ctx.fillStyle = `rgba(${p.hue}, ${Math.max(0.22, alpha)})`
+            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2)
+            ctx.fill()
+          }
+
+          requestAnimationFrame(draw)
+        }
+
+        resize()
+        requestAnimationFrame(draw)
+        window.addEventListener("resize", resize)
+      }
+    </script>
+  </body>
+</html>

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from .insights_routes import (
     alignment,
     assessments,
+    interaction,
     methodology,
     plans,
     playbook,
@@ -19,6 +20,7 @@ for child_router in (
     safety.router,
     assessments.router,
     profile.router,
+    interaction.router,
     timeline.router,
     plans.router,
     playbook.router,
