@@ -35,10 +35,15 @@ from app.models import (
 from app.services.task_adaptation import (
     build_daily_pack_label,
     build_daily_task_note,
+    clamp_daily_note_length,
 )
+
+import os
+import sys
 
 logger = logging.getLogger(__name__)
 
+TASK_PLANNER_AI_TIMEOUT_SECONDS = float(os.getenv("TASK_PLANNER_AI_TIMEOUT_SECONDS", "8.0"))
 TASK_PLANNER_DEFAULT_TIMEZONE = "Asia/Shanghai"
 DEFAULT_TASK_PLANNER_DEFAULTS = {
     "daily_ai_task_count": 5,
@@ -198,7 +203,8 @@ def merge_pair_task_planner_overrides(
 
 
 def normalize_task_importance_level(value: object, *, fallback: str = "medium") -> str:
-    normalized = str(value or fallback).strip().lower() or fallback
+    raw_val = getattr(value, "value", value)
+    normalized = str(raw_val or fallback).strip().lower() or fallback
     return normalized if normalized in VALID_TASK_IMPORTANCE_LEVELS else fallback
 
 
@@ -360,12 +366,16 @@ def _parse_task_pack_response(
 
     tasks = _normalize_generated_tasks(payload.get("tasks"), task_count=task_count)
     generated_daily_note = str(payload.get("daily_note") or "").strip()
+    if generated_daily_note:
+        generated_daily_note = clamp_daily_note_length(generated_daily_note)
     generated_planning_note = str(payload.get("planning_note") or "").strip()
+    if generated_planning_note:
+        generated_planning_note = clamp_daily_note_length(generated_planning_note)
     generated_pack_label = str(payload.get("daily_pack_label") or "").strip()
     return {
         "tasks": tasks,
         "daily_note": generated_daily_note
-        or build_daily_task_note(strategy or {}),
+        or build_daily_task_note(strategy or {}, randomize=True),
         "planning_note": generated_planning_note
         or build_planning_note(
             strategy=strategy,
@@ -424,6 +434,7 @@ async def _build_recent_status_lines(
     db: AsyncSession,
     *,
     pair_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> list[str]:
     lines: list[str] = []
 
@@ -475,27 +486,37 @@ async def _build_recent_status_lines(
             RelationshipEvent.event_type == "task.feedback_submitted",
         )
         .order_by(desc(RelationshipEvent.occurred_at), desc(RelationshipEvent.created_at))
-        .limit(3)
+        .limit(10)
     )
     for event in feedback_result.scalars().all():
         payload = event.payload or {}
+        event_user_id = str(event.user_id) if event.user_id else None
+        current_user_str = str(user_id) if user_id else None
+
+        outcome = payload.get("outcome")
+        if outcome in ("not_yet", "difficult"):
+            if current_user_str and event_user_id and current_user_str != event_user_id:
+                continue
+            outcome_label = "还没做" if outcome == "not_yet" else "遇到阻力"
+            lines.append(f"反馈：{outcome_label}")
+            continue
+
         usefulness = payload.get("usefulness_score")
         friction = payload.get("friction_score")
         shift = payload.get("relationship_shift_score")
         if usefulness is None and friction is None and shift is None:
+            if outcome == "helped":
+                lines.append("反馈：觉得有帮助")
             continue
-        lines.append(
-            "反馈："
-            + "，".join(
-                item
-                for item in [
-                    f"有用度 {usefulness}/5" if usefulness is not None else "",
-                    f"阻力 {friction}/5" if friction is not None else "",
-                    f"关系变化 {shift}" if shift is not None else "",
-                ]
-                if item
-            )
-        )
+        items = []
+        if usefulness is not None:
+            items.append(f"有用度 {usefulness}/5")
+        if friction is not None:
+            items.append(f"阻力 {friction}/5")
+        if shift is not None:
+            items.append(f"关系变化 {shift}")
+        if items:
+            lines.append("反馈：" + "，".join(items))
 
     return lines[:8]
 
@@ -557,9 +578,9 @@ def _build_task_plan_prompt(
     reminder_time = effective_settings.get("reminder_time") or "21:00"
     note_label = "planning_note" if date_scope == "tomorrow" else "daily_note"
     note_hint = (
-        "planning_note 写成轻量说明，如“明天已帮你排好，可先调顺优先级”。"
+        "planning_note 写成轻量说明，如“明天已帮你排好，可先调顺优先级”，字数控制在 24 字内。"
         if date_scope == "tomorrow"
-        else "daily_note 写成今天执行时的引导语，不要鸡汤。"
+        else "daily_note 写成今天执行时的温情引导语，必须控制在 18 到 26 字内，不要鸡汤，绝不能超过 28 字。"
     )
 
     return "\n".join(
@@ -638,13 +659,14 @@ async def generate_ai_task_pack(
     strategy: dict | None,
     scorecard: dict | None,
     effective_settings: dict[str, object],
+    user_id: uuid.UUID | None = None,
 ) -> dict[str, object]:
     from app.ai import chat_completion
 
     date_scope = resolve_date_scope(for_date)
     task_count = int(effective_settings.get("daily_ai_task_count") or 5)
     snapshot = await _load_or_refresh_snapshot(db, pair_id=pair.id)
-    status_lines = await _build_recent_status_lines(db, pair_id=pair.id)
+    status_lines = await _build_recent_status_lines(db, pair_id=pair.id, user_id=user_id)
     prompt = _build_task_plan_prompt(
         pair=pair,
         for_date=for_date,
@@ -656,17 +678,25 @@ async def generate_ai_task_pack(
         snapshot=snapshot,
         status_lines=status_lines,
     )
+    timeout_seconds = getattr(
+        sys.modules[__name__],
+        "TASK_PLANNER_AI_TIMEOUT_SECONDS",
+        TASK_PLANNER_AI_TIMEOUT_SECONDS,
+    )
     try:
-        result = await chat_completion(
-            settings.AI_TEXT_MODEL,
-            [
-                {
-                    "role": "system",
-                    "content": "你是亲健的关系任务规划助手，输出必须是合法 JSON。",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.45,
+        result = await asyncio.wait_for(
+            chat_completion(
+                settings.AI_TEXT_MODEL,
+                [
+                    {
+                        "role": "system",
+                        "content": "你是亲健的关系任务规划助手，输出必须是合法 JSON。",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.45,
+            ),
+            timeout=timeout_seconds,
         )
     except Exception as exc:
         raise TaskPlannerError("planner ai call failed") from exc
@@ -687,11 +717,12 @@ async def generate_ai_task_refresh(
     task: RelationshipTask,
     siblings: list[RelationshipTask],
     strategy: dict | None,
+    user_id: uuid.UUID | None = None,
 ) -> dict[str, str]:
     from app.ai import chat_completion
 
     snapshot = await _load_or_refresh_snapshot(db, pair_id=pair.id)
-    status_lines = await _build_recent_status_lines(db, pair_id=pair.id)
+    status_lines = await _build_recent_status_lines(db, pair_id=pair.id, user_id=user_id)
     prompt = _build_refresh_prompt(
         pair=pair,
         task=task,

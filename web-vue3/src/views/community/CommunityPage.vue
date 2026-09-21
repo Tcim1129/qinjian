@@ -70,7 +70,6 @@ import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
 import { resolveExperienceMode } from '@/utils/experienceMode'
-import { resolveRelationshipDisplayPair } from '@/utils/relationshipDisplay'
 import { createRefreshAttemptGuard } from '@/utils/refreshGuards'
 
 const router = useRouter()
@@ -92,10 +91,7 @@ const experienceMode = computed(() =>
     pairs: userStore.pairs,
   })
 )
-const relationshipDisplayPair = computed(() => resolveRelationshipDisplayPair({
-  activePair: userStore.activePair,
-  currentPair: userStore.currentPair,
-}))
+const relationshipDisplayPair = computed(() => userStore.activePair || null)
 const resolvedTipScope = computed(() => relationshipDisplayPair.value?.type || 'solo')
 const resolvedTipPairId = computed(() => relationshipDisplayPair.value?.id || null)
 onMounted(() => {

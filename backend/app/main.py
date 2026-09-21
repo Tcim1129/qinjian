@@ -1,4 +1,4 @@
-"""亲健——基于生成式智能的泛亲密关系智能感知与维系平台应用入口"""
+"""亲健（基于生成式 AI 的泛亲密关系智能感知与维系系统）应用入口"""
 
 import asyncio
 import logging
@@ -32,9 +32,9 @@ from app.services.task_planner import (
 from app.services.upload_access import public_upload_access_enabled
 
 APP_DESCRIPTION = """
-亲健——基于生成式智能的泛亲密关系智能感知与维系平台。
-面向泛亲密关系健康场景，深度集成大模型能力，提供情感感知、危机识别与维系干预等全链路闭环方案。
-涵盖账号认证、关系打卡、危机预警、关系智能画像、干预计划、剧本运行时、策略审计和叙事对齐等核心能力。
+亲健（基于生成式 AI 的泛亲密关系智能感知与维系系统）。
+提供日常记录、对话建议、关系简报和任务管理功能。
+接口负责账号验证、记录保存、风险提示、计划执行、操作查询和双方记录分析。
 """
 
 OPENAPI_TAGS = [

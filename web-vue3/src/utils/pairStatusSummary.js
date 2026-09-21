@@ -50,7 +50,7 @@ function buildFallbackSummary(pair, trend, isCurrent) {
 function buildFallbackNextAction(pair, isCurrent) {
   if (pair?.status === 'active') {
     return isCurrent
-      ? '去记录或时间轴看看。'
+      ? '去记录或关系日历看看。'
       : '打开专属关系页。'
   }
 

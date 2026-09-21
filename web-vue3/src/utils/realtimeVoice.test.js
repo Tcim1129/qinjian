@@ -231,7 +231,7 @@ test('backend realtime ASR stops partial updates after user stops recording', as
 
   assert.deepEqual(partials, ['还在听'])
   assert.deepEqual(errors, [])
-  assert.deepEqual(finals, [''])
+  assert.deepEqual(finals, ['还在听'])
 })
 
 test('backend realtime ASR auto-finalizes from last partial when provider does not close after stop', async (t) => {

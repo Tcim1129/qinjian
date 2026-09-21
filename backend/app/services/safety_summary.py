@@ -209,7 +209,7 @@ def _build_recommended_action(
         if suggestion:
             return str(suggestion)
     if scope_is_pair:
-        return "优先做一件低摩擦的小修复动作，再观察今天的互动是否更稳定。"
+        return "先尝试一件双方都容易接受的小事，再看看今天相处时是否更平和。"
     return "先做一个最容易完成的自我照顾动作，再观察这周状态是否回稳。"
 
 

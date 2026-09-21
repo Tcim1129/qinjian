@@ -1,8 +1,9 @@
-"""关系智能服务：基线指标、行为事件流与配置抓取。
+"""关系分析服务：汇总历史指标、行为记录和当前配置。
 
 该模块在现有业务表之上增加了一个轻量级的事件流和配置文件快照层，便于报告、任务和AI代理可以共享对一段关系的派生理解，而不是各自重新推导逻辑。
 """
 
+import hashlib
 import uuid
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
@@ -37,6 +38,9 @@ from app.services.behavior_judgement import (
 from app.services.product_prefs import normalize_product_prefs
 
 
+RELATIONSHIP_EVENT_IDEMPOTENCY_KEY_MAX_LENGTH = 100
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -53,6 +57,21 @@ def _require_uuid(value: uuid.UUID | None) -> uuid.UUID:
     if value is None:
         raise ValueError("expected normalized uuid")
     return value
+
+
+def normalize_relationship_event_idempotency_key(value: str | None) -> str | None:
+    """Keep deterministic event keys within the production VARCHAR(100) column."""
+
+    key = str(value or "").strip()
+    if not key:
+        return None
+    if len(key) <= RELATIONSHIP_EVENT_IDEMPOTENCY_KEY_MAX_LENGTH:
+        return key
+
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+    prefix_length = RELATIONSHIP_EVENT_IDEMPOTENCY_KEY_MAX_LENGTH - len(digest) - 1
+    prefix = key[:prefix_length].rstrip(":")
+    return f"{prefix}:{digest}"
 
 
 def _avg(values: Sequence[int | float]) -> float | None:
@@ -157,6 +176,9 @@ async def record_relationship_event(
     normalized_pair_id = _normalize_uuid(pair_id)
     normalized_user_id = _normalize_uuid(user_id)
     normalized_entity_id = str(entity_id) if entity_id is not None else None
+    normalized_idempotency_key = normalize_relationship_event_idempotency_key(
+        idempotency_key
+    )
 
     if (
         normalized_pair_id is None
@@ -165,10 +187,10 @@ async def record_relationship_event(
     ):
         raise ValueError("record_relationship_event requires pair_id or user_id")
 
-    if idempotency_key:
+    if normalized_idempotency_key:
         result = await db.execute(
             select(RelationshipEvent).where(
-                RelationshipEvent.idempotency_key == idempotency_key
+                RelationshipEvent.idempotency_key == normalized_idempotency_key
             )
         )
         existing = result.scalar_one_or_none()
@@ -183,7 +205,7 @@ async def record_relationship_event(
         entity_id=normalized_entity_id,
         source=source,
         payload=sanitize_event_payload(payload),
-        idempotency_key=idempotency_key,
+        idempotency_key=normalized_idempotency_key,
         occurred_at=occurred_at or _utcnow(),
     )
     db.add(event)
@@ -253,8 +275,13 @@ async def refresh_profile_snapshot(
             RelationshipProfileSnapshot.snapshot_date == resolved_snapshot_date,
             RelationshipProfileSnapshot.version == version,
         )
+        .order_by(
+            RelationshipProfileSnapshot.created_at.desc(),
+            RelationshipProfileSnapshot.id.desc(),
+        )
+        .limit(1)
     )
-    snapshot = result.scalar_one_or_none()
+    snapshot = result.scalars().first()
 
     if snapshot:
         snapshot.metrics_json = metrics

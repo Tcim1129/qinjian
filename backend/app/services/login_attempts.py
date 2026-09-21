@@ -69,7 +69,7 @@ class RedisLoginAttemptStore:
         ttl_seconds = 86400
         if entry.locked_until:
             ttl_seconds = max(int((entry.locked_until - _utcnow()).total_seconds()), 1)
-        
+
         await self._client.set(
             self._key(key),
             json.dumps(entry.to_dict(), ensure_ascii=False),

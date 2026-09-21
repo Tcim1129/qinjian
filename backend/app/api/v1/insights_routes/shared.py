@@ -1,5 +1,7 @@
 """Shared helpers for relationship insight routes."""
 
+import uuid
+
 from fastapi import HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,35 +37,49 @@ async def resolve_scope(
     return pair_id, None
 
 
+def _scope_uuid(value: str | uuid.UUID | None) -> uuid.UUID | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
+
+
 def profile_scope_query(pair_id: str | None, user_id: str | None):
+    pair_uuid = _scope_uuid(pair_id)
+    user_uuid = _scope_uuid(user_id)
     if pair_id:
         return [
-            RelationshipProfileSnapshot.pair_id == pair_id,
+            RelationshipProfileSnapshot.pair_id == pair_uuid,
             RelationshipProfileSnapshot.user_id.is_(None),
         ]
     return [
-        RelationshipProfileSnapshot.user_id == user_id,
+        RelationshipProfileSnapshot.user_id == user_uuid,
         RelationshipProfileSnapshot.pair_id.is_(None),
     ]
 
 
 def plan_scope_query(pair_id: str | None, user_id: str | None):
+    pair_uuid = _scope_uuid(pair_id)
+    user_uuid = _scope_uuid(user_id)
     if pair_id:
         return [
-            InterventionPlan.pair_id == pair_id,
+            InterventionPlan.pair_id == pair_uuid,
             InterventionPlan.user_id.is_(None),
         ]
     return [
-        InterventionPlan.user_id == user_id,
+        InterventionPlan.user_id == user_uuid,
         InterventionPlan.pair_id.is_(None),
     ]
 
 
 def event_scope_query(pair_id: str | None, user_id: str | None):
+    pair_uuid = _scope_uuid(pair_id)
+    user_uuid = _scope_uuid(user_id)
     if pair_id:
-        return [RelationshipEvent.pair_id == pair_id]
+        return [RelationshipEvent.pair_id == pair_uuid]
     return [
-        RelationshipEvent.user_id == user_id,
+        RelationshipEvent.user_id == user_uuid,
         RelationshipEvent.pair_id.is_(None),
     ]
 

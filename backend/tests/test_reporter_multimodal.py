@@ -7,8 +7,9 @@ from app.ai import reporter
 from app.core.config import settings
 
 
-def test_default_multimodal_model_targets_siliconflow_kimi():
-    assert settings.AI_MULTIMODAL_MODEL == "Pro/moonshotai/Kimi-K2.6"
+def test_default_multimodal_model_targets_qwen_flash():
+    assert settings.AI_MULTIMODAL_MODEL == "qwen3.8-flash"
+    assert settings.AI_MULTIMODAL_FALLBACK_MODEL == "qwen3.8-flash"
 
 
 def test_analyze_image_uses_configured_multimodal_model_and_png_data_url(monkeypatch):
@@ -38,7 +39,7 @@ def test_analyze_image_uses_configured_multimodal_model_and_png_data_url(monkeyp
     monkeypatch.setattr(
         reporter.settings,
         "AI_MULTIMODAL_MODEL",
-        "Pro/moonshotai/Kimi-K2.6",
+        "qwen3.7-plus-2026-05-26",
     )
     monkeypatch.setattr(reporter, "create_chat_completion", fake_create_chat_completion)
 
@@ -46,7 +47,7 @@ def test_analyze_image_uses_configured_multimodal_model_and_png_data_url(monkeyp
         reporter.analyze_image("/uploads/images/scene.png", context="聊天截图")
     )
 
-    assert captured["model"] == "Pro/moonshotai/Kimi-K2.6"
+    assert captured["model"] == "qwen3.7-plus-2026-05-26"
     assert captured["temperature"] == 0.4
     assert (
         captured["messages"][1]["content"][1]["image_url"]["url"].startswith(

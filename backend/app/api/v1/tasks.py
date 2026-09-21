@@ -27,6 +27,7 @@ from app.schemas import (
     TaskCreateRequest,
     TaskFeedbackRequest,
     TaskFeedbackResponse,
+    TaskResultRequest,
     TaskUpdateRequest,
 )
 from app.services.display_labels import status_label, task_category_label
@@ -40,7 +41,9 @@ from app.services.test_accounts import is_relaxed_test_account
 from app.services.task_adaptation import (
     build_daily_pack_label,
     build_daily_task_note,
+    clamp_daily_note_length,
     build_pair_task_adaptation,
+    build_simple_daily_tasks,
     personalize_task_payloads,
 )
 from app.services.task_feedback import get_latest_task_feedback_map
@@ -198,6 +201,43 @@ def _fallback_daily_strategy() -> dict:
     }
 
 
+def _fallback_daily_pack(
+    strategy: dict,
+    *,
+    effective_settings: dict[str, object],
+    date_scope: str,
+) -> dict:
+    tasks = build_simple_daily_tasks(strategy)
+    if not tasks:
+        tasks = [
+            {
+                "title": "先完成一条轻量记录",
+                "description": "用一句话写下今天关系里最值得留意的变化。",
+                "category": "reflection",
+            },
+            {
+                "title": "发起一次低压力连接",
+                "description": "找一个不容易引发争执的话题，保持十分钟轻量互动。",
+                "category": "connection",
+            },
+            {
+                "title": "留一句后续复盘",
+                "description": "记录今天哪种表达方式更容易被听见。",
+                "category": "reflection",
+            },
+        ]
+    return {
+        "tasks": tasks,
+        "daily_note": build_daily_task_note(strategy, randomize=True),
+        "planning_note": build_planning_note(
+            strategy=strategy,
+            effective_settings=effective_settings,
+        ),
+        "daily_pack_label": build_daily_pack_label(strategy),
+        "date_scope": date_scope,
+    }
+
+
 def _as_uuid(
     value: uuid.UUID | str,
     *,
@@ -320,8 +360,9 @@ def _task_layer_metadata(
 ) -> tuple[str, str, str]:
     payload = batch_event.payload if batch_event and isinstance(batch_event.payload, dict) else {}
     daily_note = str(payload.get("daily_note") or "").strip() or build_daily_task_note(
-        strategy
+        strategy, randomize=True
     )
+    daily_note = clamp_daily_note_length(daily_note)
     daily_pack_label = str(payload.get("daily_pack_label") or "").strip() or build_daily_pack_label(
         strategy
     )
@@ -447,9 +488,19 @@ async def get_daily_tasks(
                 strategy=strategy,
                 scorecard=scorecard,
                 effective_settings=effective_settings,
+                user_id=user.id,
             )
         except TaskPlannerError as exc:
-            raise HTTPException(status_code=503, detail="AI 任务生成失败，请稍后重试") from exc
+            logger.warning(
+                "Falling back to simple daily tasks after planner failure",
+                extra={"pair_id": str(pair.id), "for_date": target_date.isoformat()},
+                exc_info=exc,
+            )
+            pack = _fallback_daily_pack(
+                strategy,
+                effective_settings=effective_settings,
+                date_scope=resolved_date_scope,
+            )
 
         generated_tasks: list[RelationshipTask] = []
         for item in pack["tasks"]:
@@ -797,6 +848,7 @@ async def refresh_task(
             task=task,
             siblings=siblings,
             strategy=strategy,
+            user_id=user.id,
         )
     except TaskPlannerError as exc:
         raise HTTPException(status_code=503, detail="AI 刷新失败，请稍后重试") from exc
@@ -835,7 +887,7 @@ async def complete_task(
 ):
     if task_id.startswith("demo-"):
         return {
-            "message": "任务已完成 ✅",
+            "message": "任务已完成",
             "task": {"id": task_id, "status": "completed"},
         }
 
@@ -847,6 +899,12 @@ async def complete_task(
     pair = await db.get(Pair, task.pair_id)
     _ensure_task_operator(task, user, pair)
 
+    if task.due_date and task.due_date > current_local_date():
+        raise HTTPException(status_code=400, detail="还没到计划日期，先不用标记完成")
+    if task.status == TaskStatus.COMPLETED:
+        return {"task": _task_to_dict(task, viewer=user)}
+    if task.status == TaskStatus.SKIPPED:
+        raise HTTPException(status_code=400, detail="已跳过的安排不能标记完成")
     task.status = TaskStatus.COMPLETED
     task.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
@@ -864,11 +922,38 @@ async def complete_task(
             "importance_level": normalize_task_importance_level(task.importance_level),
             "due_date": str(task.due_date),
         },
-        idempotency_key=f"task:{task.id}:completed",
+        idempotency_key=f"task:{task.id}:completed:{task.completed_at.isoformat()}",
         occurred_at=task.completed_at,
     )
     await refresh_profile_and_plan(db, pair_id=task.pair_id)
-    return {"message": "任务已完成 ✅", "task": _task_to_dict(task, viewer=user)}
+    return {"message": "任务已完成", "task": _task_to_dict(task, viewer=user)}
+
+
+@router.post("/{task_id}/reopen")
+async def reopen_task(
+    task_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    task_uuid = _as_uuid(task_id, detail="无效的任务ID格式", status_code=400)
+    task = await db.get(RelationshipTask, task_uuid)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    pair = await db.get(Pair, task.pair_id)
+    _ensure_task_operator(task, user, pair)
+    if task.status == TaskStatus.SKIPPED:
+        raise HTTPException(status_code=400, detail="已取消的安排不能修改结果")
+    if task.status == TaskStatus.COMPLETED:
+        task.status = TaskStatus.PENDING
+        task.completed_at = None
+        await db.flush()
+        await record_relationship_event(
+            db, event_type="task.reopened", pair_id=task.pair_id, user_id=user.id,
+            entity_type="relationship_task", entity_id=task.id,
+            payload={"title": task.title, "due_date": str(task.due_date)},
+        )
+        await refresh_profile_and_plan(db, pair_id=task.pair_id)
+    return {"task": _task_to_dict(task, viewer=user)}
 
 
 @router.post("/{task_id}/feedback", response_model=TaskFeedbackResponse)
@@ -885,8 +970,14 @@ async def submit_task_feedback(
 
     pair = await db.get(Pair, task.pair_id)
     _ensure_task_operator(task, user, pair)
-    if task.status != TaskStatus.COMPLETED:
+    if task.due_date and task.due_date > current_local_date():
+        raise HTTPException(status_code=400, detail="这件事还没到计划日期，先不用反馈")
+    if task.status != TaskStatus.COMPLETED and not (
+        task.status == TaskStatus.PENDING and req.outcome in {'not_yet', 'difficult'}
+    ):
         raise HTTPException(status_code=400, detail="请先完成任务，再提交反馈")
+    if task.status == TaskStatus.COMPLETED and req.outcome == 'not_yet':
+        raise HTTPException(status_code=400, detail="这件事已标为完成，请选择实际结果")
 
     result = await db.execute(
         select(RelationshipEvent)
@@ -905,6 +996,7 @@ async def submit_task_feedback(
     feedback_event = result.scalar_one_or_none()
     submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     payload = {
+        "outcome": req.outcome,
         "usefulness_score": req.usefulness_score,
         "friction_score": req.friction_score,
         "relationship_shift_score": req.relationship_shift_score,
@@ -934,12 +1026,58 @@ async def submit_task_feedback(
 
     return TaskFeedbackResponse(
         task_id=task.id,
+        outcome=req.outcome,
         usefulness_score=req.usefulness_score,
         friction_score=req.friction_score,
         relationship_shift_score=req.relationship_shift_score,
         note=req.note,
         submitted_at=feedback_event.occurred_at or submitted_at,
     )
+
+
+@router.post("/{task_id}/result")
+async def save_task_result(
+    task_id: str,
+    req: TaskResultRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    task_uuid = _as_uuid(task_id, detail="无效的任务ID格式", status_code=400)
+    task = await db.get(RelationshipTask, task_uuid, with_for_update=True, populate_existing=True)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    pair = await db.get(Pair, task.pair_id)
+    _ensure_task_operator(task, user, pair)
+    if task.status == TaskStatus.SKIPPED:
+        raise HTTPException(status_code=400, detail="已取消的安排不能修改结果")
+    if task.due_date and task.due_date > current_local_date():
+        raise HTTPException(status_code=400, detail="还没到计划日期，先不用填写结果")
+
+    # Completion and feedback either both persist or both roll back.
+    async with db.begin_nested():
+        if req.status == 'completed':
+            await complete_task(task_id, user, db)
+        else:
+            await reopen_task(task_id, user, db)
+        if req.feedback is not None:
+            feedback = (await submit_task_feedback(task_id, req.feedback, user, db)).model_dump(mode='json')
+        else:
+            # Keep only an audit marker, not a second copy of cleared private text.
+            events = (await db.execute(select(RelationshipEvent).where(
+                RelationshipEvent.event_type == 'task.feedback_submitted',
+                RelationshipEvent.entity_type == 'relationship_task',
+                RelationshipEvent.entity_id == str(task.id),
+                RelationshipEvent.pair_id == task.pair_id,
+                RelationshipEvent.user_id == user.id,
+            ))).scalars().all()
+            for event in events:
+                event.event_type = 'task.feedback_cleared'
+                event.payload = {'summary': '这条安排的反馈已清除'}
+            await db.flush()
+            if events:
+                await refresh_profile_and_plan(db, pair_id=task.pair_id)
+            feedback = None
+        return {'task': _task_to_dict(task, viewer=user, feedback=feedback)}
 
 
 @router.get("/attachment/{pair_id}")

@@ -2,12 +2,12 @@
   <div class="checkin-page">
     <div class="page-head checkin-head">
       <p class="eyebrow">关系记录</p>
-      <h2>把今天想说的一句话先留住</h2>
+      <h2>今天过得怎么样？</h2>
     </div>
 
     <div class="segmented checkin-mode">
-      <button type="button" :class="{ active: mode === 'form' }" @click="switchMode('form')">手写记录</button>
-      <button type="button" :class="{ active: mode === 'voice' }" @click="switchMode('voice')">陪伴整理</button>
+      <button type="button" :class="{ active: mode === 'form' }" @click="switchMode('form')">自己写</button>
+      <button type="button" :class="{ active: mode === 'voice' }" @click="switchMode('voice')">聊一聊</button>
     </div>
 
     <form v-if="mode === 'form'" class="checkin-workbench" @submit.prevent="handleSubmit">
@@ -304,7 +304,7 @@
       <div class="voice-draft__head">
         <div>
           <p class="eyebrow">对话整理</p>
-          <h3>说出来，助手帮你整理成记录</h3>
+          <h3>聊聊今天的事</h3>
         </div>
         <label v-if="availableCheckinPairs.length" class="checkin-pair-picker" aria-label="记录对象">
           <select :value="activePairId" :disabled="availableCheckinPairs.length < 2" @change="switchCheckinPair">
@@ -325,7 +325,7 @@
         </button>
       </div>
 
-      <div v-if="!messages.length" class="empty-state">从一句“今天其实有点累”开始就行。</div>
+      <div v-if="!messages.length" class="empty-state">心里有什么琐碎或委屈，随时跟我说说，比如“今天下班真的好累呀~”</div>
       <div v-else class="chat-list">
         <div v-for="(msg, i) in messages" :key="i" class="chat-msg" :class="{ 'chat-msg--user': msg.role === 'user' }">
           <div class="chat-msg__avatar">{{ msg.role === 'user' ? '我' : '助' }}</div>
@@ -334,7 +334,7 @@
       </div>
 
       <div class="form-stack voice-input">
-        <textarea ref="chatInputEl" v-model="chatInput" class="input input-textarea voice-chat-textarea" placeholder="例如：今天其实有点累，但晚饭时我们把误会说开了。"></textarea>
+        <textarea ref="chatInputEl" v-model="chatInput" class="input input-textarea voice-chat-textarea" placeholder="写写今天发生的事，或者说说现在的心情。"></textarea>
         <div class="hero-actions">
           <button class="btn btn-primary" type="button" :disabled="agentSending || asrFinalizing" @click="sendChat">
             {{ agentSending ? '发送中...' : '发给助手' }}
@@ -1072,7 +1072,7 @@ async function sendChat() {
   messages.value.push({ role: 'user', content: input })
   chatInput.value = ''
   if (sessionStorage.getItem('qj_token') === 'demo-mode') {
-    const reply = '我先帮你拆成两层：表面是这句话让你很累，底下更像是希望对方看见你的负担。'
+    const reply = '听得出来你今天真的受累了~ 抱抱你！其实你不是在计较事情本身，只是特别希望对方能看到你默默抗下的辛苦，多给你一点心疼和体贴呀~'
     messages.value.push({ role: 'assistant', content: reply })
     lastAgentReply.value = reply
     agentSending.value = false

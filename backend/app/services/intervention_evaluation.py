@@ -90,13 +90,13 @@ def _evaluate_data_quality(scorecard: dict, playbook: dict | None) -> tuple[str,
     if duration_days < 3:
         gaps.append("观察期还短，当前更像早期信号，不足以下稳定结论。")
     if total_task_count < 2:
-        gaps.append("当前承载动作偏少，执行层证据还不够厚。")
+        gaps.append("目前记录的行动较少，还不足以判断完成情况。")
     if feedback_count == 0:
         gaps.append("还缺主观有用度和执行摩擦反馈，系统难判断方案是否真的贴合。")
     if not has_outcome_signal:
         gaps.append("缺少风险或健康分变化，结果层证据仍偏弱。")
     if playbook and transition_count == 0:
-        gaps.append("剧本运行态还缺少有效迁移记录，过程证据还在积累。")
+        gaps.append("目前缺少步骤切换记录，还无法判断整个过程是否顺利。")
 
     if duration_days >= 7 and total_task_count >= 4 and feedback_count >= 2 and has_outcome_signal:
         return "high", gaps
@@ -113,13 +113,13 @@ def _risk_metric(scorecard: dict) -> tuple[dict, str]:
 
     if now_rank < before_rank:
         status = "improved"
-        summary = f"风险等级从 {before} 降到 {now}，说明这轮干预至少在止损层面出现正向变化。"
+        summary = f"风险等级从 {before} 降到 {now}，本次评估的风险低于上次，但还不能据此确定变化的原因。"
     elif now_rank > before_rank:
         status = "worse"
         summary = f"风险等级从 {before} 升到 {now}，当前方案需要重新评估或升级支持。"
     else:
         status = "stable"
-        summary = f"风险等级维持在 {now}，还需要结合其他指标判断这是稳定、停滞还是暂时卡住。"
+        summary = f"风险等级维持在 {now}，还需要结合记录和反馈，了解相处情况是否发生变化。"
 
     return (
         _metric(
@@ -192,7 +192,7 @@ def _completion_metric(scorecard: dict) -> tuple[dict, str]:
                 metric_id="task_completion",
                 label="动作完成率",
                 status="unknown",
-                summary="当前没有足够的承载动作，执行率证据还没建立起来。",
+                summary="目前记录的行动不足，还无法比较完成率。",
                 baseline=None,
                 current="0/0",
                 delta=None,

@@ -25,7 +25,7 @@ def upgrade() -> None:
     inspector = sa.inspect(conn)
     existing_tables = inspector.get_table_names()
 
-    # ── users ──
+    # users
     if "users" not in existing_tables:
         op.create_table(
             "users",
@@ -37,7 +37,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── pairs ──
+    # pairs
     if "pairs" not in existing_tables:
         # 创建枚举类型
         pairtype = postgresql.ENUM(
@@ -129,7 +129,7 @@ def upgrade() -> None:
                 ),
             )
 
-    # ── checkins ──
+    # checkins
     if "checkins" not in existing_tables:
         op.create_table(
             "checkins",
@@ -171,7 +171,7 @@ def upgrade() -> None:
             if col_name not in existing_columns:
                 op.add_column("checkins", sa.Column(col_name, col_type, nullable=True))
 
-    # ── reports ──
+    # reports
     if "reports" not in existing_tables:
         reporttype = postgresql.ENUM(
             "daily", "weekly", "monthly", "solo", name="reporttype", create_type=False
@@ -203,7 +203,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── relationship_trees ──
+    # relationship_trees
     if "relationship_trees" not in existing_tables:
         op.execute(
             "DO $$ BEGIN CREATE TYPE treelevel AS ENUM ('seed', 'sprout', 'sapling', 'tree', 'big_tree', 'forest'); EXCEPTION WHEN duplicate_object THEN null; END $$;"
@@ -238,7 +238,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── relationship_tasks ──
+    # relationship_tasks
     if "relationship_tasks" not in existing_tables:
         op.execute(
             "DO $$ BEGIN CREATE TYPE taskstatus AS ENUM ('pending', 'completed', 'skipped'); EXCEPTION WHEN duplicate_object THEN null; END $$;"
@@ -271,7 +271,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── long_distance_activities ──
+    # long_distance_activities
     if "long_distance_activities" not in existing_tables:
         op.create_table(
             "long_distance_activities",
@@ -295,7 +295,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── milestones ──
+    # milestones
     if "milestones" not in existing_tables:
         op.create_table(
             "milestones",
@@ -315,7 +315,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── community_tips ──
+    # community_tips
     if "community_tips" not in existing_tables:
         op.create_table(
             "community_tips",
@@ -329,7 +329,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
 
-    # ── user_notifications ──
+    # user_notifications
     if "user_notifications" not in existing_tables:
         op.create_table(
             "user_notifications",

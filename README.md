@@ -26,8 +26,8 @@
 | --- | --- | --- |
 | 语音识别 | `qwen3-asr-flash` | 阿里云 DashScope |
 | 实时语音 | `qwen3-asr-flash-realtime` | 阿里云 DashScope |
-| 文本分析 | `Pro/deepseek-ai/DeepSeek-V3.2` | 硅基流动兼容网关 |
-| 多模态 | `moonshot/kimi-k2.6` | 硅基流动兼容网关 |
+| 文本 / Agent | `deepseek-v4.1-flash` | 阿里云 MaaS 兼容网关 |
+| 多模态 | `qwen3.7-plus-2026-05-26`，备用 `qwen3.7-plus` | 阿里云 MaaS 兼容网关 |
 
 以上默认值与 [docker-compose.yml](docker-compose.yml)、[backend/app/core/config.py](backend/app/core/config.py)、[.env.example](.env.example) 保持一致，并允许通过环境变量覆盖。
 
@@ -36,14 +36,15 @@
 ```text
 qinjian/
 ├── backend/                    # FastAPI 后端与测试
+│   ├── app/                    # 应用代码（API、模型、服务）
+│   ├── alembic/                # 数据库迁移
+│   └── tests/                  # 自动化测试
 ├── web-vue3/                   # Vue 3 前端源码
 │   ├── src/                    # 页面、组件、状态管理
-│   ├── public/                 # 静态资源
-│   └── dist/                   # Vite 构建产物（部署时挂载）
+│   ├── public/                 # 静态资源（含演示入口）
+│   └── dist/                   # Vite 构建产物（本地构建生成，不入库）
 ├── docker-compose.yml          # 容器编排
 ├── nginx.conf                  # Nginx 反向代理与安全响应头
-├── deploy_current_workspace.py # 一键部署脚本
-├── docs/                       # 项目说明、答辩与演示材料
 └── .env.example                # Docker / 服务器环境变量模板
 ```
 
@@ -68,10 +69,10 @@ npm install
 npm run dev
 ```
 
-默认前端开发地址为 `http://localhost:5173`。如需让后端放行该来源，可在 `backend/.env` 中设置：
+默认前端开发地址为 `http://localhost:3001`。如需临时改用其他端口，可执行 `npm run dev -- --port 5173`。后端放行来源可在 `backend/.env` 中设置：
 
 ```bash
-FRONTEND_ORIGIN=http://localhost:5173
+FRONTEND_ORIGIN=http://localhost:3001
 ADDITIONAL_FRONTEND_ORIGINS=http://localhost:3000
 ```
 
@@ -95,20 +96,19 @@ docker compose up -d --build
 
 项目内置了独立样例数据，适合答辩或汇报时避开真实账号与实时生成波动。
 
-- 关系管理入口：`http://localhost:5173/demo?route=/pair`
-- 关系空间详情：`http://localhost:5173/demo?route=/relationship-space/22222222-2222-4222-8222-222222222222`
-- 页面入口：`http://localhost:5173/demo?route=/`
-- 指定页面直达：`http://localhost:5173/demo?route=/report`
-- 纯静态跳转入口：`http://localhost:5173/preview-demo.html?route=/message-simulation`
+- 页面入口：`http://localhost:3001/preview-demo.html?route=/`
+- 关系管理入口：`http://localhost:3001/preview-demo.html?route=/pair`
+- 关系空间详情：`http://localhost:3001/preview-demo.html?route=/relationship-space/22222222-2222-4222-8222-222222222222`
+- 指定页面直达：`http://localhost:3001/preview-demo.html?route=/report`
+- 消息预演入口：`http://localhost:3001/preview-demo.html?route=/message-simulation`
 
 演示模式会自动注入 `demo-mode` token 和样例关系数据，可直接展示关系空间、今日安排、简报、双视角、修复协议、时间轴归档与隐私安全页面。
 
 ## 工程验证
 
-- 后端当前复核 `python -m pytest --collect-only -q` 可收集 `223` 条自动化测试。
-- 前端工具层当前复核 `npm test -- --run` 为 `101/101` 自动化测试通过。
+- 后端当前复核 `pytest -q` 为 `250/250` 条自动化测试通过。
+- 前端工具层当前复核 `npm test` 为 `109/109` 自动化测试通过。
 - 前端生产构建当前复核 `npm run build` 通过，可生成正式部署产物。
-- 真实环境冒烟与轻量压测脚本保留在 `output/`，最终提交或答辩前可重新运行生成当天证据。
 
 ## 环境变量
 
@@ -123,11 +123,13 @@ DB_PASSWORD=your_secure_password_here
 SECRET_KEY=your_random_secret_key_min_32_chars
 FRONTEND_ORIGIN=https://your-domain.com
 AI_API_KEY=
-AI_BASE_URL=
+AI_BASE_URL=https://llm-ipplpz10dpd82u07.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
 SILICONFLOW_API_KEY=
 QWEN_ASR_API_KEY=
-AI_TEXT_MODEL=Pro/deepseek-ai/DeepSeek-V3.2
-AI_MULTIMODAL_MODEL=moonshot/kimi-k2.6
+AI_TEXT_MODEL=deepseek-v4.1-flash
+AI_TEXT_FALLBACK_MODEL=deepseek-v4.1-flash
+AI_MULTIMODAL_MODEL=qwen3.7-plus-2026-05-26
+AI_MULTIMODAL_FALLBACK_MODEL=qwen3.7-plus
 QWEN_ASR_FILE_MODEL=qwen3-asr-flash
 QWEN_ASR_REALTIME_MODEL=qwen3-asr-flash-realtime
 ```
@@ -151,16 +153,20 @@ QWEN_ASR_REALTIME_MODEL=qwen3-asr-flash-realtime
 
 ## 部署
 
-部署说明见 [DEPLOY.md](DEPLOY.md)。
+使用 Docker Compose 一键运行全栈：
 
-## 文档导航
+```bash
+copy .env.example .env    # 填入 DB_PASSWORD、SECRET_KEY 与 AI API Key
+cd web-vue3
+npm install
+npm run build
+cd ..
+docker compose up -d --build
+```
 
-- 接口总表、关键业务时序、测试覆盖矩阵、隐私安全说明见 [docs/项目说明与验证.md](docs/项目说明与验证.md)。
-- 比赛提交用的主设计和开发文档底稿见 [docs/设计和开发文档-当前实现版.md](docs/设计和开发文档-当前实现版.md)。
-- 10 分钟答辩 PPT 大纲与逐页讲稿见 [docs/10分钟答辩PPT大纲与讲稿.md](docs/10分钟答辩PPT大纲与讲稿.md)。
-- 10 分钟功能演示脚本见 [docs/10分钟演示脚本.md](docs/10分钟演示脚本.md)。
-- 可直接放进 PPT 的验证页文案见 [docs/PPT验证页-当前证据版.md](docs/PPT验证页-当前证据版.md)。
-- 数据库 E-R 图说明见 [docs/database-er.md](docs/database-er.md)，图片产物见 [output/qinjian-database-er.png](output/qinjian-database-er.png)。
-- 数据资产构成、演示样例与测试数据边界见 [docs/数据集说明.md](docs/数据集说明.md)。
-- 当前仓库对应的本地开发、容器部署和环境变量配置见 [docs/安装配置说明.md](docs/安装配置说明.md)。
-- 面向演示与日常使用流程的操作说明见 [docs/用户手册.md](docs/用户手册.md)。
+启动后：
+
+- Web：`http://localhost`
+- API 健康检查：`http://localhost/api/health`
+
+服务说明：PostgreSQL 提供数据存储，Redis 支撑验证码与登录风控，Nginx 挂载 `web-vue3/dist` 静态产物并代理 `/api` 到后端，配置见 [docker-compose.yml](docker-compose.yml) 与 [nginx.conf](nginx.conf)。

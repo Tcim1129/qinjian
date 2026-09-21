@@ -2,12 +2,13 @@ import { defineStore } from 'pinia'
 import { api } from '@/api'
 import { ref } from 'vue'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
-import { isDemoToken } from '@/utils/auth'
+import { getAuthToken, isDemoToken } from '@/utils/auth'
 import { collectEnergyNodeLocally, normalizeEnergyNodes } from '@/utils/relationshipTreeEnergy'
+import { createLatestRequest } from '@/utils/taskSchedule'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_WATER_BONUS = 12
-const DEFAULT_DECAY_PER_DAY = 4
+const DEFAULT_DECAY_PER_DAY = 0
 const DEFAULT_DECAY_GRACE_DAYS = 1
 
 function isDemoMode() {
@@ -31,7 +32,12 @@ function todayDateOnly() {
 }
 
 function todayIso() {
+  return isoDaysAgo(0)
+}
+
+function isoDaysAgo(days) {
   const today = todayDateOnly()
+  today.setDate(today.getDate() - Math.max(0, Number(days || 0)))
   const pad = (value) => String(value).padStart(2, '0')
   return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
 }
@@ -56,8 +62,8 @@ function withTreeDerivedFields(input = {}) {
   const decayPerDay = Math.max(0, Number(base.decay_per_day ?? DEFAULT_DECAY_PER_DAY))
   const decayGraceDays = Math.max(0, Number(base.decay_grace_days ?? DEFAULT_DECAY_GRACE_DAYS))
   const daysWithoutWater = daysSince(base.last_watered)
-  const decayDays = Math.max(0, daysWithoutWater - decayGraceDays)
-  const decayPoints = Math.min(growthPoints, decayDays * decayPerDay)
+  // The server owns the balance. Do not fabricate score loss from a local clock.
+  const decayPoints = Math.min(growthPoints, Math.max(0, Number(base.decay_points || 0)))
   const effectiveGrowthPoints = Math.max(0, growthPoints - decayPoints)
   const progressPercent = calcProgress(growthPoints, base.next_level_at, base.progress_percent)
   const displayProgressPercent = calcProgress(effectiveGrowthPoints, base.next_level_at, base.progress_percent)
@@ -89,8 +95,14 @@ export const useHomeStore = defineStore('home', () => {
   const tasks = ref([])
   const dailyNote = ref('')
   const milestones = ref([])
+  const loads = createLatestRequest()
+  const demoTrees = new Map()
+  let treeScope = null
 
   function reset() {
+    loads.invalidate()
+    demoTrees.clear()
+    treeScope = null
     snapshot.value = null
     tree.value = {}
     crisis.value = {}
@@ -100,12 +112,20 @@ export const useHomeStore = defineStore('home', () => {
   }
 
   async function loadAll(pairId = null) {
+    const requestCurrent = loads.begin()
+    const token = getAuthToken()
+    const current = () => requestCurrent() && token === getAuthToken()
+    treeScope = pairId
+    tree.value = {}
     if (isDemoMode()) {
       snapshot.value = {
         todayStatus: cloneDemo(demoFixture.todayStatus),
         streak: cloneDemo(demoFixture.streak),
       }
-      tree.value = withTreeDerivedFields(cloneDemo(demoFixture.tree))
+      tree.value = demoTrees.get(`${pairId}:${todayIso()}`) || withTreeDerivedFields({
+        ...cloneDemo(demoFixture.tree),
+        last_watered: isoDaysAgo(13),
+      })
       crisis.value = cloneDemo(demoFixture.crisis)
       tasks.value = cloneDemo((demoFixture.tasks.tasks || []).filter((task) => task.source !== 'manual').slice(0, 3))
       dailyNote.value = demoFixture.tasks.daily_note || ''
@@ -118,6 +138,7 @@ export const useHomeStore = defineStore('home', () => {
         api.getTodayStatus(null),
         api.getCheckinStreak(null),
       ])
+      if (!current()) return
       const unwrap = (r, fallback = {}) => r.status === 'fulfilled' ? r.value : fallback
 
       snapshot.value = {
@@ -140,6 +161,7 @@ export const useHomeStore = defineStore('home', () => {
       api.getDailyTasks(pairId),
       api.getMilestones(pairId),
     ])
+    if (!current()) return
     const unwrap = (r, fallback = {}) => r.status === 'fulfilled' ? r.value : fallback
 
     snapshot.value = {
@@ -182,16 +204,21 @@ export const useHomeStore = defineStore('home', () => {
   }
 
   async function collectTreeEnergy(pairId, nodeKey) {
+    const expectedTree = tree.value
+    const token = getAuthToken()
+    if (treeScope !== pairId) throw new Error('关系已切换，请重新收取')
     if (isDemoMode()) {
       const current = Object.keys(tree.value || {}).length ? tree.value : withTreeDerivedFields(cloneDemo(demoFixture.tree))
       tree.value = withTreeDerivedFields({
         ...collectEnergyNodeLocally(current, nodeKey),
         last_watered: todayIso(),
       })
+      demoTrees.set(`${pairId}:${todayIso()}`, tree.value)
       return tree.value
     }
 
     const result = await api.collectTreeEnergy(pairId, nodeKey)
+    if (treeScope !== pairId || tree.value !== expectedTree || token !== getAuthToken()) throw new Error('关系已刷新，请重新查看成长值')
     tree.value = withTreeDerivedFields({
       ...tree.value,
       ...result,

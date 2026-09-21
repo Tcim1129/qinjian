@@ -171,6 +171,79 @@ def test_create_chat_completion_emits_metadata_only_privacy_audit(monkeypatch):
     assert audit_calls["raw_output"] == "请改成温和一点的说法"
 
 
+def test_create_chat_completion_retries_configured_fallback_model(monkeypatch):
+    provider_calls = []
+    audit_calls = []
+
+    async def fake_create(**kwargs):
+        provider_calls.append(kwargs)
+        if len(provider_calls) == 1:
+            raise RuntimeError("primary unavailable")
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="fallback ok"))]
+        )
+
+    async def fake_log_privacy_ai_chat(db, **kwargs):
+        audit_calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr(ai_module.client.chat.completions, "create", fake_create)
+    monkeypatch.setattr(ai_module, "log_privacy_ai_chat", fake_log_privacy_ai_chat)
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_MODEL", "primary-model")
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_FALLBACK_MODEL", "fallback-model")
+
+    response = asyncio.run(
+        ai_module.create_chat_completion(
+            model="primary-model",
+            messages=[{"role": "user", "content": "你好"}],
+            temperature=0.2,
+        )
+    )
+
+    assert response.choices[0].message.content == "fallback ok"
+    assert [call["model"] for call in provider_calls] == [
+        "primary-model",
+        "fallback-model",
+    ]
+    assert [call["status"] for call in audit_calls] == ["error", "completed"]
+    assert audit_calls[1]["model"] == "fallback-model"
+    assert audit_calls[1]["proxy_metrics"] == {"fallback_from_model": "primary-model"}
+
+
+def test_create_chat_completion_does_not_retry_bad_request(monkeypatch):
+    provider_calls = []
+
+    class BadRequestLikeError(Exception):
+        status_code = 400
+
+    async def fake_create(**kwargs):
+        provider_calls.append(kwargs)
+        raise BadRequestLikeError("bad request")
+
+    async def fake_log_privacy_ai_chat(db, **kwargs):
+        return None
+
+    monkeypatch.setattr(ai_module.client.chat.completions, "create", fake_create)
+    monkeypatch.setattr(ai_module, "log_privacy_ai_chat", fake_log_privacy_ai_chat)
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_MODEL", "primary-model")
+    monkeypatch.setattr(ai_module.settings, "AI_TEXT_FALLBACK_MODEL", "fallback-model")
+
+    try:
+        asyncio.run(
+            ai_module.create_chat_completion(
+                model="primary-model",
+                messages=[{"role": "user", "content": "你好"}],
+                temperature=0.2,
+            )
+        )
+    except BadRequestLikeError:
+        pass
+    else:
+        raise AssertionError("bad request should be raised")
+
+    assert [call["model"] for call in provider_calls] == ["primary-model"]
+
+
 def test_proxy_message_payload_uses_placeholders_and_can_rehydrate():
     bundle = proxy_message_payload(
         [{"role": "user", "content": "请联系 13800138000，邮箱 tester@example.com"}]

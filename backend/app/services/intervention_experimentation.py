@@ -433,7 +433,7 @@ def _compare_observations(current: dict, previous: dict | None) -> tuple[str, st
     ):
         return (
             "worse_than_baseline",
-            "和上一版相比，这一版策略更容易卡住或走弱，下一步更适合调强度或调表达，而不是继续硬推。",
+            "与上一版相比，这一版的执行情况或反馈有所下降，可以减少安排，或调整表达方式后再观察。",
         )
 
     return (

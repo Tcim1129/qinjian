@@ -1,3 +1,5 @@
+import { accountStorageKey, getStorageOwner } from './accountStorage.js'
+
 const SOLO_TASKS_KEY = 'qj_solo_tasks_v1'
 const SOLO_MILESTONES_KEY = 'qj_solo_milestones_v1'
 const SOLO_CONNECTION_KEY = 'qj_solo_connection_v1'
@@ -13,10 +15,13 @@ function clone(value) {
 function readList(key) {
   if (!canUseStorage()) return []
   try {
-    const raw = window.localStorage.getItem(key)
+    const ownerUserId = getStorageOwner()
+    const scopedKey = accountStorageKey(key, ownerUserId)
+    if (!scopedKey) return []
+    const raw = window.localStorage.getItem(scopedKey)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    return parsed?.ownerUserId === ownerUserId && Array.isArray(parsed.items) ? parsed.items : []
   } catch {
     return []
   }
@@ -24,7 +29,10 @@ function readList(key) {
 
 function writeList(key, value) {
   if (!canUseStorage()) return
-  window.localStorage.setItem(key, JSON.stringify(value))
+  const ownerUserId = getStorageOwner()
+  const scopedKey = accountStorageKey(key, ownerUserId)
+  if (!scopedKey) throw new Error('请先登录，再保存记录')
+  window.localStorage.setItem(scopedKey, JSON.stringify({ ownerUserId, items: value }))
 }
 
 export function todayIsoLocal() {
@@ -170,6 +178,7 @@ export function completeSoloTaskEntry(taskId, { streak = 0, isoDate = todayIsoLo
 export function saveSoloTaskFeedbackEntry(taskId, feedback, { streak = 0, isoDate = todayIsoLocal() } = {}) {
   const current = ensureSoloTasks(readList(SOLO_TASKS_KEY), { streak, isoDate })
   const normalizedFeedback = {
+    outcome: ['helped', 'not_yet', 'difficult', 'uncertain'].includes(feedback.outcome) ? feedback.outcome : null,
     usefulness_score: feedback.usefulness_score,
     friction_score: feedback.friction_score,
     relationship_shift_score: feedback.relationship_shift_score,
@@ -179,6 +188,7 @@ export function saveSoloTaskFeedbackEntry(taskId, feedback, { streak = 0, isoDat
     task.id === taskId
       ? {
           ...task,
+          ...(feedback.outcome === 'not_yet' ? { status: 'pending', completed_at: null } : {}),
           feedback: normalizedFeedback,
           needs_feedback: false,
         }
@@ -186,6 +196,21 @@ export function saveSoloTaskFeedbackEntry(taskId, feedback, { streak = 0, isoDat
   )
   writeList(SOLO_TASKS_KEY, nextTasks)
   return buildSoloTaskPayload({ tasks: nextTasks, streak, isoDate })
+}
+
+export function saveSoloTaskResultEntry(taskId, result, { streak = 0, isoDate = todayIsoLocal() } = {}) {
+  const current = readList(SOLO_TASKS_KEY)
+  const task = current.find(item => item.id === taskId)
+  if (!task) throw new Error('这条安排已不存在，请重新打开。')
+  if (task.due_date > todayIsoLocal()) throw new Error('还没到计划日期，先不用填写结果')
+  if (!['pending', 'completed'].includes(result.status) || task.status === 'skipped') throw new Error('这条安排暂时不能修改结果')
+  const completed = result.status === 'completed'
+  const next = current.map(item => item.id === taskId ? {
+    ...item, status: result.status, completed_at: completed ? item.completed_at || new Date().toISOString() : null,
+    feedback: result.feedback, needs_feedback: completed && !result.feedback,
+  } : item)
+  writeList(SOLO_TASKS_KEY, next)
+  return buildSoloTaskPayload({ tasks: next, streak, isoDate })
 }
 
 export function loadSoloMilestoneEntries() {

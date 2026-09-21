@@ -6,11 +6,13 @@ import tempfile
 import aiofiles
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.api.deps import get_current_user
+from app.core.security import decode_access_token
+from app.api.deps import DEMO_MODE_TOKEN, get_current_user
 from app.models import User
 from app.ai import transcribe_audio_result
 from app.ai.reporter import analyze_image
@@ -505,6 +507,9 @@ async def access_uploaded_file(
     owner: str | None = None,
     pair: str | None = None,
     db: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        HTTPBearer(auto_error=False)
+    ),
 ):
     """通过签名 URL 访问私有上传文件。"""
     upload_path = f"/uploads/{subdir}/{filename}"
@@ -529,6 +534,26 @@ async def access_uploaded_file(
         )
         await db.commit()
         raise HTTPException(status_code=403, detail="文件访问签名无效或已过期")
+
+    # 签名绑定了 actor 时，若请求携带有效凭据则校验身份一致；
+    # 未携带凭据（浏览器 <img>/<audio> 直连）保持签名校验即可。
+    if actor is not None and credentials is not None:
+        token_user_id = None
+        if credentials.credentials != DEMO_MODE_TOKEN:
+            token_user_id = decode_access_token(credentials.credentials)
+        if not token_user_id or str(token_user_id) != actor:
+            await log_privacy_event(
+                db,
+                event_type="privacy.upload.access_denied",
+                user_id=None,
+                pair_id=None,
+                entity_type="upload_access",
+                entity_id=f"{subdir}/{filename}",
+                payload={"subdir": subdir, "actor_mismatch": True},
+                summary="拦截了一次 actor 与请求身份不一致的上传访问。",
+            )
+            await db.commit()
+            raise HTTPException(status_code=403, detail="文件访问身份校验失败")
 
     try:
         file_path = resolve_upload_file_path(upload_path)

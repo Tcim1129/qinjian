@@ -23,7 +23,7 @@
           <button class="hero-subactions__link" @click="$router.push('/message-simulation')">发前看看</button>
           <button class="hero-subactions__link" @click="$router.push('/repair-protocol')">缓和建议</button>
           <button class="hero-subactions__link" @click="$router.push('/challenges')">今日安排</button>
-          <button class="hero-subactions__link" @click="$router.push('/timeline')">时间轴</button>
+          <button class="hero-subactions__link" @click="$router.push('/timeline')">关系日历</button>
         </div>
       </div>
 
@@ -102,7 +102,7 @@
         </template>
         <div v-else class="home-chart-empty">
           <strong>还没有趋势数据</strong>
-          <span>完成记录后，这里会显示真实变化。</span>
+          <span>多记几次日常，这里就会画出你们的心情走势图啦~</span>
         </div>
       </article>
 
@@ -159,7 +159,7 @@
         </div>
         <div v-else class="home-chart-empty">
           <strong>还没有维度数据</strong>
-          <span>有真实简报或体检后再展示五项状态。</span>
+          <span>做过一次小体检或有了简报后，就能看到你们的关系雷达图啦~</span>
         </div>
       </article>
     </section>
@@ -169,13 +169,14 @@
         <section class="archive-panel">
           <div class="card-header">
             <div>
-              <p class="eyebrow">今日安排</p>
+              <p class="eyebrow">{{ homeTaskScopeTab === 'today' ? '今日安排' : '明日安排' }}</p>
               <h3>{{ homeTaskScopeTab === 'today' ? '今天先做这些' : '明天先看这些' }}</h3>
             </div>
-            <div class="home-task-switch" role="tablist" aria-label="首页安排切换">
+            <div class="home-task-switch" role="group" aria-label="首页安排切换">
               <button
                 class="home-task-switch__item"
                 :class="{ active: homeTaskScopeTab === 'today' }"
+              :aria-pressed="homeTaskScopeTab === 'today'"
                 type="button"
                 @click="setHomeTaskScope('today')"
               >
@@ -184,6 +185,7 @@
               <button
                 class="home-task-switch__item"
                 :class="{ active: homeTaskScopeTab === 'tomorrow' }"
+              :aria-pressed="homeTaskScopeTab === 'tomorrow'"
                 type="button"
                 @click="setHomeTaskScope('tomorrow')"
               >
@@ -191,18 +193,35 @@
               </button>
             </div>
           </div>
-          <div v-if="homeTaskLoading" class="home-list home-list--empty">正在整理这一层安排...</div>
-          <div v-else class="home-list home-list--scroll">
+          <div v-if="displayHomeDailyNote" class="home-daily-note">
+            <span class="home-daily-note__text">“{{ displayHomeDailyNote }}”</span>
+            <button
+              class="btn-note-rotate"
+              type="button"
+              title="换一句每日寄语"
+              @click="rotateHomeDailyNote"
+            >
+              <RotateCcw :size="12" />
+              <span>换一句</span>
+            </button>
+          </div>
+          <div v-if="homeTaskLoading" class="home-list home-list--empty">正在加载安排…</div>
+          <div v-else-if="scheduleError" class="home-list home-list--empty" role="alert">{{ scheduleError }} <button class="btn btn-ghost btn-sm" @click="loadHomeTasks">重试</button></div>
+            <div v-else-if="!homeTaskItems.length" class="home-list home-list--empty">{{ homeTaskScopeTab === 'today' ? '今天还没有安排' : '明天还没有安排' }}</div>
+            <div v-else class="home-list home-list--scroll">
             <article
               v-for="item in homeTaskItems"
               :key="item.id || item.label"
               class="home-list__item"
             >
               <strong>{{ item.title || item.label }}</strong>
+              <span v-if="item.status === 'completed'" class="pill pill--soft">已完成</span>
               <p>{{ item.description || item.note }}</p>
+              <button v-if="item.id && homeTaskScopeTab === 'today'" class="btn btn-ghost btn-sm" type="button" @click="resultTask = item">更新结果</button>
             </article>
           </div>
           <div class="hero-actions home-task-actions">
+              <button class="btn btn-secondary btn-sm" type="button" :disabled="homeTaskLoading || Boolean(scheduleError)" @click="openScheduleAgent()">{{ homeTaskScopeTab === 'today' ? '让 AI 帮我选一件' : '和 AI 商量明天' }}</button>
             <button
               class="btn btn-ghost btn-sm"
               type="button"
@@ -239,84 +258,12 @@
           <div class="card-header">
             <p class="eyebrow">关系树</p>
           </div>
-          <div class="life-tree-video" aria-label="关系树当前状态">
-            <div class="tree-energy-bubbles" aria-label="可抓取成长值">
-              <button
-                v-for="(node, index) in treeEnergyNodes"
-                :key="node.key"
-                class="energy-node"
-                :class="[
-                  `energy-node--${index + 1}`,
-                  `energy-node--${node.state}`,
-                  { 'energy-node--collecting': collectingEnergyKey === node.key },
-                ]"
-                type="button"
-                :aria-label="energyNodeAriaLabel(node)"
-                :disabled="!node.available || Boolean(collectingEnergyKey)"
-                @click="handleCollectEnergyNode(node)"
-              >
-                <span>{{ node.label }}</span>
-                <strong>{{ node.value }}</strong>
-                <span class="energy-node__cue" aria-hidden="true">
-                  <BadgeCheck v-if="node.collected" :size="13" />
-                  <LockKeyhole v-else-if="!node.available" :size="12" />
-                  <Hand v-else :size="13" />
-                </span>
-                <i v-if="energyPulseKey === node.key" class="energy-node__gain">+{{ node.points }}</i>
-              </button>
-            </div>
-            <svg
-              class="life-tree-svg"
-              :class="{ 'life-tree-svg--decayed': treeDecayPoints > 0 }"
-              viewBox="0 0 260 260"
-              role="img"
-              aria-label="关系树当前状态"
-            >
-              <defs>
-                <linearGradient id="treeTrunkGradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stop-color="#8f5a42" />
-                  <stop offset="100%" stop-color="#5b3a2a" />
-                </linearGradient>
-                <radialGradient id="energyGlow" cx="50%" cy="38%" r="58%">
-                  <stop offset="0%" stop-color="#fff8ef" />
-                  <stop offset="62%" stop-color="#f0b08f" />
-                  <stop offset="100%" stop-color="#8eb7c5" />
-                </radialGradient>
-              </defs>
-              <path class="tree-hill tree-hill--back" d="M22 222 C60 184 92 208 130 184 C176 154 204 196 238 174 L238 260 L22 260 Z" />
-              <path class="tree-hill tree-hill--front" d="M0 230 C42 204 78 224 116 204 C154 184 191 214 260 194 L260 260 L0 260 Z" />
-              <ellipse class="tree-soil" cx="130" cy="218" rx="78" ry="14" />
-              <g class="tree-seed">
-                <ellipse cx="130" cy="214" rx="13" ry="9" />
-              </g>
-              <g class="tree-sprout">
-                <path d="M130 213 C130 194 130 183 130 165" />
-                <path d="M130 184 C113 174 103 161 100 146" />
-                <path d="M131 176 C149 166 160 152 164 136" />
-              </g>
-              <g class="tree-grown">
-                <path class="tree-trunk" d="M129 214 C126 184 127 152 132 119 C136 147 140 181 137 214 Z" />
-                <path class="tree-branch tree-branch--left" d="M131 155 C109 143 93 127 82 105" />
-                <path class="tree-branch tree-branch--right" d="M133 143 C158 130 177 111 188 88" />
-                <path class="tree-branch tree-branch--top" d="M132 126 C130 104 133 86 143 66" />
-                <circle class="tree-leaf-bloom tree-leaf-bloom--1" cx="78" cy="98" r="30" />
-                <circle class="tree-leaf-bloom tree-leaf-bloom--2" cx="113" cy="74" r="36" />
-                <circle class="tree-leaf-bloom tree-leaf-bloom--3" cx="154" cy="70" r="38" />
-                <circle class="tree-leaf-bloom tree-leaf-bloom--4" cx="191" cy="102" r="33" />
-                <circle class="tree-leaf-bloom tree-leaf-bloom--5" cx="135" cy="112" r="42" />
-              </g>
-              <g class="tree-energy-drops" aria-hidden="true">
-                <circle cx="84" cy="154" r="10" />
-                <circle cx="182" cy="146" r="8" />
-                <circle cx="150" cy="182" r="7" />
-              </g>
-            </svg>
-          </div>
+          <RelationshipTree :nodes="treeEnergyNodes" :collecting-key="collectingEnergyKey" :feedback="energyFeedback" :resting="treeDecayPoints > 0" @collect="handleCollectEnergyNode" />
           <div class="tree-progress-head">
             <span>成长值</span>
             <strong>{{ treeProgress }}%</strong>
           </div>
-          <div class="tree-progress">
+          <div class="tree-progress" role="progressbar" aria-label="关系树成长进度" :aria-valuenow="treeProgress" aria-valuemin="0" aria-valuemax="100">
             <span :style="{ width: `${treeProgress}%` }"></span>
           </div>
           <div class="tree-leaves">
@@ -350,12 +297,19 @@
         </section>
       </aside>
     </div>
+    <TaskResultDialog v-if="resultTask" :task="resultTask" :pair-id="userStore.activePairId" :date="scheduleDate(homeTaskScopeTab)" @close="resultTask = null" @saved="loadHomeTasks" @analyze="scheduleContext = $event" />
+    <ContextAgentDialog v-if="scheduleContext" :context="scheduleContext" @close="scheduleContext = null" />
   </div>
 </template>
 
 <script setup>
-import { computed, inject, onMounted, ref, watch } from 'vue'
-import { FolderHeart, PenLine, FileText, Handshake, ChevronRight, CalendarDays, UserCheck, Users, Activity, Hand, BadgeCheck, LockKeyhole } from 'lucide-vue-next'
+import RelationshipTree from '@/components/RelationshipTree.vue'
+import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
+import TaskResultDialog from '@/components/TaskResultDialog.vue'
+import { buildDemoSchedule, buildScheduleContext, createLatestRequest, scheduleDate, demoScheduleCache } from '@/utils/taskSchedule'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { FolderHeart, PenLine, FileText, Handshake, ChevronRight, CalendarDays, UserCheck, Users, Activity, RotateCcw } from 'lucide-vue-next'
+import { clampDailyNote, getNextDailyNote, DAILY_NOTE_CANDIDATES } from '@/utils/dailyNotes'
 import { api } from '@/api'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
 import { useHomeStore } from '@/stores/home'
@@ -392,29 +346,47 @@ function pairOptionLabel(pair) {
 }
 
 function buildDemoHomeTaskPayload(scope = 'today') {
-  const base = cloneDemo(demoFixture.tasks || { tasks: [] })
-  if (scope === 'tomorrow') {
-    return {
-      ...base,
-      daily_note: '明天先排好，不合适的去安排页单独换。',
-      planning_note: '明天已排好，先调优先级。',
-      tasks: (base.tasks || []).filter((task) => task.source !== 'manual').slice(0, 6),
-    }
-  }
-  return {
-    ...base,
-    tasks: (base.tasks || []).filter((task) => task.source !== 'manual').slice(0, 6),
-  }
+  const saved = demoScheduleCache.read({ owner: userStore.me?.id || 'sample', pairId: userStore.activePairId, date: scheduleDate(scope) })
+  if (saved) return saved
+  const payload = { ...buildDemoSchedule(demoFixture.tasks, scope) }
+  demoScheduleCache.save({ owner: userStore.me?.id || 'sample', pairId: userStore.activePairId, date: scheduleDate(scope) }, payload)
+  return payload
 }
 
 const homeStore = useHomeStore()
 const userStore = useUserStore()
 const showToast = inject('showToast', () => {})
 const collectingEnergyKey = ref('')
-const energyPulseKey = ref('')
+const energyFeedback = ref(null)
+let energyFeedbackTimer = null
+let energyRequestVersion = 0
+function clearEnergyFeedback() {
+  energyRequestVersion++
+  collectingEnergyKey.value = ''
+  energyFeedback.value = null
+  clearTimeout(energyFeedbackTimer)
+}
+onBeforeUnmount(clearEnergyFeedback)
+watch(() => [userStore.activePairId, userStore.token, userStore.me?.id], clearEnergyFeedback, { flush: 'sync' })
 const homeTaskScopeTab = ref('today')
 const homeTaskPayload = ref({ tasks: [] })
 const homeTaskLoading = ref(false)
+const customHomeDailyNote = ref('')
+
+const displayHomeDailyNote = computed(() => {
+  if (customHomeDailyNote.value) {
+    return clampDailyNote(customHomeDailyNote.value)
+  }
+  const sourceNote = homeTaskScopeTab.value === 'tomorrow'
+    ? (homeTaskPayload.value.planning_note || homeTaskPayload.value.daily_note)
+    : (homeTaskPayload.value.daily_note || homeStore.dailyNote)
+  return clampDailyNote(sourceNote || DAILY_NOTE_CANDIDATES[0])
+})
+
+function rotateHomeDailyNote() {
+  const next = getNextDailyNote(displayHomeDailyNote.value)
+  customHomeDailyNote.value = next
+}
 
 const streakDays = computed(() => homeStore.snapshot?.streak?.streak || 0)
 const myDone = computed(() => homeStore.snapshot?.todayStatus?.my_done || false)
@@ -533,7 +505,7 @@ const heroHeadline = computed(() => {
 const homeTaskItems = computed(() => {
   const items = homeTaskPayload.value.tasks || []
   if (items.length) return items.slice(0, 6)
-  return homeOverview.value.todoItems || []
+  return homeTaskScopeTab.value === 'today' && !userStore.activePairId ? homeOverview.value.todoItems || [] : []
 })
 const sidePanelLeafItems = computed(() => {
   if (relationshipView.value.kind === 'pending') {
@@ -584,7 +556,7 @@ const sidePanelSecondaryAction = computed(() => {
 
   if (primaryAction.value.actionKind === 'report') {
     return {
-      label: '时间轴',
+      label: '关系日历',
       route: '/timeline',
     }
   }
@@ -710,66 +682,58 @@ async function handleRelationshipSelect(event) {
   await userStore.switchPair(pairId)
 }
 
-function energyNodeAriaLabel(node) {
-  if (!node) return '成长值节点'
-  if (node.collected) return `${node.label}已抓取，明天再来`
-  if (!node.available) return `${node.label}${node.value}，${node.hint}`
-  return `${node.label}${node.value}，点击抓取成长值`
-}
-
 async function loadHomeTasks() {
-  if (!userStore.activePairId) {
-    homeTaskPayload.value = { tasks: [] }
-    return
-  }
-
+  const current = scheduleRequests.begin()
+  const requestScope = homeTaskScopeTab.value
+  const requestPair = userStore.activePairId
+  homeTaskLoading.value = false
+  scheduleError.value = ''
+  homeTaskPayload.value = { tasks: [] }
+  if (!(userStore.activePairId)) return
   if (userStore.isDemoMode) {
-    homeTaskPayload.value = buildDemoHomeTaskPayload(homeTaskScopeTab.value)
+    homeTaskPayload.value = buildDemoHomeTaskPayload(requestScope)
     return
   }
-
   homeTaskLoading.value = true
   try {
-    homeTaskPayload.value = await api.getDailyTasks(userStore.activePairId, {
-      forDate: homeTaskScopeTab.value === 'tomorrow' ? isoDate(1) : isoDate(0),
-      dateScope: homeTaskScopeTab.value,
-    })
+    const result = await api.getDailyTasks(requestPair, { forDate: scheduleDate(requestScope), dateScope: requestScope })
+    if (current()) homeTaskPayload.value = result
   } catch (error) {
-    homeTaskPayload.value = { tasks: [] }
-    showToast(error.message || '首页安排没加载出来')
+    if (current()) scheduleError.value = error.message || '安排没加载出来，请重试'
   } finally {
-    homeTaskLoading.value = false
+    if (current()) homeTaskLoading.value = false
   }
 }
 
 async function handleCollectEnergyNode(node) {
+  if (collectingEnergyKey.value || !node?.available || node.collected) return
   if (!userStore.hasActivePair || !userStore.activePairId) {
     showToast(featureUnavailableReason('pair-context', experienceMode.value))
     return
   }
-  if (!node?.available) {
-    showToast(node?.hint || '这个节点还不能收')
-    return
-  }
+  const request = ++energyRequestVersion
+  const scope = userStore.activePairId
   collectingEnergyKey.value = node.key
   try {
-    const updated = await homeStore.collectTreeEnergy(userStore.activePairId, node.key)
-    const pointsAdded = updated?.points_added || node.points
-    energyPulseKey.value = node.key
-    window.setTimeout(() => {
-      if (energyPulseKey.value === node.key) energyPulseKey.value = ''
-    }, 900)
-    showToast(`已抓取${node.label}，成长值 +${pointsAdded}`)
-  } catch (e) {
-    showToast(e.message || '这次没记上，请稍后再试')
+    const updated = await homeStore.collectTreeEnergy(scope, node.key)
+    if (request !== energyRequestVersion) return
+    const points = Number(updated?.points_added ?? 0)
+    if (points > 0) {
+      clearTimeout(energyFeedbackTimer)
+      energyFeedback.value = { key: node.key, points, id: request }
+      energyFeedbackTimer = setTimeout(() => { energyFeedback.value = null }, 1400)
+    }
+  } catch (error) {
+    if (request === energyRequestVersion) showToast(error.message || '这次没收成功，再试一次吧')
   } finally {
-    collectingEnergyKey.value = ''
+    if (request === energyRequestVersion) collectingEnergyKey.value = ''
   }
 }
 
 watch(
   () => [userStore.activePairId, homeTaskScopeTab.value],
   () => {
+    customHomeDailyNote.value = ''
     loadHomeTasks()
   }
 )
@@ -785,6 +749,26 @@ onMounted(async () => {
   await homeStore.loadAll(userStore.activePairId || null)
   await loadHomeTasks()
 })
+const scheduleContext = ref(null)
+const resultTask = ref(null)
+const scheduleRequests = createLatestRequest()
+const scheduleError = ref('')
+function openScheduleAgent(task = null) {
+  scheduleContext.value = buildScheduleContext(task ? [task] : homeTaskItems.value, {
+    scope: homeTaskScopeTab.value, date: scheduleDate(homeTaskScopeTab.value), pairId: userStore.activePairId || null,
+    isDemoMode: userStore.isDemoMode, single: Boolean(task),
+  })
+}
+watch(() => [userStore.token, userStore.me?.id, userStore.activePairId, homeTaskScopeTab.value], () => {
+  scheduleRequests.invalidate()
+  scheduleContext.value = null
+  resultTask.value = null
+  homeTaskPayload.value = { tasks: [] }
+  homeTaskLoading.value = false
+}, { flush: 'sync' })
+watch(() => [userStore.token, userStore.me?.id], () => loadHomeTasks())
+onBeforeUnmount(() => scheduleRequests.invalidate())
+
 </script>
 
 <style scoped>
@@ -1426,264 +1410,6 @@ onMounted(async () => {
   font-weight: 800;
 }
 
-.life-tree-video {
-  position: relative;
-  display: grid;
-  place-items: center;
-  margin: 12px 0 14px;
-  padding: 8px;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-  border: 1px solid rgba(67, 98, 115, 0.18);
-  border-radius: var(--radius-sm);
-  background:
-    radial-gradient(circle at 50% 18%, rgba(255, 247, 239, 0.96), rgba(232, 240, 244, 0.72) 36%, rgba(255, 253, 250, 0.76) 74%);
-}
-
-.life-tree-svg {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-}
-
-.tree-energy-bubbles {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  height: 100%;
-  pointer-events: none;
-}
-
-.energy-node {
-  position: absolute;
-  width: 70px;
-  min-height: 45px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  grid-template-rows: auto auto;
-  column-gap: 4px;
-  align-items: center;
-  justify-content: stretch;
-  padding: 6px 6px 6px 8px;
-  border: 1px solid rgba(255, 251, 240, 0.84);
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.96), rgba(255, 239, 181, 0.94) 38%, rgba(223, 151, 67, 0.88) 76%);
-  color: #68421d;
-  box-shadow:
-    0 12px 24px rgba(143, 89, 32, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  font-size: 9.5px;
-  font-weight: 900;
-  line-height: 1.15;
-  pointer-events: auto;
-  text-align: left;
-  transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
-  animation: energyGlowPulse 5.8s ease-in-out infinite;
-}
-
-.energy-node:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.02);
-  filter: saturate(1.06);
-}
-
-.energy-node:disabled {
-  cursor: default;
-}
-
-.energy-node > span:not(.energy-node__cue),
-.energy-node strong {
-  display: block;
-  min-width: 0;
-}
-
-.energy-node strong {
-  margin-top: 1px;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.energy-node__cue {
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  grid-column: 2;
-  grid-row: 1 / 3;
-  margin: 0;
-  border-radius: 999px;
-  background: rgba(255, 253, 246, 0.52);
-  color: rgba(104, 66, 29, 0.76);
-}
-
-.energy-node--1 {
-  left: 6%;
-  top: 38%;
-}
-
-.energy-node--2 {
-  right: 4%;
-  top: 25%;
-  animation-delay: 0.7s;
-}
-
-.energy-node--3 {
-  left: 42%;
-  top: 58%;
-  animation-delay: 1.2s;
-}
-
-.energy-node--locked {
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.88), rgba(228, 232, 225, 0.88) 42%, rgba(154, 168, 158, 0.72) 78%);
-  color: rgba(65, 78, 67, 0.8);
-  opacity: 0.68;
-  box-shadow: 0 8px 18px rgba(61, 72, 65, 0.09);
-  animation: none;
-}
-
-.energy-node--locked .energy-node__cue {
-  color: rgba(65, 78, 67, 0.72);
-}
-
-.energy-node--collected {
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 253, 247, 0.92), rgba(223, 233, 221, 0.86) 42%, rgba(95, 135, 111, 0.72) 80%);
-  color: var(--moss-deep);
-  opacity: 0.82;
-  animation: none;
-}
-
-.energy-node--collecting {
-  animation: energyCollectPulse 0.68s ease both;
-}
-
-.energy-node__gain {
-  position: absolute;
-  left: 50%;
-  top: -12px;
-  transform: translateX(-50%);
-  color: var(--seal-deep);
-  font-style: normal;
-  font-size: 14px;
-  font-weight: 900;
-  pointer-events: none;
-  animation: energyGainFloat 0.9s ease both;
-}
-
-.tree-hill {
-  opacity: 0.9;
-}
-
-.tree-hill--back {
-  fill: rgba(230, 207, 176, 0.58);
-}
-
-.tree-hill--front {
-  fill: rgba(172, 193, 199, 0.58);
-}
-
-.tree-soil {
-  fill: rgba(134, 58, 43, 0.24);
-  opacity: 0.82;
-}
-
-.tree-seed,
-.tree-sprout {
-  display: none;
-}
-
-.tree-sprout {
-  fill: none;
-  stroke: var(--sky-deep);
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 160;
-  stroke-dashoffset: 160;
-  opacity: 0;
-}
-
-.tree-grown {
-  transform-origin: 130px 218px;
-  opacity: 1;
-}
-
-.tree-trunk {
-  fill: url(#treeTrunkGradient);
-}
-
-.tree-branch {
-  fill: none;
-  stroke: #6f4935;
-  stroke-width: 10;
-  stroke-linecap: round;
-  stroke-dasharray: 130;
-  stroke-dashoffset: 0;
-  opacity: 1;
-}
-
-.tree-leaf-bloom {
-  fill: rgba(215, 104, 72, 0.78);
-  transform-box: fill-box;
-  transform-origin: center;
-  opacity: 1;
-}
-
-.tree-leaf-bloom--2,
-.tree-leaf-bloom--4 {
-  fill: rgba(143, 184, 198, 0.86);
-}
-
-.tree-leaf-bloom--5 {
-  fill: rgba(231, 189, 128, 0.92);
-}
-
-.life-tree-svg--decayed .tree-leaf-bloom {
-  fill: rgba(199, 169, 73, 0.92);
-}
-
-.life-tree-svg--decayed .tree-leaf-bloom--2,
-.life-tree-svg--decayed .tree-leaf-bloom--4 {
-  fill: rgba(213, 188, 90, 0.9);
-}
-
-.life-tree-svg--decayed .tree-leaf-bloom--5 {
-  fill: rgba(226, 203, 105, 0.95);
-}
-
-.life-tree-svg--decayed .tree-energy-drops circle {
-  opacity: 0.5;
-}
-
-.tree-energy-drops circle {
-  fill: url(#energyGlow);
-  stroke: rgba(255, 255, 255, 0.88);
-  stroke-width: 2;
-  animation: energyDropPulse 3.6s ease-in-out infinite;
-}
-
-.tree-energy-drops circle:nth-child(2) {
-  animation-delay: 0.7s;
-}
-
-.tree-energy-drops circle:nth-child(3) {
-  animation-delay: 1.1s;
-}
-
-.life-tree-caption {
-  padding: 9px 12px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 253, 250, 0.72);
-  text-align: center;
-}
-
-.life-tree-caption strong {
-  color: var(--ink);
-  font-family: var(--font-serif);
-  font-size: 14px;
-}
-
 .tree-progress-head {
   display: flex;
   align-items: center;
@@ -1970,5 +1696,47 @@ onMounted(async () => {
   .metric-item strong {
     font-size: 12px;
   }
+}
+
+.home-daily-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: rgba(189, 75, 53, 0.05);
+  border-radius: 10px;
+  border-left: 3px solid var(--seal, #bd4b35);
+}
+
+.home-daily-note__text {
+  font-size: 13px;
+  color: var(--ink-soft, #594f48);
+  line-height: 1.5;
+  flex: 1;
+  word-break: break-all;
+}
+
+.btn-note-rotate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--ink-muted, #8a7c73);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(112, 72, 46, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-note-rotate:hover {
+  color: var(--seal, #bd4b35);
+  border-color: var(--seal, #bd4b35);
+  background: #fff;
 }
 </style>

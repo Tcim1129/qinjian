@@ -27,11 +27,11 @@ async def create_activity(
     await validate_pair_access(pair_id, user, db, require_active=True)
 
     ACTIVITY_TITLES = {
-        "movie": "一起看电影 🎬",
-        "meal": "云打卡吃饭 🍜",
-        "chat": "视频深度聊天 📞",
-        "gift": "给对方寄礼物 🎁",
-        "exercise": "同步运动打卡 🏃",
+        "movie": "一起看电影",
+        "meal": "云打卡吃饭",
+        "chat": "视频深度聊天",
+        "gift": "给对方寄礼物",
+        "exercise": "同步运动打卡",
     }
 
     activity = LongDistanceActivity(
@@ -98,7 +98,7 @@ async def complete_activity(
 
     activity.status = "completed"
     activity.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    return {"message": "活动完成 🎉", "status": "completed"}
+    return {"message": "活动完成", "status": "completed"}
 
 
 @router.get("/health-index/{pair_id}")

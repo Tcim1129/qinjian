@@ -144,7 +144,7 @@ function buildMilestoneItems(milestones = []) {
   return [
     {
       label: '还没有最近节点',
-      note: '之后补上的纪念日和关键时刻，会进时间轴。',
+      note: '之后补上的纪念日和关键时刻，会进关系日历。',
     },
   ]
 }

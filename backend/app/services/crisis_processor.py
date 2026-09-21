@@ -216,15 +216,15 @@ async def _create_crisis_notifications(
     ) > CRISIS_LEVEL_SEVERITY.get(previous_level, 0)
 
     if is_escalation and previous_level != "none":
-        content = f"⚠️ 关系预警升级至【{level_label}】，请关注并查看干预建议"
+        content = f"关系预警升级至【{level_label}】，请关注并查看干预建议"
     elif crisis_level == "severe":
         content = (
-            f"🚨 检测到【{level_label}】信号，建议立即查看干预方案，必要时寻求专业帮助"
+            f"检测到【{level_label}】信号，建议立即查看干预方案，必要时寻求专业帮助"
         )
     elif crisis_level == "moderate":
-        content = f"⚠️ 检测到【{level_label}】信号，建议查看沟通引导建议"
+        content = f"检测到【{level_label}】信号，建议查看沟通引导建议"
     else:
-        content = f"💡 检测到【{level_label}】信号，推荐尝试趣味互动任务改善关系"
+        content = f"检测到【{level_label}】信号，推荐尝试趣味互动任务改善关系"
 
     user_ids = [pair.user_a_id]
     if pair.user_b_id:

@@ -1,193 +1,349 @@
 <template>
-  <div class="auth-page">
-    <div class="ambient-blob ambient-blob--seal"></div>
-    <div class="ambient-blob ambient-blob--moss"></div>
-    <div class="ambient-blob ambient-blob--ochre"></div>
-
-    <div class="auth-container">
-      <div class="auth-intro">
-        <div class="auth-hero-art">
-          <div class="art-circle art-circle-1"><HeartHandshake :size="48" stroke-width="1.5" /></div>
-          <div class="art-circle art-circle-2"><Sparkles :size="32" stroke-width="1.5" /></div>
-          <div class="art-pill">
-            <span class="pill-dot"></span> 泛亲密关系智能感知
-          </div>
-        </div>
-
+  <main class="auth-page">
+    <section class="auth-brand" aria-label="亲健">
+      <span class="brand-logo-wrap">
+        <img src="/qinjian-logo.jpg" alt="亲健 logo" class="brand-logo" />
+      </span>
+      <div>
         <h1>亲健</h1>
-        <p class="auth-tagline">先看见，再靠近</p>
-        <p class="auth-lead">
-          无论你是情侣、夫妻还是亲密好友，亲健帮你把关系里的故事记下来——看看卡在哪里，然后一起往前走。
-        </p>
+        <p>先看见，再靠近</p>
+      </div>
+    </section>
 
-        <div class="auth-features">
-          <div class="feature-item">
-            <div class="feature-icon"><PenLine :size="18" /></div>
-            <div>
-              <strong>先留住刚发生的事</strong>
-              <p>一句话、一段语音，把重要的片段记下来。</p>
-            </div>
-          </div>
-          <div class="feature-item">
-            <div class="feature-icon"><Activity :size="18" /></div>
-            <div>
-              <strong>再看清关系现在怎么样</strong>
-              <p>不说空话，直接告诉你现在更需要注意什么。</p>
-            </div>
-          </div>
-          <div class="feature-item">
-            <div class="feature-icon"><FolderHeart :size="18" /></div>
-            <div>
-              <strong>最后给出更容易开口的下一步</strong>
-              <p>适合情侣、伴侣、夫妻和亲密搭子，也可以先一个人慢慢整理。</p>
-            </div>
-          </div>
-        </div>
+    <section class="auth-card" aria-labelledby="auth-title">
+      <p class="eyebrow">{{ modeLabel }}</p>
+      <h2 id="auth-title">{{ titleText }}</h2>
 
-        <div class="service-status glass-card" style="margin-top: 24px;">
-          <span class="pill" :class="backendOk ? 'pill-success' : 'pill-warning'">
-            {{ backendOk ? '服务正常' : '仅预览' }}
-          </span>
-          <p>{{ backendOk ? '一切就绪，欢迎回来。' : '可以先逛逛界面，不着急。' }}</p>
-        </div>
+      <div v-if="mode !== 'reset'" class="segmented auth-tabs" role="tablist" aria-label="账号入口">
+        <button type="button" :class="{ active: mode === 'login' }" @click="switchMode('login')">登录</button>
+        <button type="button" :class="{ active: mode === 'register' }" @click="switchMode('register')">注册</button>
       </div>
 
-      <div class="auth-form-wrapper glass-card">
-        <div class="auth-form-head">
-          <p class="eyebrow">欢迎回来</p>
-          <h2>{{ isRegister ? '创建账号' : '登录' }}</h2>
-        </div>
+      <form class="form-stack" @submit.prevent="handleSubmit">
+        <label v-if="mode === 'register'" class="field">
+          <span>昵称</span>
+          <input
+            v-model.trim="form.nickname"
+            class="input"
+            type="text"
+            autocomplete="nickname"
+            placeholder="请输入昵称"
+          />
+        </label>
 
-        <div class="segmented" style="margin-bottom: 12px;">
-          <button :class="{ active: !isRegister }" @click="isRegister = false">登录</button>
-          <button :class="{ active: isRegister }" @click="isRegister = true">注册</button>
-        </div>
-
-        <div class="segmented" style="margin-bottom: 24px;">
-          <button :class="{ active: authMethod === 'email' }" @click="authMethod = 'email'">邮箱</button>
-          <button :class="{ active: authMethod === 'phone' }" @click="authMethod = 'phone'">手机号</button>
-        </div>
-
-        <form @submit.prevent="handleSubmit" class="form-stack">
-          <label v-if="isRegister && authMethod === 'email'" class="field">
-            <span>昵称</span>
-            <input v-model="form.nickname" class="input" type="text" placeholder="希望对方怎么称呼你" />
+        <template v-if="mode !== 'reset'">
+          <label class="field">
+            <span>账号</span>
+            <input
+              v-model.trim="form.account"
+              class="input"
+              type="text"
+              autocomplete="username"
+              inputmode="email"
+              placeholder="请输入手机号或邮箱"
+              required
+            />
           </label>
 
-          <label v-if="authMethod === 'email'" class="field">
-            <span>邮箱</span>
-            <input v-model="form.email" class="input" type="email" placeholder="你的邮箱" required />
-          </label>
-
-          <label v-if="authMethod === 'email'" class="field">
+          <label class="field">
             <span>密码</span>
-            <input v-model="form.password" class="input" type="password" placeholder="密码" :minlength="isRegister ? 8 : 6" required />
+            <input
+              v-model="form.password"
+              class="input"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+              minlength="6"
+              required
+            />
           </label>
 
-          <template v-if="authMethod === 'phone'">
-            <label class="field">
-              <span>手机号</span>
-              <input v-model="form.phone" class="input" type="tel" inputmode="numeric" maxlength="11" placeholder="手机号" />
+          <div class="auth-options">
+            <label class="checkline">
+              <input v-model="rememberAccount" type="checkbox" />
+              <span>记住账号</span>
             </label>
-            <div class="field">
-              <span>验证码</span>
-              <div class="code-row">
-                <input v-model="form.phoneCode" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
-                <button type="button" class="btn btn-secondary btn-sm" :disabled="cooldown > 0" @click="sendCode">
-                  {{ cooldown > 0 ? `${cooldown}s` : '获取验证码' }}
-                </button>
-              </div>
-            </div>
-          </template>
+            <button type="button" class="text-button" @click="switchMode('reset')">忘记密码</button>
+          </div>
+        </template>
 
-          <div style="margin-top: 10px;">
-            <button type="submit" class="btn btn-primary btn-block" style="border-radius: 999px; height: 46px; font-size: 16px;" :disabled="submitting">
-              {{ submitting ? '处理中...' : (isRegister ? '创建账号' : '进入亲健') }}
+        <template v-else>
+          <label class="field">
+            <span>手机号</span>
+            <input
+              v-model.trim="form.phone"
+              class="input"
+              type="tel"
+              inputmode="numeric"
+              maxlength="11"
+              autocomplete="tel"
+              placeholder="已绑定的手机号"
+              required
+            />
+          </label>
+
+          <div class="field">
+            <span>验证码</span>
+            <div class="code-row">
+              <input
+                v-model.trim="form.code"
+                class="input"
+                type="text"
+                inputmode="numeric"
+                maxlength="6"
+                autocomplete="one-time-code"
+                placeholder="6 位验证码"
+                required
+              />
+              <button type="button" class="code-button" :disabled="cooldown > 0" @click="sendCode">
+                {{ cooldown > 0 ? `${cooldown}s` : '获取验证码' }}
+              </button>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>新密码</span>
+            <input
+              v-model="form.newPassword"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              placeholder="至少 6 位"
+              minlength="6"
+              required
+            />
+          </label>
+        </template>
+
+        <div class="agreement-row">
+          <label class="checkline">
+            <input v-model="agreementAccepted" type="checkbox" />
+            <span>我已阅读并同意</span>
+          </label>
+          <div class="legal-links" aria-label="协议文档">
+            <button
+              v-for="doc in legalDocs"
+              :key="doc.id"
+              type="button"
+              class="legal-link"
+              @click="showLegal(doc)"
+            >
+              {{ doc.title }}
             </button>
           </div>
-          <button type="button" class="btn btn-ghost btn-block" style="border-radius: 999px; height: 46px;" @click="enterDemo">
-            先看看界面
-          </button>
-        </form>
+        </div>
+
+        <button type="submit" class="primary-submit" :disabled="submitting">
+          {{ submitting ? '处理中...' : submitText }}
+        </button>
+
+        <button v-if="mode !== 'reset'" type="button" class="demo-button" @click="enterDemo">
+          进入体验样例
+        </button>
+        <button v-else type="button" class="demo-button" @click="switchMode('login')">
+          返回登录
+        </button>
+      </form>
+    </section>
+
+    <Teleport to="body">
+      <div v-if="activeLegalDoc" class="legal-overlay" @click.self="closeLegal">
+        <section
+          class="legal-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="legal-dialog-title"
+        >
+          <header class="legal-dialog__head">
+            <div>
+              <p class="eyebrow">使用前请阅读</p>
+              <h3 id="legal-dialog-title">{{ activeLegalDoc.title }}</h3>
+            </div>
+            <button type="button" class="legal-dialog__close" aria-label="关闭协议" @click="closeLegal">×</button>
+          </header>
+          <p class="legal-dialog__intro">{{ LOGIN_LEGAL_NOTICE.intro }}</p>
+          <div class="legal-dialog__body">
+            <section v-for="section in activeLegalDoc.sections" :key="section.heading" class="legal-section">
+              <h4>{{ section.heading }}</h4>
+              <ul>
+                <li v-for="item in section.items" :key="item">{{ item }}</li>
+              </ul>
+            </section>
+          </div>
+          <footer class="legal-dialog__foot">
+            <button type="button" class="primary-submit" @click="closeLegal">读完了</button>
+          </footer>
+        </section>
       </div>
-    </div>
-  </div>
+    </Teleport>
+  </main>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, inject } from 'vue'
+import { computed, inject, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
-import { HeartHandshake, Sparkles, PenLine, Activity, FolderHeart } from 'lucide-vue-next'
+import { useUserStore } from '@/stores/user'
+import {
+  AGREEMENT_BLOCK_MESSAGE,
+  LOGIN_LEGAL_NOTICE,
+  canEnterService,
+} from '@/utils/complianceAgreement'
 
 const router = useRouter()
 const userStore = useUserStore()
-const showToast = inject('showToast')
+const injectedToast = inject('showToast', null)
 
-const isRegister = ref(false)
-const authMethod = ref('email')
+const mode = ref('login')
+const rememberAccount = ref(false)
+const agreementAccepted = ref(false)
 const submitting = ref(false)
 const cooldown = ref(0)
+const activeLegalDoc = ref(null)
 
 const form = reactive({
-  email: '',
+  account: '',
   password: '',
   nickname: '',
   phone: '',
-  phoneCode: '',
+  code: '',
+  newPassword: '',
 })
 
-const backendOk = ref(true)
+const legalDocs = LOGIN_LEGAL_NOTICE.documents
 
-onMounted(async () => {
-  try {
-    await api.health()
-    backendOk.value = true
-  } catch {
-    backendOk.value = false
+const modeLabel = computed(() => {
+  if (mode.value === 'register') return '注册'
+  if (mode.value === 'reset') return '找回密码'
+  return '登录'
+})
+const titleText = computed(() => {
+  if (mode.value === 'register') return '注册账号'
+  if (mode.value === 'reset') return '重新设置密码'
+  return '登录亲健'
+})
+const submitText = computed(() => {
+  if (mode.value === 'register') return '注册'
+  if (mode.value === 'reset') return '重设密码'
+  return '登录'
+})
+
+onMounted(() => {
+  const savedAccount = localStorage.getItem('qj_saved_account') || ''
+  if (savedAccount) {
+    form.account = savedAccount
+    rememberAccount.value = true
   }
 })
 
+function toast(message) {
+  if (typeof injectedToast === 'function') {
+    injectedToast(message)
+    return
+  }
+  window.alert(message)
+}
+
+function switchMode(nextMode) {
+  mode.value = nextMode
+}
+
+function normalizeAccount(value) {
+  return String(value || '').trim()
+}
+
+function persistLoginPreference() {
+  if (rememberAccount.value && form.account) {
+    localStorage.setItem('qj_saved_account', form.account)
+  } else {
+    localStorage.removeItem('qj_saved_account')
+  }
+}
+
+function validateAgreement() {
+  const result = canEnterService(agreementAccepted.value)
+  if (!result.allowed) {
+    toast(result.message || AGREEMENT_BLOCK_MESSAGE)
+    return false
+  }
+  return true
+}
+
 async function handleSubmit() {
-  if (!form.email || !form.password) { showToast('请填写邮箱和密码'); return }
-  if (isRegister.value && !form.nickname) { showToast('请填写昵称'); return }
+  if (!validateAgreement()) return
+
+  submitting.value = true
   try {
-    if (authMethod.value === 'phone') {
-      if (!/^1\d{10}$/.test(form.phone)) { showToast('请输入正确的手机号'); return }
-      if (!/^\d{6}$/.test(form.phoneCode)) { showToast('请输入 6 位验证码'); return }
-      await userStore.phoneLogin(form.phone, form.phoneCode)
-    } else {
-      if (isRegister.value) await userStore.register(form.email, form.nickname, form.password)
-      else await userStore.login(form.email, form.password)
+    if (mode.value === 'reset') {
+      if (!/^1\d{10}$/.test(form.phone)) {
+        toast('请输入正确的手机号')
+        return
+      }
+      if (!/^\d{6}$/.test(form.code)) {
+        toast('请输入 6 位验证码')
+        return
+      }
+      await api.resetPasswordByPhone(form.phone, form.code, form.newPassword)
+      toast('密码已重设，请重新登录')
+      mode.value = 'login'
+      return
     }
-    showToast('登录成功，欢迎回来')
+
+    form.account = normalizeAccount(form.account)
+    if (!form.account || !form.password) {
+      toast('请填写账号和密码')
+      return
+    }
+    if (mode.value === 'register' && !form.nickname) {
+      toast('请填写昵称')
+      return
+    }
+
+    if (mode.value === 'register') {
+      await userStore.register(form.account, form.nickname, form.password)
+    } else {
+      await userStore.login(form.account, form.password)
+    }
+    persistLoginPreference()
+    toast('登录成功，欢迎回来')
     router.push('/')
-  } catch (e) {
-    showToast(e.message || '操作失败，请稍后再试')
+  } catch (error) {
+    toast(error.message || '操作失败，请稍后再试')
   } finally {
     submitting.value = false
   }
 }
 
 async function sendCode() {
-  if (!/^1\d{10}$/.test(form.phone)) { showToast('请输入正确的手机号'); return }
+  if (!/^1\d{10}$/.test(form.phone)) {
+    toast('请输入正确的手机号')
+    return
+  }
   try {
     const res = await api.sendPhoneCode(form.phone)
-    showToast(res.debug_code ? `验证码已发送：${res.debug_code}` : '验证码已发送，请查收')
+    toast(res.debug_code ? `验证码已发送：${res.debug_code}` : '验证码已发送，请查收')
     cooldown.value = 60
-    const timer = setInterval(() => {
-      cooldown.value--
-      if (cooldown.value <= 0) clearInterval(timer)
+    const timer = window.setInterval(() => {
+      cooldown.value -= 1
+      if (cooldown.value <= 0) window.clearInterval(timer)
     }, 1000)
-  } catch (e) {
-    showToast(e.message || '发送失败，请稍后再试')
+  } catch (error) {
+    toast(error.message || '发送失败，请稍后再试')
   }
 }
 
+function showLegal(doc) {
+  activeLegalDoc.value = doc
+}
+
+function closeLegal() {
+  activeLegalDoc.value = null
+}
+
 function enterDemo() {
+  if (!validateAgreement()) return
   userStore.enterDemo()
-  showToast('已进入预览模式')
+  toast('已进入体验样例')
   router.push('/')
 }
 </script>
@@ -195,250 +351,107 @@ function enterDemo() {
 <style scoped>
 .auth-page {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 16px;
-  background: var(--paper);
-  overflow-y: auto;
-}
-
-.ambient-blob {
-  position: fixed;
-  border-radius: 50%;
-  filter: blur(72px);
-  opacity: 0.38;
-  pointer-events: none;
-}
-.ambient-blob--seal {
-  width: 340px; height: 340px;
-  top: -90px; left: -80px;
-  background: var(--seal-soft);
-}
-.ambient-blob--moss {
-  width: 280px; height: 280px;
-  bottom: -60px; right: -60px;
-  background: var(--moss-soft);
-}
-.ambient-blob--ochre {
-  width: 200px; height: 200px;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--amber-soft);
-  opacity: 0.18;
-}
-
-.auth-container {
+  min-height: 100dvh;
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 32px;
-  max-width: 860px;
-  width: 100%;
-  align-items: start;
+  grid-template-columns: minmax(320px, 1fr) 410px;
+  align-items: center;
+  gap: 148px;
+  width: min(980px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 88px 0;
 }
 
-.auth-intro {
-  padding: 32px 8px;
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 18px;
+  transform: translateY(108px);
 }
 
-.auth-hero-art {
-  position: relative;
-  width: 90px;
-  height: 90px;
-  margin-bottom: 24px;
-}
-
-.art-circle {
-  position: absolute;
-  border-radius: 50%;
+.brand-logo-wrap {
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
-}
-.art-circle-1 {
-  width: 72px; height: 72px;
-  top: 0; left: 0;
-  background: var(--seal-soft);
-  color: var(--seal);
-}
-.art-circle-2 {
-  width: 48px; height: 48px;
-  bottom: 0; right: 0;
-  background: var(--moss-soft);
-  color: var(--moss);
-}
-
-.art-pill {
-  position: absolute;
-  top: 80px; left: 72px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: rgba(255, 253, 250, 0.82);
-  border: 1px solid var(--border-strong);
-  backdrop-filter: blur(8px);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-.pill-dot {
-  width: 6px; height: 6px;
+  border: 1px solid rgba(215, 104, 72, 0.36);
   border-radius: 50%;
-  background: var(--seal);
-  animation: pulse 2s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.85); }
+  background: rgba(255, 253, 250, 0.78);
+  box-shadow: 0 16px 38px rgba(94, 62, 43, 0.12);
 }
 
-.auth-intro h1 {
-  font-family: var(--font-serif);
-  font-size: 42px;
-  font-weight: 700;
+.brand-logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.auth-brand h1 {
   color: var(--seal-deep);
-  line-height: 1.2;
-  margin-bottom: 8px;
-}
-
-.auth-tagline {
-  font-size: 18px;
-  color: var(--ink-soft);
-  margin-bottom: 16px;
-  font-weight: 600;
-}
-
-.auth-lead {
-  font-size: 15px;
-  color: var(--ink-soft);
-  line-height: 1.75;
-  max-width: 420px;
-  margin-bottom: 28px;
-}
-
-.auth-features {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 400px;
-}
-
-.feature-item {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.feature-icon {
-  width: 36px; height: 36px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--seal-soft);
-  color: var(--seal);
-}
-
-.feature-item strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 2px;
-}
-
-.feature-item p {
-  font-size: 13px;
-  color: var(--ink-soft);
-  line-height: 1.55;
-}
-
-.service-status {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 253, 250, 0.72);
-}
-
-.service-status .pill {
-  align-self: flex-start;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-}
-.pill-success {
-  background: var(--moss-soft);
-  color: var(--moss-deep);
-}
-.pill-warning {
-  background: var(--amber-soft);
-  color: var(--amber-deep);
-}
-
-.service-status p {
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.auth-form-wrapper {
-  padding: 28px 24px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 253, 250, 0.92);
-}
-
-.auth-form-head {
-  margin-bottom: 20px;
-}
-
-.auth-form-head .eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 4px;
-}
-
-.auth-form-head h2 {
   font-family: var(--font-serif);
-  font-size: 24px;
+  font-size: 40px;
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+.auth-brand p {
+  margin-top: 8px;
+  color: #5d6870;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--ink);
 }
 
-.segmented {
-  display: flex;
-  background: var(--paper);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  padding: 3px;
-  gap: 3px;
+.auth-card {
+  min-height: 576px;
+  align-self: center;
+  padding: 40px 24px 34px;
+  border: 1px solid rgba(68, 52, 40, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 253, 250, 0.72);
+  box-shadow: 0 26px 64px rgba(74, 52, 36, 0.12);
+  backdrop-filter: blur(18px);
 }
 
-.segmented button {
-  flex: 1;
-  padding: 8px;
-  border: none;
-  border-radius: calc(var(--radius-md) - 2px);
-  background: transparent;
-  font-size: 13px;
+.eyebrow {
+  margin-bottom: 8px;
+  color: #5f696d;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: all 0.15s ease;
 }
 
-.segmented button.active {
-  background: var(--paper-soft);
+.auth-card h2 {
+  margin-bottom: 24px;
   color: var(--ink);
-  box-shadow: var(--shadow-xs);
+  font-family: var(--font-serif);
+  font-size: 25px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  height: 44px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border: 1px solid rgba(68, 52, 40, 0.18);
+  border-radius: 8px;
+  background: rgba(245, 238, 231, 0.74);
+}
+
+.auth-tabs button {
+  border-radius: 7px;
+  color: #4e5659;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.auth-tabs button.active {
+  color: var(--ink);
+  background: rgba(255, 253, 250, 0.82);
+  box-shadow: 0 8px 18px rgba(74, 52, 36, 0.08);
 }
 
 .form-stack {
@@ -448,120 +461,244 @@ function enterDemo() {
 }
 
 .field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  gap: 8px;
 }
 
-.field span {
-  font-size: 12px;
+.field span,
+.checkline span {
+  color: #4f5b60;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--ink-soft);
 }
 
 .input {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--paper);
-  font-size: 14px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(68, 52, 40, 0.18);
+  border-radius: 8px;
+  background: rgba(246, 240, 234, 0.78);
   color: var(--ink);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--seal);
-  box-shadow: 0 0 0 3px rgba(189, 75, 53, 0.1);
+  font-size: 14px;
 }
 
 .input::placeholder {
-  color: var(--ink-faint);
+  color: rgba(80, 88, 92, 0.58);
+}
+
+.input:focus {
+  border-color: rgba(181, 83, 56, 0.54);
+  background: rgba(255, 253, 250, 0.9);
+  box-shadow: 0 0 0 3px rgba(215, 104, 72, 0.12);
+}
+
+.auth-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.checkline input {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--seal);
+}
+
+.text-button,
+.legal-link {
+  color: var(--seal-deep);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .code-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 104px;
   gap: 8px;
 }
 
-.code-row .input {
-  flex: 1;
+.code-button {
+  height: 44px;
+  border: 1px solid rgba(68, 52, 40, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 253, 250, 0.78);
+  color: var(--seal-deep);
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 18px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  text-decoration: none;
+.agreement-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 10px;
+  align-items: start;
 }
 
-.btn-primary {
+.agreement-row .checkline {
+  margin-top: 1px;
+}
+
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  justify-content: flex-start;
+}
+
+.primary-submit {
+  height: 46px;
+  margin-top: 8px;
+  border-radius: 8px;
   background: var(--seal);
-  color: #fff;
+  color: #fffdfa;
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: 0 14px 24px rgba(181, 83, 56, 0.18);
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
-.btn-primary:hover:not(:disabled) {
-  background: var(--seal-deep);
+
+.primary-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-}
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  background: var(--seal-deep);
+  box-shadow: 0 18px 28px rgba(181, 83, 56, 0.22);
 }
 
-.btn-secondary {
+.demo-button {
+  align-self: center;
+  min-height: 30px;
+  padding: 0 16px;
+  color: #4f5b60;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.legal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(37, 40, 33, 0.42);
+  backdrop-filter: blur(8px);
+}
+
+.legal-dialog {
+  width: min(720px, 100%);
+  max-height: min(82vh, 760px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 24px;
   background: var(--paper-soft);
-  color: var(--ink);
-  border-color: var(--border-strong);
-}
-.btn-secondary:hover:not(:disabled) {
-  border-color: var(--seal);
-  color: var(--seal);
+  box-shadow: var(--shadow-lg);
 }
 
-.btn-ghost {
-  background: transparent;
+.legal-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.legal-dialog__head h3 {
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 21px;
+}
+
+.legal-dialog__close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: rgba(255, 253, 250, 0.82);
   color: var(--ink-soft);
+  font-size: 22px;
+  line-height: 1;
 }
-.btn-ghost:hover {
+
+.legal-dialog__intro {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.legal-dialog__body {
+  display: grid;
+  gap: 20px;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 253, 250, 0.7);
+}
+
+.legal-section h4 {
+  margin-bottom: 8px;
   color: var(--ink);
-  background: var(--paper);
+  font-size: 15px;
 }
 
-.btn-block {
-  width: 100%;
+.legal-section ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.75;
 }
 
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
+.legal-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
 }
 
-@media (max-width: 700px) {
-  .auth-container {
+.legal-dialog__foot .primary-submit {
+  width: 120px;
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .auth-page {
     grid-template-columns: 1fr;
-    gap: 24px;
+    gap: 32px;
+    width: min(430px, calc(100% - 32px));
+    padding: 42px 0;
   }
-  .auth-intro {
-    padding: 16px 4px;
+
+  .auth-brand {
+    justify-self: center;
+    transform: none;
   }
-  .auth-intro h1 {
-    font-size: 32px;
+
+  .auth-card {
+    min-height: auto;
   }
-  .auth-hero-art {
-    width: 72px;
-    height: 72px;
+
+  .legal-overlay {
+    padding: 12px;
   }
-  .art-circle-1 { width: 56px; height: 56px; }
-  .art-circle-2 { width: 38px; height: 38px; }
-  .art-pill { top: 64px; left: 56px; }
+
+  .legal-dialog {
+    max-height: 90vh;
+    padding: 18px;
+  }
 }
 </style>

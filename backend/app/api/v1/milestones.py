@@ -48,7 +48,7 @@ async def create_milestone(
         "type": milestone.type,
         "title": milestone.title,
         "date": str(milestone.date),
-        "message": "里程碑已创建 🎉",
+        "message": "里程碑已创建",
     }
 
 
@@ -128,7 +128,7 @@ async def generate_review(
         return {
             "milestone_id": str(milestone.id),
             "review": review,
-            "message": "关系成长回顾已生成 🎉",
+            "message": "关系成长回顾已生成",
         }
     except Exception as e:
         logger.error(f"生成里程碑报告失败: {e}")

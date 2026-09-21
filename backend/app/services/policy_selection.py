@@ -26,8 +26,8 @@ INTENSITY_RANK = {
 SELECTION_LABELS = {
     "keep_current": "保持当前策略",
     "observe_more": "继续观察",
-    "adopt_proven_variant": "切到更稳的已验证策略",
-    "backoff_to_lower_friction": "回退到更低摩擦版本",
+    "adopt_proven_variant": "采用已有记录支持的方案",
+    "backoff_to_lower_friction": "改用更容易完成的方案",
     "adopt_proven_copy": "沿用更有效的表达方式",
 }
 
@@ -95,22 +95,22 @@ def _selection_reason(
 ) -> str:
     if mode == "adopt_proven_copy" and candidate:
         return (
-            f"当前更像是表达方式卡住了，系统先沿用更有证据的“{candidate.get('copy_mode_label') or '任务表达'}”，"
+            f"目前的表达方式可能不太合适，系统先采用已有记录支持的“{candidate.get('copy_mode_label') or '任务表达'}”，"
             f"避免继续在低效写法上消耗。{comparison_summary}"
         )
     if mode == "backoff_to_lower_friction" and candidate:
         return (
-            f"当前策略阻力偏大，系统先回退到更低摩擦的“{candidate.get('label') or '已验证策略'}”，"
-            f"优先把执行重新拉起来。{comparison_summary}"
+            f"目前的方案执行起来较困难，系统先改用更容易完成的“{candidate.get('label') or '已验证策略'}”，"
+            f"先观察用户能否完成安排。{comparison_summary}"
         )
     if mode == "adopt_proven_variant" and candidate:
         return (
-            f"当前策略已经出现走弱迹象，系统先切到证据更稳的“{candidate.get('label') or '已验证策略'}”，"
+            f"近期反馈有所下降，系统先改用已有记录支持的“{candidate.get('label') or '已验证策略'}”，"
             f"看看能不能更快稳住结果。{comparison_summary}"
         )
     if mode == "observe_more":
         return (
-            "现有替代策略证据还不够厚，系统暂时不自动切换，先继续积累 2 到 3 次连续观测。"
+            "其他方案的记录还不足，系统暂不自动切换，等待后续 2 到 3 次连续记录。"
         )
     return (
         f"当前策略还没有出现足够强的负向信号，系统先保留“{current_policy.get('label') or '当前策略'}”，"
@@ -120,11 +120,11 @@ def _selection_reason(
 
 def _selection_support(mode: str, intensity: str) -> str:
     if mode == "backoff_to_lower_friction":
-        return "先把动作做轻、做稳，等执行重新起来，再判断要不要继续加码。"
+        return "先尝试容易完成的安排，完成后再考虑是否增加内容。"
     if intensity == "stretch":
-        return "现在更适合在稳住有效动作的基础上，多往前走半步。"
+        return "可以保留已经有帮助的做法，再尝试一项新的安排。"
     if intensity == "light":
-        return "今天先把最小一步做完就够了，目标是恢复可执行性。"
+        return "今天先完成一件容易做到的小事，再根据反馈调整后续安排。"
     return "先把稳定执行做出来，效果通常比频繁换方向更好。"
 
 

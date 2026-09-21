@@ -4,7 +4,9 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -12,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.v1 import pairs as pairs_api
 from app.api.v1 import tasks as tasks_api
+from app import ai as ai_module
 from app.services import task_adaptation
 from app.services import task_planner as planner_service
 from app.core.database import Base
@@ -167,9 +170,59 @@ def test_daily_tasks_generates_tomorrow_layer_with_configured_count(monkeypatch)
         assert scope_response.status_code == 200
         assert scope_response.json()["date_scope"] == "tomorrow"
         assert call_count["value"] == 1
+
+        async def read_plan_view_keys():
+            async with sessionmaker() as db:
+                result = await db.execute(
+                    select(RelationshipEvent.idempotency_key).where(
+                        RelationshipEvent.event_type == "task.plan_viewed"
+                    )
+                )
+                return [key for key in result.scalars().all() if key]
+
+        idempotency_keys = asyncio.run(read_plan_view_keys())
+        assert idempotency_keys
+        assert all(len(key) <= 100 for key in idempotency_keys)
     finally:
         asyncio.run(engine.dispose())
         db_path.unlink(missing_ok=True)
+
+
+def test_task_pack_ai_call_respects_page_budget(monkeypatch):
+    async def fake_snapshot(*_args, **_kwargs):
+        return None
+
+    async def fake_status_lines(*_args, **_kwargs):
+        return []
+
+    async def slow_chat_completion(*_args, **_kwargs):
+        await asyncio.sleep(0.05)
+        return '{"daily_note":"不应等到","daily_pack_label":"慢响应","tasks":[]}'
+
+    monkeypatch.setattr(planner_service, "_load_or_refresh_snapshot", fake_snapshot)
+    monkeypatch.setattr(planner_service, "_build_recent_status_lines", fake_status_lines)
+    monkeypatch.setattr(ai_module, "chat_completion", slow_chat_completion)
+    monkeypatch.setattr(
+        planner_service,
+        "TASK_PLANNER_AI_TIMEOUT_SECONDS",
+        0.001,
+        raising=False,
+    )
+
+    with pytest.raises(planner_service.TaskPlannerError, match="planner ai call failed"):
+        asyncio.run(
+            planner_service.generate_ai_task_pack(
+                object(),
+                pair=SimpleNamespace(id=uuid.uuid4(), type=PairType.COUPLE),
+                for_date=current_local_date() + timedelta(days=1),
+                strategy={"intensity": "steady"},
+                scorecard=None,
+                effective_settings={
+                    "daily_ai_task_count": 5,
+                    "reminder_time": "21:00",
+                },
+            )
+        )
 
 
 def test_pair_task_settings_override_and_clear():
@@ -420,6 +473,9 @@ def test_manual_task_limit_and_system_importance_update(monkeypatch):
                 f"/tasks/{state['system_task_id']}",
                 json={"importance_level": "high"},
             )
+            complete_response = client.post(
+                f"/tasks/{state['system_task_id']}/complete",
+            )
             edit_system_response = client.patch(
                 f"/tasks/{state['system_task_id']}",
                 json={"title": "不允许改标题"},
@@ -429,6 +485,8 @@ def test_manual_task_limit_and_system_importance_update(monkeypatch):
         assert "最多" in limit_response.json()["detail"]
         assert importance_response.status_code == 200, importance_response.text
         assert importance_response.json()["task"]["importance_level"] == "high"
+        assert complete_response.status_code == 200, complete_response.text
+        assert complete_response.json()["task"]["importance_level"] == "high"
         assert edit_system_response.status_code == 400
     finally:
         asyncio.run(engine.dispose())

@@ -337,7 +337,7 @@ def _moderate_protocol(*, is_long_distance: bool) -> dict:
                 "sequence": 3,
                 "title": "要求对方复述，不要求立刻认同",
                 "action": "请对方先复述你的重点，只确认听懂，不急着争结论。",
-                "why": "先对齐理解，再讨论立场，更容易止损。",
+                "why": "先弄清彼此的意思，再谈各自的想法，可以减少争执。",
                 "duration_hint": "3 分钟",
             },
             {

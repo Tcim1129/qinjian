@@ -152,64 +152,64 @@ def _risk_level_from_score(score: float) -> str:
 
 def _risk_reason(score: float, cleaned: str, signal: dict[str, Any]) -> str:
     if score < 0.95:
-        return "这句话把请求和时间边界说得比较清楚，刺激性不高。"
+        return "这句话说清了请求和时间，没有明显的责怪或催促。"
     if _has_any(cleaned, ABSOLUTE_MARKERS + BLAME_MARKERS):
-        return "里面带着绝对化或责备感，对方容易先起防御。"
+        return "有些措辞像是在责怪对方，可能让人忽略你想说的事。"
     if signal.get("reaction_type") in {"withdraw", "defend", "urgent"}:
-        return "这句话更容易先把情绪推高，而不是把重点说清楚。"
-    return "里面的压力感偏重，容易让对方先卡在情绪上。"
+        return "语气比较急，但还没有说清希望对方怎么做。"
+    return "这句话可能让对方感到被催促，可以把要求说得更具体。"
 
 
 def _partner_view(risk_level: str, signal: dict[str, Any]) -> str:
     reaction = str(signal.get("reaction_type") or "neutral")
     if risk_level == "low":
-        return "对方更容易把它听成想确认安排，不太像指责。"
+        return "对方可能会理解为你在确认安排。"
     if reaction in {"defend", "urgent"}:
-        return "对方大概率会先听到压力和责备。"
+        return "对方可能觉得自己被责怪了，先解释或反驳。"
     if reaction == "withdraw":
-        return "对方更可能先感到这段对话要被关掉了。"
-    return "对方可能会先感到紧张，得先消化情绪再听重点。"
+        return "对方可能认为你不想再聊，也可能继续追问原因。"
+    return "对方可能看得出你不高兴，但不清楚你希望怎么处理。"
 
 
 def _likely_impact(risk_level: str, signal: dict[str, Any]) -> str:
     reaction = str(signal.get("reaction_type") or "neutral")
     if risk_level == "low":
-        return "更像是先把时间和理解对齐，比较容易继续聊。"
+        return "可以接着确认时间或具体安排。"
     if risk_level == "high":
         if reaction == "withdraw":
-            return "如果直接发出，容易让对方更想退开或结束对话。"
-        return "如果直接发出，互动很容易先升级成顶嘴或沉默。"
-    return "如果直接发出，容易在误会和解释里来回打转。"
+            return "这句话可能使对话中断，事情仍然没有说清楚。"
+        return "接下来可能争论谁对谁错，而没有讨论怎么处理这件事。"
+    return "双方可能需要先解释这句话是什么意思，才能继续讨论。"
 
 
 def _conversation_goal(risk_level: str, signal: dict[str, Any]) -> str:
     if risk_level == "low":
-        return "先确认这件事怎么聊"
+        return "确认具体安排"
     if risk_level == "high":
-        return "先降温再继续聊"
+        return "说清当前的问题和自己的要求"
     if str(signal.get("reaction_type") or "") == "seek_support":
-        return "先让对方听见感受"
-    return "先把重点说清楚"
+        return "说明自己需要什么帮助"
+    return "说清自己的想法和要求"
 
 
 def _suggested_tone(risk_level: str, signal: dict[str, Any]) -> str:
     if risk_level == "low":
-        return "保持现在这种先确认再表达的说法"
+        return "保持当前语气"
     if risk_level == "high":
-        return "先降刺激，再说重点"
+        return "平静、直接"
     if str(signal.get("reaction_type") or "") == "seek_support":
-        return "先说感受，再说需要"
-    return "直接但别带责备"
+        return "直接说明自己的感受"
+    return "说具体的事，不评价对方为人"
 
 
 def _rewrite_draft(cleaned: str, risk_level: str, signal: dict[str, Any]) -> str:
     if not cleaned:
-        return "我现在有点乱，想先停一下。等我们都缓一点后，再把这件事说清楚。"
+        return "请先输入准备发出的消息。"
 
     if _has_any(cleaned, ABSOLUTE_MARKERS + BLAME_MARKERS + DISENGAGE_MARKERS):
         if _has_any(cleaned, RESPONSE_MARKERS):
-            return "你刚刚没回的时候，我这边会有点慌，也容易多想。等你方便时，想和你确认一下刚才那件事。"
-        return "我现在有点难受，也不想把话越说越重。等你方便时，我想把刚刚卡住的点说清楚。"
+            return "一直没等到你的回复，我有些着急。方便的时候回我一下吧。"
+        return "这件事我有些在意，想和你说清楚。你什么时候方便聊？"
 
     if risk_level == "low":
         if cleaned.endswith(("吗？", "吗?", "可以吗？", "可以吗?")):
@@ -219,10 +219,10 @@ def _rewrite_draft(cleaned: str, risk_level: str, signal: dict[str, Any]) -> str
         return cleaned
 
     if _has_any(cleaned, RESPONSE_MARKERS):
-        return "你刚刚没回的时候，我这边会有点慌，也容易多想。等你方便时，想和你确认一下刚才那件事。"
+        return "一直没等到你的回复，我有些着急。方便的时候回我一下吧。"
     if str(signal.get("reaction_type") or "") == "withdraw":
-        return "我现在情绪有点高，怕继续说会更糟。我们先停一下，晚一点再把这件事说清楚。"
-    return "我现在有点难受，想先把自己的感受说清楚，不是想跟你算账。等你方便时，我们把刚刚那件事对齐一下。"
+        return "我现在不太想继续聊，需要先休息一会儿。晚点再说，可以吗？"
+    return "我想把这件事说清楚，你现在方便聊吗？"
 
 
 def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -318,18 +318,18 @@ def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = 
         "shadow_result": None,
         "feedback_status": "pending_feedback",
         "do_list": (
-            ["先把想确认的事说具体", "给对方一个能回应的时间窗口"]
+            ["先把想确认的事具体说出来", "问问对方什么时候方便回复"]
             if risk_level == "low"
-            else ["先说自己的感受", "一次只谈这一件事"]
+            else ["先说具体发生了什么", "说清自己的感受和要求"]
             if risk_level == "medium"
-            else ["先降温再开口", "等对方有空再进入主题"]
+            else ["只讨论当前这一件事", "如果说不下去，可以先暂停"]
         ),
         "avoid_list": (
-            ["不要把问题一下子铺太大", "不要临时加码旧账"]
+            ["不要临时翻出以前的事", "不要一次讨论太多问题"]
             if risk_level == "low"
-            else ["不要连续追问", "不要把猜测说成结论"]
+            else ["避免用“你每次都这样”概括对方", "不要连续发消息催促"]
             if risk_level == "medium"
-            else ["不要用每次都、从来这种话", "不要逼对方立刻表态"]
+            else ["不要辱骂或贬低对方", "不要要求对方立刻回复或认错"]
         ),
         "structured_evidence": {
             "risk_score": score,
@@ -404,10 +404,10 @@ def _bridge_actions(focus_a: list[str], focus_b: list[str]) -> list[str]:
 def _suggested_opening(focus_a: list[str], focus_b: list[str]) -> str:
     pair = {focus_a[0], focus_b[0]}
     if pair == {"回应节奏", "缓冲空间"}:
-        return "我知道你昨天可能是真的太累了；我这边是因为没等到回应会慌，想先把这件事对齐一下。"
+        return "我知道你昨天可能是真的太累了；我这边是因为没等到回应会慌，想和你说清楚这件事。"
     if "被理解" in pair:
         return "我不是想跟你算账，我是想先把我刚才卡住的点说清楚，看看你听见的是不是同一件事。"
-    return "我想先对齐一下，我们刚才各自最在意的到底是什么，不急着分对错。"
+    return "我想先听听你刚才最在意什么，也说说我的想法，不急着分对错。"
 
 
 def _coach_note(focus_a: list[str], focus_b: list[str], score: int) -> str:

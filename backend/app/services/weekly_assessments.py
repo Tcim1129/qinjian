@@ -100,17 +100,17 @@ def _build_dimension_scores(answers: list[dict]) -> list[dict]:
 
 def _build_change_summary(current_score: int, previous_score: int | None) -> str:
     if previous_score is None:
-        return "这是第一份正式周评估，后续再提交几次后系统就能识别更清晰的改善或卡点。"
+        return "这是你的第一次周评估，暂时没有可比较的记录。下次填写后，可以查看各项分数的变化。"
     delta = current_score - previous_score
     if delta >= 8:
-        return "相比上一轮明显回升，说明最近的互动和修复节奏正在变稳。"
+        return "这次总分比上次提高较多，可以结合最近的相处情况，看看哪些方面有了改善。"
     if delta >= 3:
-        return "相比上一轮有小幅改善，建议继续保持当前节奏，不要突然加压。"
+        return "这次总分比上次略高，可以继续尝试最近觉得有帮助的做法。"
     if delta <= -8:
-        return "相比上一轮下降明显，说明近期关系体验正在卡住，需要先减压和止损。"
+        return "这次总分比上次下降较多。可以先看看哪些题目的分数变低了，再回顾最近是否遇到了让你不舒服的事情。"
     if delta <= -3:
-        return "相比上一轮略有下滑，建议优先修复低分维度，再观察是否继续下降。"
-    return "和上一轮接近，说明当前状态更像是在平台期，需要看细分维度而不只看总分。"
+        return "这次总分比上次略低，可以留意分数较低的项目，下次填写时再作比较。"
+    return "这次总分与上次接近，各项分数仍可能有变化，可以分别查看。"
 
 
 def _profile_signal(current_score: int, previous_score: int | None) -> str | None:
@@ -230,7 +230,7 @@ async def submit_weekly_assessment(
             user_id=normalized_user_id,
             entity_type="weekly_assessment_profile_signal",
             payload={
-                "summary": "最近两次关系体检总分接近，当前更像平台期，建议优先看最低分维度。",
+                "summary": "最近两次关系体检总分接近，可以先看看得分最低的项目。",
                 "profile_signal": "stable_band",
                 "current_score": total_score,
                 "previous_score": previous_score,

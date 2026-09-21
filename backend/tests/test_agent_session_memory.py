@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.api.v1 import agent as agent_api
 from app.core.database import Base
 from app.core.time import current_local_date
-from app.models import AgentChatSession, User
+from app.models import AgentChatMessage, AgentChatSession, User
 from app.services.ai_context import build_context_pack
 
 
@@ -177,6 +177,60 @@ def test_post_agent_sessions_force_new_creates_new_session(monkeypatch):
             str(state["session_id"]),
             payload["session_id"],
         }
+    finally:
+        asyncio.run(engine.dispose())
+        db_path.unlink(missing_ok=True)
+
+
+def test_get_agent_sessions_lists_real_topics_and_latest_messages(monkeypatch):
+    db_path = _test_db_path("agent-session-memory-list")
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def seed():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with sessionmaker() as db:
+            user = User(email="agent-session-list@example.com", nickname="会话用户", password_hash="not-used")
+            db.add(user)
+            await db.flush()
+            first = AgentChatSession(
+                user_id=user.id,
+                pair_id=None,
+                session_date=current_local_date(),
+                status="active",
+                summary_json={"topic": "关于周末计划的沟通"},
+            )
+            second = AgentChatSession(
+                user_id=user.id,
+                pair_id=None,
+                session_date=current_local_date(),
+                status="archived",
+            )
+            db.add_all([first, second])
+            await db.flush()
+            db.add_all([
+                AgentChatMessage(session_id=first.id, role="user", content="我担心周末安排又变了。"),
+                AgentChatMessage(session_id=first.id, role="assistant", content="先说清楚你最在意的部分。"),
+                AgentChatMessage(session_id=second.id, role="user", content="我想梳理一下最近的情绪。"),
+            ])
+            await db.commit()
+            return {"user_id": user.id, "first_id": first.id, "second_id": second.id}
+
+    try:
+        state = asyncio.run(seed())
+        with _make_agent_client(monkeypatch, sessionmaker, state["user_id"]) as client:
+            response = client.get("/agent/sessions?limit=10")
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert {item["session_id"] for item in payload} == {str(state["first_id"]), str(state["second_id"])}
+        summarized = next(item for item in payload if item["session_id"] == str(state["first_id"]))
+        assert summarized["topic"] == "关于周末计划的沟通"
+        assert summarized["last_message"] == "先说清楚你最在意的部分。"
+        derived = next(item for item in payload if item["session_id"] == str(state["second_id"]))
+        assert derived["topic"] == "我想梳理一下最近的情绪。"
+        assert derived["message_count"] == 1
     finally:
         asyncio.run(engine.dispose())
         db_path.unlink(missing_ok=True)

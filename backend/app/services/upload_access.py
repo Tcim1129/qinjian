@@ -8,6 +8,7 @@ import hmac
 import mimetypes
 import os
 import time
+from contextvars import ContextVar
 from urllib.parse import urlencode, urlparse
 
 from sqlalchemy import or_, select
@@ -18,6 +19,15 @@ from app.core.config import settings
 UPLOAD_STORAGE_PREFIX = "/uploads/"
 UPLOAD_ACCESS_PREFIX = "/api/v1/upload/access"
 ALLOWED_UPLOAD_SUBDIRS = {"images", "voices"}
+
+# 当前请求用户 ID：由认证依赖在请求上下文中写入，序列化器签发上传 URL 时绑定 actor
+CURRENT_ACTOR_USER_ID: ContextVar[str | None] = ContextVar(
+    "qinjian_upload_access_actor", default=None
+)
+
+
+def set_request_actor_user_id(user_id: str | None) -> None:
+    CURRENT_ACTOR_USER_ID.set(str(user_id) if user_id else None)
 
 
 def public_upload_access_enabled() -> bool:
@@ -283,7 +293,8 @@ async def build_scoped_upload_response_payload(
 def to_client_upload_url(value: str | None) -> str | None:
     if not is_local_upload_path(value):
         return value
-    return build_upload_access_url(value)
+    actor_user_id = CURRENT_ACTOR_USER_ID.get()
+    return build_upload_access_url(value, actor_user_id=actor_user_id)
 
 
 def verify_upload_access(

@@ -38,6 +38,22 @@ def _resolve_provider_name() -> str:
     return "compatible-gateway"
 
 
+def _resolve_fallback_model(model: str) -> str | None:
+    if model == settings.AI_TEXT_MODEL:
+        fallback = settings.AI_TEXT_FALLBACK_MODEL
+    elif model == settings.AI_MULTIMODAL_MODEL:
+        fallback = settings.AI_MULTIMODAL_FALLBACK_MODEL
+    else:
+        fallback = ""
+
+    fallback = str(fallback or "").strip()
+    return fallback if fallback and fallback != model else None
+
+
+def _should_try_fallback(exc: Exception) -> bool:
+    return getattr(exc, "status_code", None) != 400
+
+
 client = AsyncOpenAI(
     api_key=_resolve_api_key(),
     base_url=_resolve_base_url(),
@@ -79,7 +95,11 @@ async def create_chat_completion(
     temperature: float = 0.7,
     **kwargs,
 ):
-    """统一聊天出口，便于挂载隐私沙盒与后续审计。"""
+    """统一聊天出口，便于挂载隐私沙盒与后续审计。
+    model 传 "default" 时解析为当前的 AI_TEXT_MODEL。
+    """
+    if not model or model == "default":
+        model = settings.AI_TEXT_MODEL
     audit_context = get_privacy_audit_context()
     privacy_mode = await _resolve_privacy_mode(audit_context)
     proxy_strategy = "redact_only"
@@ -87,6 +107,10 @@ async def create_chat_completion(
     context_enabled = kwargs.pop("context_enabled", True)
     current_input = kwargs.pop("current_input", None)
     session_id = kwargs.pop("session_id", None)
+    # 这些值仅供上下文和审计使用，不是 OpenAI 接口参数，发送请求前需要移除。
+    kwargs.pop("pair_id", None)
+    kwargs.pop("user_id", None)
+    kwargs.pop("db", None)
     if context_pack is None and context_enabled:
         db = audit_context.get("db")
         if db:
@@ -119,14 +143,9 @@ async def create_chat_completion(
             **kwargs,
         )
     except Exception as exc:
-        await log_privacy_ai_chat(
-            audit_context.get("db"),
+        await _log_chat_call(
+            audit_context,
             model=model,
-            provider=_resolve_provider_name(),
-            run_type=str(audit_context.get("run_type") or "chat_completion"),
-            scope=str(audit_context.get("scope") or "solo"),
-            user_id=audit_context.get("user_id"),
-            pair_id=audit_context.get("pair_id"),
             raw_messages=messages,
             redacted_messages=safe_messages,
             raw_output=str(exc),
@@ -137,13 +156,88 @@ async def create_chat_completion(
             proxy_strategy=proxy_strategy,
             proxy_metrics={},
         )
-        raise
+        fallback_model = _resolve_fallback_model(model)
+        if not fallback_model or not _should_try_fallback(exc):
+            raise
 
-    output_preview = None
+        fallback_started_at = time.perf_counter()
+        try:
+            response = await client.chat.completions.create(
+                model=fallback_model,
+                messages=safe_messages,
+                temperature=temperature,
+                **kwargs,
+            )
+        except Exception as fallback_exc:
+            await _log_chat_call(
+                audit_context,
+                model=fallback_model,
+                raw_messages=messages,
+                redacted_messages=safe_messages,
+                raw_output=str(fallback_exc),
+                latency_ms=int((time.perf_counter() - fallback_started_at) * 1000),
+                status="error",
+                error_code=fallback_exc.__class__.__name__,
+                privacy_mode=privacy_mode,
+                proxy_strategy=proxy_strategy,
+                proxy_metrics={"fallback_from_model": model},
+            )
+            raise
+
+        await _log_chat_call(
+            audit_context,
+            model=fallback_model,
+            raw_messages=messages,
+            redacted_messages=safe_messages,
+            raw_output=_response_output_preview(response),
+            latency_ms=int((time.perf_counter() - fallback_started_at) * 1000),
+            status="completed",
+            privacy_mode=privacy_mode,
+            proxy_strategy=proxy_strategy,
+            proxy_metrics={"fallback_from_model": model},
+        )
+        return response
+
+    await _log_chat_call(
+        audit_context,
+        model=model,
+        raw_messages=messages,
+        redacted_messages=safe_messages,
+        raw_output=_response_output_preview(response),
+        latency_ms=int((time.perf_counter() - started_at) * 1000),
+        status="completed",
+        privacy_mode=privacy_mode,
+        proxy_strategy=proxy_strategy,
+        proxy_metrics={},
+    )
+    return response
+
+
+def _response_output_preview(response) -> str | None:
     if getattr(response, "choices", None):
         message = response.choices[0].message
-        output_preview = message.content or str(message.model_dump())
+        if message.content:
+            return message.content
+        if hasattr(message, "model_dump"):
+            return str(message.model_dump())
+        return str(message)
+    return None
 
+
+async def _log_chat_call(
+    audit_context: dict,
+    *,
+    model: str,
+    raw_messages: list[dict],
+    redacted_messages: list[dict],
+    raw_output: str | None,
+    latency_ms: int,
+    status: str,
+    privacy_mode: str,
+    proxy_strategy: str,
+    proxy_metrics: dict,
+    error_code: str | None = None,
+) -> None:
     await log_privacy_ai_chat(
         audit_context.get("db"),
         model=model,
@@ -152,16 +246,16 @@ async def create_chat_completion(
         scope=str(audit_context.get("scope") or "solo"),
         user_id=audit_context.get("user_id"),
         pair_id=audit_context.get("pair_id"),
-        raw_messages=messages,
-        redacted_messages=safe_messages,
-        raw_output=output_preview,
-        latency_ms=int((time.perf_counter() - started_at) * 1000),
-        status="completed",
+        raw_messages=raw_messages,
+        redacted_messages=redacted_messages,
+        raw_output=raw_output,
+        latency_ms=latency_ms,
+        status=status,
+        error_code=error_code,
         privacy_mode=privacy_mode,
         proxy_strategy=proxy_strategy,
-        proxy_metrics={},
+        proxy_metrics=proxy_metrics,
     )
-    return response
 
 
 async def _resolve_privacy_mode(audit_context: dict) -> str:

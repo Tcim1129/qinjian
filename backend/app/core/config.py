@@ -7,12 +7,13 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # 应用
-    APP_NAME: str = "亲健——基于生成式AI的泛亲密关系智能感知与维系平台"
+    APP_NAME: str = "亲健（基于生成式 AI 的泛亲密关系智能感知与维系系统）"
     APP_TIMEZONE: str = "Asia/Shanghai"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
     ADMIN_EMAILS: str = ""
     RELAXED_TEST_ACCOUNT_EMAILS: str = ""
+    ALLOW_DEMO_AGENT: bool = False
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8小时
     ENABLE_API_DOCS: bool = False
     ADDITIONAL_TRUSTED_HOSTS: str = ""
@@ -40,7 +41,7 @@ class Settings(BaseSettings):
 
     # AI - 通用 OpenAI 兼容网关
     AI_API_KEY: str = ""
-    AI_BASE_URL: str = ""
+    AI_BASE_URL: str = "https://api.deepseek.com"
     AI_TIMEOUT_SECONDS: int = 60
     AGENT_SESSION_TTL_HOURS: int = 12
     AGENT_CHAT_HISTORY_LIMIT: int = 8
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
     PRIVACY_MASK_LOGS: bool = True
     PRIVACY_REDACT_LLM_INPUT: bool = True
     PRIVACY_AUDIT_ENABLED: bool = True
-    PRIVACY_TEXT_PROXY_ENABLED: bool = True
+    PRIVACY_TEXT_PROXY_ENABLED: bool = False
     PRIVACY_BENCHMARK_ENABLED: bool = True
     PRIVACY_SERVER_PROFILE: str = "2c2g_text_proxy"
     PRIVACY_AUDIO_PIPELINE_MODE: str = "cloud_transcription"
@@ -68,6 +69,8 @@ class Settings(BaseSettings):
     PRIVACY_TRANSCRIPTION_TEMP_DIR: str = "./uploads/tmp_transcriptions"
     PRIVACY_AUDIT_SUMMARY_CHARS: int = 240
     PRIVACY_EXTRA_SENSITIVE_TERMS: str = ""
+    TASK_PLANNER_REMINDER_ENABLED: bool = True
+    TASK_PLANNER_REMINDER_STARTUP_ENABLED: bool = False
 
     # AI - 硅基流动（兼容旧配置）
     SILICONFLOW_API_KEY: str = ""
@@ -84,9 +87,11 @@ class Settings(BaseSettings):
     XFYUN_RTASR_WS_URL: str = "wss://office-api-ast-dx.iflyaisol.com/ast/communicate/v1"
     XFYUN_RTASR_LANG: str = "autodialect"
     # 多模态模型（图片+文本分析，默认走硅基流动 Kimi 2.6）
-    AI_MULTIMODAL_MODEL: str = "Pro/moonshotai/Kimi-K2.6"
+    AI_MULTIMODAL_MODEL: str = "qwen3.8-flash"
     # 文本模型（情感分析，性价比高）
-    AI_TEXT_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3.2"
+    AI_TEXT_MODEL: str = "deepseek-v4.1-flash"
+    AI_TEXT_FALLBACK_MODEL: str = "deepseek-v4.1-flash"
+    AI_MULTIMODAL_FALLBACK_MODEL: str = "qwen3.8-flash"
 
     # 文件上传
     UPLOAD_DIR: str = "./uploads"

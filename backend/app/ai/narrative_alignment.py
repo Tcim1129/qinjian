@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 ALIGNMENT_TIMEOUT_SECONDS = 20
 
 
-ALIGNMENT_SYSTEM_PROMPT = compose_relationship_system_prompt("""你是亲健平台的关系编辑台分析器。你的任务不是判断谁对谁错，而是把双方对同一天或同一阶段的描述，整理成“共同版本 + 错位点 + 对齐动作”。
+ALIGNMENT_SYSTEM_PROMPT = compose_relationship_system_prompt("""请比较双方对同一天或同一阶段的记录，整理共同提到的事情、各自的感受、理解不同的地方，以及可以进一步确认的问题。不判断谁对谁错，也不编造双方未提到的经历。
 
 请保持克制、具体、可执行，不要夸大风险，不要写成空泛鸡汤。严格输出 JSON。"""
 )
 
 
-ALIGNMENT_PROMPT = """请根据以下关系上下文、双方记录和结构化判断，生成一份“双视角叙事对齐”结果。
+ALIGNMENT_PROMPT = """请根据以下关系上下文、双方记录和结构化判断，比较双方对同一件事的记录，整理各自的看法和还需要确认的问题。
 
 【关系上下文】
 {context_json}
@@ -39,14 +39,14 @@ ALIGNMENT_PROMPT = """请根据以下关系上下文、双方记录和结构化�
 请输出 JSON（不要包含其他文字）：
 {{
   "alignment_score": 0-100,
-  "shared_story": "双方其实都在经历的共同版本（80字内）",
-  "view_a_summary": "A方更在意或更容易卡住的点（60字内）",
-  "view_b_summary": "B方更在意或更容易卡住的点（60字内）",
+  "shared_story": "双方记录中都提到的事情；没有共同信息时如实说明（80字内）",
+  "view_a_summary": "A方提到的感受和在意的事情（60字内）",
+  "view_b_summary": "B方提到的感受和在意的事情（60字内）",
   "misread_risk": "最容易发生的误读或错位（60字内）",
   "divergence_points": ["分歧点1", "分歧点2", "分歧点3"],
-  "bridge_actions": ["可以这样对齐1", "可以这样对齐2", "可以这样对齐3"],
-  "suggested_opening": "一句更容易开启对齐的开场白（80字内）",
-  "coach_note": "给双方的编辑部备注（60字内）"
+  "bridge_actions": ["可以进一步确认的问题或具体做法1", "具体做法2", "具体做法3"],
+  "suggested_opening": "一句可以用来开始沟通的话（80字内）",
+  "coach_note": "沟通时需要留意的事情（60字内）"
 }}"""
 
 

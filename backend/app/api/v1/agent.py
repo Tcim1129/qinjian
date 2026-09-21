@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import uuid
+from datetime import date, datetime, timezone
+from app.core.time import current_local_date
 from time import perf_counter
 from typing import Any, Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -23,23 +25,35 @@ from app.models import (
     Pair,
     AgentChatSession,
     AgentChatMessage,
+    AgentThought,
     RelationshipEvent,
     RelationshipProfileSnapshot,
     InterventionPlan,
+    RelationshipTask,
 )
 from app.schemas import (
     AgentSessionResponse,
+    AgentSessionListItemResponse,
     AgentMessageResponse,
     AgentChatRequest,
     AgentChatResponse,
+    AgentThoughtTraceResponse,
+    AgentSwarmResponse,
+    AgentCheckupResponse,
     AgentRealtimeTicketResponse,
     DecisionFeedbackRequest,
     MessageSimulationRequest,
     MessageSimulationResponse,
+    TaskCreateRequest,
 )
 from app.ai import create_chat_completion
+from app.ai.agent_loop import run_agent_loop
+from app.ai.multi_agent import run_multi_agent_flow
+from app.ai.tools import AGENT_TOOL_GUIDANCE
 from app.ai.policy import compose_relationship_system_prompt
-from app.ai.message_simulator import simulate_message_preview
+from app.ai.conversation import build_agent_system_prompt
+from app.services.agent_delivery import prepare_chat_turn, complete_chat_turn, fail_chat_turn
+from app.ai.message_simulator import simulate_message_preview, MessageSimulationUnavailableError
 from app.core.config import settings
 from app.services.relationship_intelligence import (
     record_relationship_event,
@@ -60,8 +74,12 @@ from app.services.display_labels import (
 )
 from app.services.guidance_policy import build_crisis_support
 from app.services.agent_session_memory import (
+    _derive_topic,
+    _preview_text,
     build_messages_for_llm,
     get_or_create_active_session,
+    list_agent_sessions,
+    list_session_messages,
     refresh_session_summary_if_needed,
     touch_session_activity,
 )
@@ -84,63 +102,76 @@ from app.services.upload_access import (
 router = APIRouter(prefix="/agent", tags=["智能陪伴"])
 logger = logging.getLogger(__name__)
 
-# 这里设定系统提示词
-SYSTEM_PROMPT = compose_relationship_system_prompt("""你是一个情感智能伴侣（亲健助手）。你的任务是通过与用户的自然对话，提供情绪支持、感情建议，并“隐式”地引导他们完成每日的情感打卡。
-你不能直接说“请填写表单”或者“请打卡”。相反，你需要在自然的聊天中，通过共情和引导提问，引出以下信息：
-1. 他们今天的心情指数（1-10分，不要直接问几分，而是从对方描述中感知或轻巧地确认）
-2. 他们今天与伴侣（或自己）的互动频率和深入程度
-3. 是否有什么特别的事情发生或任务完成
 
-一旦你认为收集到了足够丰富的信息，你可以调用 `extract_checkin_data` 工具将今天的内容提炼出来。
-""")
+def _task_proposals_from_steps(steps):
+    proposals = {}
+    for step in steps:
+        for item in step.tool_results or []:
+            result = item.get('result') or {}
+            data = result.get('data') or {}
+            if item.get('name') == 'create_task' and result.get('status') == 'success' and data.get('requires_confirmation'):
+                proposals[data['proposal_id']] = data
+    return list(proposals.values())[:5]
+
+
+@router.post('/sessions/{session_id}/messages/{message_id}/tasks/{proposal_id}/confirm')
+async def confirm_agent_task(
+    session_id: uuid.UUID, message_id: uuid.UUID, proposal_id: uuid.UUID,
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    from app.api.v1.tasks import create_manual_task, _task_to_dict
+
+    session = await db.get(AgentChatSession, session_id)
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail='会话不存在')
+    if not session.pair_id:
+        raise HTTPException(status_code=400, detail='请先选择一段关系')
+    await validate_pair_access(session.pair_id, user, db, require_active=True)
+    # Lock the persisted suggestion so retries create at most one task (PostgreSQL).
+    message = (await db.execute(select(AgentChatMessage).where(
+        AgentChatMessage.id == message_id, AgentChatMessage.session_id == session_id,
+        AgentChatMessage.role == 'assistant',
+    ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+    payload = dict(message.payload or {}) if message else {}
+    proposals = [dict(item) for item in payload.get('task_proposals', [])]
+    proposal = next((item for item in proposals if item.get('proposal_id') == str(proposal_id)), None)
+    if not proposal or not proposal.get('requires_confirmation'):
+        raise HTTPException(status_code=404, detail='这条行动建议不存在')
+    if proposal.get('confirmed_task_id'):
+        task = await db.get(RelationshipTask, uuid.UUID(proposal['confirmed_task_id']))
+        if not task or task.pair_id != session.pair_id or task.user_id != user.id:
+            raise HTTPException(status_code=409, detail='原安排已变更，请回到安排页面查看')
+        return {'message': '已加入安排', 'task': _task_to_dict(task, viewer=user)}
+    try:
+        due_date = date.fromisoformat(proposal['due_date'])
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(status_code=409, detail='建议日期无效，请重新生成')
+    if due_date < current_local_date():
+        raise HTTPException(status_code=409, detail='建议日期已过，请重新安排')
+    result = await create_manual_task(session.pair_id, TaskCreateRequest(
+        title=proposal['title'], description=proposal.get('description', ''),
+        due_date=due_date, target_scope='self',
+    ), user=user, db=db)
+    proposal['confirmed_task_id'] = str(result['task']['id'])
+    payload['task_proposals'] = proposals
+    message.payload = payload
+    await db.commit()
+    return result
+
+# 这里设定系统提示词
+SYSTEM_PROMPT = build_agent_system_prompt(surface='checkin_assist')
 
 # Frontend AI requests are capped at 60s; stop before that so the user sees a timeout.
 AGENT_COMPLETION_TIMEOUT_SECONDS = 55
+# 多智能体协作涉及 4 个角色接力调用，网关延迟下允许更长的深度思考窗口。
+MULTI_AGENT_COMPLETION_TIMEOUT_SECONDS = 150
 AGENT_FALLBACK_REPLY = (
-    "我这边连接有点慢，但我在。你可以先只说最想被理解的那一句，"
-    "不用急着把所有细节讲完，我们慢慢来。"
+    "这次没能连上助手，暂时没有生成回复。你的话还在，可以稍后重试。"
 )
 MESSAGE_SIMULATION_WINDOW_SECONDS = 60
 MESSAGE_SIMULATION_MAX_ATTEMPTS = 2
 REALTIME_ASR_MIN_SESSION_SECONDS = 15
 REALTIME_ASR_MAX_SESSION_SECONDS = 300
-
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "extract_checkin_data",
-            "description": "当在聊天中收集到足够的信息（心情、互动情况、发生的事件）时，提取这些数据用于生成当日的关系日记",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "diary_content": {
-                        "type": "string",
-                        "description": "基于今天用户的倾诉，替用户总结出一段富有感情、条理清晰的日记正文（约100-200字即可）。这会作为打卡的 content 字段。",
-                    },
-                    "mood_score": {
-                        "type": "integer",
-                        "description": "推断出的心情分数，范围 1 到 10",
-                    },
-                    "interaction_freq": {
-                        "type": "integer",
-                        "description": "今天关系互动的频率，比如 1（很少）到 5（很高）。如果是单人就是和自己的相处评分。",
-                    },
-                    "deep_conversation": {
-                        "type": "boolean",
-                        "description": "是否有较深入或有意义的对话反思",
-                    },
-                },
-                "required": [
-                    "diary_content",
-                    "mood_score",
-                    "interaction_freq",
-                    "deep_conversation",
-                ],
-            },
-        },
-    }
-]
 
 
 def _surface_page_context(
@@ -181,11 +212,27 @@ def _serialize_message_payload_for_client(payload: dict[str, Any] | None) -> dic
     return serialized
 
 
+def _serialize_agent_steps(steps: list[Any]) -> list[dict[str, Any]]:
+    """把 AgentStep 序列化为可下发的推理痕迹 trace。"""
+    trace = []
+    for step in steps:
+        trace.append(
+            {
+                "step_index": step.step_index,
+                "thought": step.thought,
+                "tool_calls": getattr(step, "tool_calls", []) or [],
+                "tool_results": getattr(step, "tool_results", []) or [],
+                "duration_ms": step.duration_ms,
+            }
+        )
+    return trace
+
+
 @router.post("/asr/ws-ticket", response_model=AgentRealtimeTicketResponse)
 async def create_agent_asr_ws_ticket(
     user: User = Depends(get_current_user),
 ):
-    """签发实时语音短时票据，避免长期 JWT 进入 WebSocket URL。"""
+    """生成实时语音临时访问令牌，避免在 WebSocket 地址中暴露长期有效的 JWT。"""
     return AgentRealtimeTicketResponse(
         ticket=create_realtime_ws_ticket(str(user.id)),
         expires_in=max(30, settings.REALTIME_ASR_TICKET_EXPIRE_SECONDS),
@@ -295,6 +342,47 @@ async def create_or_get_session(
 
 
 @router.get(
+    "/sessions", response_model=list[AgentSessionListItemResponse]
+)
+async def list_agent_sessions_route(
+    limit: int = 20,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出当前用户最近的 Agent 会话及其 topic / 最近消息 / 消息数。"""
+    sessions = await list_agent_sessions(
+        db,
+        user_id=user.id,
+        limit=limit,
+    )
+
+    items = []
+    for session in sessions:
+        messages = await list_session_messages(db, session_id=session.id)
+        topic = (session.summary_json or {}).get("topic") if isinstance(session.summary_json, dict) else None
+        if not topic:
+            topic = _derive_topic(messages)
+        last_content = messages[-1].content if messages else ""
+        last_message = _preview_text(last_content, 120) or ""
+        items.append(
+            AgentSessionListItemResponse(
+                session_id=session.id,
+                pair_id=session.pair_id,
+                status=session.status,
+                topic=topic or "",
+                last_message=last_message or "",
+                message_count=len(messages),
+                has_extracted_checkin=session.has_extracted_checkin,
+                session_date=session.session_date,
+                created_at=session.created_at,
+                updated_at=session.updated_at,
+                expires_at=session.expires_at,
+            )
+        )
+    return items
+
+
+@router.get(
     "/sessions/{session_id}/messages", response_model=list[AgentMessageResponse]
 )
 async def get_session_messages(
@@ -335,10 +423,12 @@ async def chat_with_agent(
     db: AsyncSession = Depends(get_db),
 ):
     """向智能伴侣发送消息并获取回复"""
-    session = await db.get(AgentChatSession, session_id)
+    session = await db.get(AgentChatSession, session_id, with_for_update=True, populate_existing=True)
     if not session or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="会话不存在")
     page, path = _surface_page_context(req.surface)
+    if session.pair_id:
+        await validate_pair_access(session.pair_id, user, db, require_active=True)
     voice_evidence_payload = _build_voice_evidence_payload(
         req.voice_evidence.model_dump(exclude_none=True)
         if req.voice_evidence is not None
@@ -358,64 +448,60 @@ async def chat_with_agent(
     privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
     stored_user_content = effective_content
     user_payload = {"surface": req.surface}
+    if req.scene_context:
+        user_payload['scene_context'] = req.scene_context.model_dump()
     if voice_evidence_payload:
         user_payload["voice_evidence"] = voice_evidence_payload
 
-    # 1. 记录用户的消息
-    user_msg = AgentChatMessage(
-        session_id=session.id,
-        role="user",
-        content=stored_user_content,
-        payload=user_payload,
+    # 记录用户的消息
+    user_msg, cached_reply, is_new_turn = await prepare_chat_turn(
+        db, session_id=session.id, client_message_id=req.client_message_id,
+        content=stored_user_content, payload=user_payload,
     )
-    db.add(user_msg)
+    if cached_reply is not None:
+        return cached_reply
     touch_session_activity(session)
     await db.flush()
+    user_message_id = user_msg.id
 
-    await record_user_interaction_event(
-        db,
-        event_type="agent.chat.user_message",
-        user_id=user.id,
-        pair_id=session.pair_id,
-        source="agent",
-        page=page,
-        path=path,
-        http_method="POST",
-        http_status=200,
-        session_id=str(session.id),
-        target_type="agent_message",
-        target_id=user_msg.id,
-        payload=build_interaction_payload(
-            {
-                "role": "user",
-                "surface": req.surface,
-                "has_voice_evidence": bool(voice_evidence_payload),
-                "voice_source": (voice_evidence_payload or {}).get("source"),
-                "voice_duration_seconds": (voice_evidence_payload or {}).get(
-                    "duration_seconds"
-                ),
-            },
-            text=effective_content,
-        ),
-    )
+    if is_new_turn:
+        await record_user_interaction_event(
+            db,
+            event_type="agent.chat.user_message",
+            user_id=user.id,
+            pair_id=session.pair_id,
+            source="agent",
+            page=page,
+            path=path,
+            http_method="POST",
+            http_status=200,
+            session_id=str(session.id),
+            target_type="agent_message",
+            target_id=user_msg.id,
+            payload=build_interaction_payload(
+                {
+                    "role": "user",
+                    "surface": req.surface,
+                    "has_voice_evidence": bool(voice_evidence_payload),
+                    "voice_source": (voice_evidence_payload or {}).get("source"),
+                    "voice_duration_seconds": (voice_evidence_payload or {}).get("duration_seconds"),
+                },
+                text=effective_content,
+            ),
+        )
     await db.commit()
 
-    # 2. 仅保留最近几轮原始消息，把更早内容压缩进 session summary。
-    history = await refresh_session_summary_if_needed(db, session=session)
-    await db.commit()
-    messages_for_llm = build_messages_for_llm(
-        system_prompt=SYSTEM_PROMPT,
-        history=history,
-    )
-
-    # 3. 调用 AI (若今日已提取过打卡，就不带 tools 了，纯聊天)
-    current_tools = (
-        tools
-        if req.surface != "chat" and not session.has_extracted_checkin
-        else None
-    )
+    # 调用 AI 循环
+    include_checkin = (req.surface != "chat" and not session.has_extracted_checkin)
 
     try:
+        # Summary failures must also leave the saved turn retryable.
+        history = await refresh_session_summary_if_needed(db, session=session)
+        await db.commit()
+        messages_for_llm = build_messages_for_llm(
+            system_prompt=build_agent_system_prompt(surface=req.surface, intent=req.scene_context.intent if req.scene_context else 'auto'),
+            history=history,
+        )
         try:
             with privacy_audit_scope(
                 db=db,
@@ -425,84 +511,43 @@ async def chat_with_agent(
                 run_type="agent_chat",
                 privacy_mode=privacy_mode,
             ):
-                response = await asyncio.wait_for(
-                    create_chat_completion(
-                        model=settings.AI_TEXT_MODEL,
+                reply_content, agent_steps, checkin_extracted = await asyncio.wait_for(
+                    run_agent_loop(
                         messages=messages_for_llm,
-                        temperature=0.7,
-                        tools=current_tools,
-                        tool_choice="auto" if current_tools else "none",
-                        session_id=session.id,
+                        pair_id=str(session.pair_id) if session.pair_id else None,
+                        user_id=str(user.id),
+                        session_id=str(session.id),
+                        db=db,
+                        include_checkin_tool=include_checkin
                     ),
                     timeout=AGENT_COMPLETION_TIMEOUT_SECONDS,
                 )
-            ai_msg = response.choices[0].message
         except asyncio.TimeoutError:
             logger.warning("agent chat completion timed out")
             raise HTTPException(status_code=504, detail="处理超过 1 分钟，已自动超时，请稍后再试")
         except Exception as exc:
-            logger.warning(
-                "agent chat completion failed, using fallback: %s",
-                exc.__class__.__name__,
-            )
-            assistant_msg = AgentChatMessage(
-                session_id=session.id, role="assistant", content=AGENT_FALLBACK_REPLY
-            )
-            db.add(assistant_msg)
-            touch_session_activity(session)
-            await record_user_interaction_event(
-                db,
-                event_type="agent.chat.assistant_reply",
-                user_id=user.id,
-                pair_id=session.pair_id,
-                source="agent",
-                page=page,
-                path=path,
-                http_method="POST",
-                http_status=200,
-                session_id=str(session.id),
-                target_type="agent_message",
-                target_id=assistant_msg.id,
-                payload={
-                    "role": "assistant",
-                    "reply_preview": AGENT_FALLBACK_REPLY[:120],
-                    "fallback": True,
-                },
-            )
-            await db.commit()
-            await refresh_session_summary_if_needed(db, session=session)
-            await db.commit()
-            return AgentChatResponse(reply=AGENT_FALLBACK_REPLY, action="chat")
+            logger.warning("agent loop failed: %s", exc.__class__.__name__)
+            raise HTTPException(status_code=502, detail="这次没能连上助手，请稍后重试。") from exc
 
-        # 4. 判断 AI 是否决意调用工具（提取打卡）
-        if req.surface != "chat" and ai_msg.tool_calls:
-            # 存下 AI 这一轮带 function call 的回复
-            t_call = ai_msg.tool_calls[0]
-            func_name = t_call.function.name
-            func_args = json.loads(t_call.function.arguments)
+        # 如果没有内容则兜底
+        if not reply_content or not reply_content.strip():
+            raise HTTPException(status_code=502, detail="这次没有收到回复，请重试。")
 
-            assistant_msg = AgentChatMessage(
-                session_id=session.id,
-                role="assistant",
-                content=ai_msg.content or "",
-                payload={
-                    "tool_calls": [
-                        {
-                            "id": t_call.id,
-                            "type": "function",
-                            "function": {
-                                "name": func_name,
-                                "arguments": t_call.function.arguments,
-                            },
-                        }
-                    ]
-                },
-            )
-            db.add(assistant_msg)
+        action = "chat"
+        if checkin_extracted:
+            action = "checkin_extracted"
+            # 找到参数并生成 Checkin
+            func_args = {}
+            for step in agent_steps:
+                for tc in step.tool_calls:
+                    if tc["function"]["name"] == "extract_checkin_data":
+                        try:
+                            func_args = json.loads(tc["function"]["arguments"])
+                        except Exception:
+                            pass
+                        break
 
-            # --- 执行提取打卡的逻辑 ---
-            if func_name == "extract_checkin_data":
-                # 这里引入 Checkin 的写入逻辑
+            if func_args:
                 from app.api.v1.checkins import create_checkin
                 from app.schemas import CheckinRequest
 
@@ -517,7 +562,6 @@ async def chat_with_agent(
                 )
 
                 try:
-                    # 复用核心打卡业务逻辑（其中自带触发生成每日合拍报告等）
                     await create_checkin(
                         req=checkin_req,
                         background_tasks=background_tasks,
@@ -526,96 +570,31 @@ async def chat_with_agent(
                         db=db,
                     )
                     session.has_extracted_checkin = True
-                    tool_result_content = (
-                        "打卡成功生成入库！可以跟用户说一声辛苦了或者晚安。"
-                    )
                 except Exception as e:
-                    tool_result_content = f"保存打卡失败：{str(e)}"
+                    logger.error(f"Save checkin failed: {e}")
 
-                # 记录 Tool 回执
-                tool_msg = AgentChatMessage(
-                    session_id=session.id,
-                    role="tool",
-                    content=tool_result_content,
-                    payload={"tool_call_id": t_call.id},
-                )
-                db.add(tool_msg)
-                await db.flush()
-                await db.commit()
-
-                # 带上回执再次让大模型生成最终文本答复
-                messages_for_llm.append(ai_msg.model_dump())
-                messages_for_llm.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": t_call.id,
-                        "content": tool_result_content,
-                    }
-                )
-
-                try:
-                    with privacy_audit_scope(
-                        db=db,
-                        user_id=user.id,
-                        pair_id=session.pair_id,
-                        scope="pair" if session.pair_id else "solo",
-                        run_type="agent_chat_followup",
-                        privacy_mode=privacy_mode,
-                    ):
-                        second_response = await asyncio.wait_for(
-                            create_chat_completion(
-                                model=settings.AI_TEXT_MODEL,
-                                messages=messages_for_llm,
-                                temperature=0.7,
-                                session_id=session.id,
-                            ),
-                            timeout=AGENT_COMPLETION_TIMEOUT_SECONDS,
-                        )
-                    final_content = second_response.choices[0].message.content
-                except asyncio.TimeoutError:
-                    logger.warning("agent followup completion timed out")
-                    raise HTTPException(status_code=504, detail="处理超过 1 分钟，已自动超时，请稍后再试")
-                except Exception as exc:
-                    logger.warning(
-                        "agent followup completion failed, using fallback: %s",
-                        exc.__class__.__name__,
-                    )
-                    final_content = AGENT_FALLBACK_REPLY
-
-                final_assistant_msg = AgentChatMessage(
-                    session_id=session.id, role="assistant", content=final_content
-                )
-                db.add(final_assistant_msg)
-                touch_session_activity(session)
-                await record_user_interaction_event(
-                    db,
-                    event_type="agent.chat.assistant_reply",
-                    user_id=user.id,
-                    pair_id=session.pair_id,
-                    source="agent",
-                    page=page,
-                    path=path,
-                    http_method="POST",
-                    http_status=200,
-                    session_id=str(session.id),
-                    target_type="agent_message",
-                    target_id=final_assistant_msg.id,
-                    payload={"role": "assistant", "reply_preview": final_content[:120]},
-                )
-                await db.commit()
-                await refresh_session_summary_if_needed(db, session=session)
-                await db.commit()
-
-                return AgentChatResponse(
-                    reply=final_content, action="checkin_extracted"
-                )
-
-        # 没有进行工具调用（纯聊天回复）
-        reply_content = ai_msg.content or "抱歉，我刚刚走神了。"
+        # 保存 AI 最终回复和思路
+        task_proposals = _task_proposals_from_steps(agent_steps)
         assistant_msg = AgentChatMessage(
-            session_id=session.id, role="assistant", content=reply_content
+            session_id=session.id, role="assistant", content=reply_content,
+            payload={'task_proposals': task_proposals} if task_proposals else None,
         )
         db.add(assistant_msg)
+        await db.flush()
+        complete_chat_turn(user_msg, reply_id=assistant_msg.id, action=action)
+
+        for step in agent_steps:
+            if step.tool_calls:
+                thought_record = AgentThought(
+                    session_id=session.id,
+                    step_index=step.step_index,
+                    thought=step.thought,
+                    tool_calls_json=json.dumps(step.tool_calls, ensure_ascii=False),
+                    tool_results_json=json.dumps(step.tool_results, ensure_ascii=False),
+                    duration_ms=step.duration_ms,
+                )
+                db.add(thought_record)
+
         touch_session_activity(session)
         await record_user_interaction_event(
             db,
@@ -636,15 +615,299 @@ async def chat_with_agent(
         await refresh_session_summary_if_needed(db, session=session)
         await db.commit()
 
-        return AgentChatResponse(reply=reply_content, action="chat")
+        return AgentChatResponse(
+            reply=reply_content,
+            action=action,
+            message_id=assistant_msg.id,
+            task_proposals=task_proposals,
+            trace=_serialize_agent_steps(agent_steps),
+        )
 
     except HTTPException:
         await db.rollback()
+        await fail_chat_turn(db, user_message_id)
         raise
     except Exception:
         await db.rollback()
+        await fail_chat_turn(db, user_message_id)
         logger.exception("agent chat failed")
         raise HTTPException(status_code=500, detail="智能服务暂时不可用，请稍后再试")
+
+
+@router.get("/sessions/{session_id}/thoughts", response_model=list[AgentThoughtTraceResponse])
+async def get_agent_thoughts(
+    session_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取一次 Agent 会话中每一步的推理痕迹(想法与工具调用)，供前端做过程可视化。"""
+    session = await db.get(AgentChatSession, session_id)
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    result = await db.execute(
+        select(AgentThought)
+        .where(AgentThought.session_id == session_id)
+        .order_by(AgentThought.step_index.asc())
+    )
+    rows = result.scalars().all()
+    trace = []
+    for row in rows:
+        tool_calls = []
+        tool_results = []
+        if row.tool_calls_json:
+            try:
+                tool_calls = json.loads(row.tool_calls_json)
+            except Exception:
+                tool_calls = []
+        if row.tool_results_json:
+            try:
+                tool_results = json.loads(row.tool_results_json)
+            except Exception:
+                tool_results = []
+        trace.append(
+            AgentThoughtTraceResponse(
+                step_index=row.step_index,
+                thought=row.thought,
+                tool_calls=tool_calls,
+                tool_results=tool_results,
+                duration_ms=row.duration_ms,
+            )
+        )
+    return trace
+
+
+@router.post(
+    "/sessions/{session_id}/checkup",
+    response_model=AgentCheckupResponse,
+)
+async def run_active_checkup(
+    session_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """主动巡查：不等用户提问，Agent 主动体检关系健康并产出干预建议。
+
+    流程：拉起关系全景 → 评估是否需干预 → 判断危机 → 汇总成可执行的主动干预报告。
+    """
+    session = await db.get(AgentChatSession, session_id)
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    from app.services.safety_summary import build_safety_status
+    from app.services.intervention_evaluation import build_intervention_evaluation
+    from app.ai.tools import _get_crisis_status, _get_active_tasks
+
+    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
+    pair_id = str(session.pair_id) if session.pair_id else None
+    user_id = str(user.id)
+
+    try:
+        with privacy_audit_scope(
+            db=db,
+            user_id=user.id,
+            pair_id=session.pair_id,
+            scope="pair" if session.pair_id else "solo",
+            run_type="agent_checkup",
+            privacy_mode=privacy_mode,
+        ):
+            if session.pair_id:
+                snapshot = await build_safety_status(db=db, pair_id=pair_id)
+                intervention = await build_intervention_evaluation(
+                    db=db, pair_id=pair_id
+                )
+                crisis = await _get_crisis_status(db=db, pair_id=pair_id)
+                active_tasks = await _get_active_tasks(db=db, pair_id=pair_id)
+            else:
+                snapshot = await build_safety_status(db=db, user_id=user_id)
+                intervention = await build_intervention_evaluation(
+                    db=db, user_id=user_id
+                )
+                crisis = await _get_crisis_status(db=db, pair_id=pair_id, user_id=user_id)
+                active_tasks = await _get_active_tasks(db=db, pair_id=pair_id, user_id=user_id)
+    except Exception as exc:
+        logger.warning("active checkup perception failed: %s", exc.__class__.__name__)
+        raise HTTPException(status_code=500, detail="暂时无法完成主动体检")
+
+    health = None
+    raw_health = (snapshot or {}).get("health_score") if isinstance(snapshot, dict) else None
+    if raw_health is None:
+        raw_health = (snapshot or {}).get("score")
+    try:
+        health = int(raw_health)
+    except (TypeError, ValueError):
+        health = None
+
+    risk_level = str(crisis.get("highest_level") or "low") if isinstance(crisis, dict) else "low"
+    risk_reason = ""
+    if isinstance(intervention, dict):
+        risk_reason = str(
+            intervention.get("reason")
+            or intervention.get("risk_reason")
+            or risk_reason
+        )
+    urgency = "monitor"
+    if risk_level in ("severe", "high"):
+        urgency = "immediate"
+    elif risk_level == "medium":
+        urgency = "soon"
+
+    recommended_actions = []
+    tasks = active_tasks if isinstance(active_tasks, list) else []
+    for task in tasks[:3]:
+        title = task.get("title") or task.get("name") or "待办任务"
+        recommended_actions.append(title)
+
+    report_lines = []
+    if health is not None:
+        report_lines.append(f"本期主动巡查完成。关系健康分约 {health}/100，")
+    else:
+        report_lines.append("本期主动巡查完成。")
+    report_lines.append(f"当前风险等级为「{risk_level}」。")
+    if risk_reason:
+        report_lines.append(risk_reason)
+    if isinstance(intervention, dict) and intervention.get("recommendation"):
+        report_lines.append(f"建议：{intervention['recommendation']}")
+    else:
+        report_lines.append("当前整体平稳，建议保持规律记录与沟通节奏。")
+    report = "".join(report_lines)
+
+    await record_user_interaction_event(
+        db,
+        event_type="agent.checkup.completed",
+        user_id=user.id,
+        pair_id=session.pair_id,
+        source="agent",
+        page="chat",
+        path="/agent/sessions/{session_id}/checkup",
+        http_method="POST",
+        http_status=200,
+        session_id=str(session.id),
+        target_type="agent_checkup",
+        target_id=None,
+        payload={"health": health, "risk_level": risk_level, "urgency": urgency},
+    )
+    await db.commit()
+
+    return AgentCheckupResponse(
+        report=report,
+        health=health,
+        risk_level=risk_level,
+        risk_reason=risk_reason,
+        recommended_actions=recommended_actions,
+        urgency=urgency,
+        generated_at=datetime.now(timezone.utc),
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/collaborate",
+    response_model=AgentSwarmResponse,
+)
+async def collaborate_multi_agent(
+    session_id: uuid.UUID,
+    req: AgentChatRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """多智能体协作：感知→分析→行动→陪伴 四个角色接力处理后给出陪伴回复。
+
+    这是一个面向展示与体验的入口；普通聊天仍走 /chat。
+    """
+    session = await db.get(AgentChatSession, session_id)
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    if session.pair_id:
+        await validate_pair_access(session.pair_id, user, db, require_active=True)
+    checkin_extracted = False
+    effective_content = str(req.content or "").strip()
+    user_msg = AgentChatMessage(
+        session_id=session.id,
+        role="user",
+        content=effective_content,
+        payload={"surface": req.surface, "multi_agent": True, **({'scene_context': req.scene_context.model_dump()} if req.scene_context else {})},
+    )
+    db.add(user_msg)
+    touch_session_activity(session)
+    await db.flush()
+    await db.commit()
+
+    history = await refresh_session_summary_if_needed(db, session=session)
+    await db.commit()
+    messages_for_llm = build_messages_for_llm(
+        system_prompt=build_agent_system_prompt(surface=req.surface, intent=req.scene_context.intent if req.scene_context else 'auto'),
+        history=history,
+    )
+    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
+
+    try:
+        with privacy_audit_scope(
+            db=db,
+            user_id=user.id,
+            pair_id=session.pair_id,
+            scope="pair" if session.pair_id else "solo",
+            run_type="agent_collaborate",
+            privacy_mode=privacy_mode,
+        ):
+            final_reply, final_steps, swarm, checkin_extracted = await asyncio.wait_for(
+                run_multi_agent_flow(
+                    messages=messages_for_llm,
+                    pair_id=str(session.pair_id) if session.pair_id else None,
+                    user_id=str(user.id),
+                    session_id=str(session.id),
+                    db=db,
+                ),
+                timeout=MULTI_AGENT_COMPLETION_TIMEOUT_SECONDS,
+            )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="协作深度思考较久，请稍后再试或减少内容量")
+    except Exception as exc:
+        logger.warning("multi-agent collaborate failed: %s", exc.__class__.__name__)
+        raise HTTPException(status_code=502, detail="这次协作没能完成，请重试。") from exc
+
+    if not final_reply or not final_reply.strip():
+        raise HTTPException(status_code=502, detail="这次没有收到回复，请重试。")
+    action = "checkin_extracted" if checkin_extracted else "chat"
+
+    task_proposals = _task_proposals_from_steps(final_steps)
+    assistant_msg = AgentChatMessage(
+        session_id=session.id, role="assistant", content=final_reply,
+        payload={'task_proposals': task_proposals} if task_proposals else None,
+    )
+    db.add(assistant_msg)
+    for step in final_steps:
+        if step.tool_calls:
+            db.add(AgentThought(
+                session_id=session.id,
+                step_index=step.step_index,
+                thought=step.thought,
+                tool_calls_json=json.dumps(step.tool_calls, ensure_ascii=False),
+                tool_results_json=json.dumps(step.tool_results, ensure_ascii=False),
+                duration_ms=step.duration_ms,
+            ))
+    touch_session_activity(session)
+    await db.commit()
+    await refresh_session_summary_if_needed(db, session=session)
+    await db.commit()
+
+    return AgentSwarmResponse(
+        reply=final_reply,
+        action=action,
+        message_id=assistant_msg.id,
+        task_proposals=task_proposals,
+        swarm=[
+            {
+                "role": s.role,
+                "role_name": s.role_name,
+                "summary": s.summary,
+                "status": s.status,
+                "duration_ms": s.duration_ms,
+            }
+            for s in swarm
+        ],
+        trace=_serialize_agent_steps(final_steps),
+    )
 
 
 @router.post("/simulate-message", response_model=MessageSimulationResponse)
@@ -741,6 +1004,8 @@ async def simulate_message(
             simulation = await simulate_message_preview(req.draft, context)
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="处理超过 1 分钟，已自动超时，请稍后再试")
+    except MessageSimulationUnavailableError:
+        raise HTTPException(status_code=502, detail="这次没能完成改写，原句已保留，请重试。")
     safety_status = await build_safety_status(
         db,
         pair_id=pair.id if pair else None,
@@ -1469,3 +1734,184 @@ async def realtime_asr(
             await websocket.close()
         except Exception:
             pass
+
+
+# 多步骤分析接口
+
+
+@router.post("/skill/analyze")
+async def skill_analyze(
+    pair_id: uuid.UUID,
+    content: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """调用各分析模块处理关系事件，并返回分析结果和建议。
+
+    前端用这个端点发送复杂关系事件，后端自动执行：
+    表达澄清 → 立场分析 → 冲突识别 → 行动规划 → 记忆提取
+    """
+    from app.ai.skill_orchestrator import orchestrate
+    from app.services.relationship_memory import recall_memories, batch_store_from_skill
+    from app.models import SkillAnalysisRecord
+
+    pair = await validate_pair_access(pair_id, user, db, require_active=True)
+
+    # 查找相关的历史记录，供本次分析参考
+    memories = await recall_memories(
+        db, pair_id=pair_id, user_id=user.id, query=content, limit=5,
+    )
+
+    # 按计划调用各分析模块
+    package = await orchestrate(
+        content,
+        pair_id=str(pair_id),
+        user_id=str(user.id),
+        relationship_memories=memories,
+    )
+
+    delivery = package.to_dict()
+
+    # 保存分析记录
+    record = SkillAnalysisRecord(
+        pair_id=pair_id,
+        user_id=user.id,
+        user_input=content,
+        primary_intent=package.primary_intent,
+        delivery_json=delivery,
+    )
+    db.add(record)
+
+    # 批量写入长期记忆
+    if package.memories_to_save:
+        await batch_store_from_skill(
+            db,
+            pair_id=pair_id,
+            user_id=user.id,
+            memories=package.memories_to_save,
+        )
+
+    await db.commit()
+
+    return {
+        "record_id": str(record.id),
+        "delivery": delivery,
+        "related_memories": memories,
+    }
+
+
+@router.post("/skill/select-proposal")
+async def skill_select_proposal(
+    pair_id: uuid.UUID,
+    record_id: uuid.UUID,
+    proposal_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """选择方案 — 用户选定方案后，生成沟通草稿 + 行动计划。"""
+    from app.ai.skill_orchestrator import generate_draft_for_proposal
+    from app.models import SkillAnalysisRecord
+
+    await validate_pair_access(pair_id, user, db, require_active=True)
+
+    record = await db.get(SkillAnalysisRecord, record_id)
+    if not record or record.user_id != user.id:
+        raise HTTPException(status_code=404, detail="分析记录不存在")
+
+    # 从保存的分析结果中提取上下文
+    delivery_json = record.delivery_json or {}
+    analysis_results = {}
+    # 将 delivery 中的结构化数据回传给草稿 Skill
+    if delivery_json.get("summary"):
+        analysis_results["expression_clarify"] = delivery_json["summary"]
+    if delivery_json.get("stances"):
+        analysis_results["stance_analysis"] = {"stances": delivery_json["stances"]}
+    if delivery_json.get("proposals"):
+        analysis_results["action_plan"] = {"proposals": delivery_json["proposals"]}
+
+    draft = await generate_draft_for_proposal(
+        record.user_input,
+        proposal_id,
+        analysis_results=analysis_results,
+    )
+
+    # 更新记录（使用新字典赋值触发 SQLAlchemy JSON 字段变更保存）
+    record.selected_proposal_id = proposal_id
+    record.delivery_json = {**delivery_json, "draft": draft}
+    await db.commit()
+
+    return {"draft": draft, "proposal_id": proposal_id}
+
+
+@router.post("/skill/review")
+async def skill_review(
+    pair_id: uuid.UUID,
+    content: str,
+    record_id: uuid.UUID | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """复盘 — 对一次关系事件进行复盘分析。"""
+    from app.ai.skill_registry import SKILL_REGISTRY, execute_skill
+    from app.ai.skill_registry import SkillOutput
+    from app.services.relationship_memory import batch_store_from_skill
+    import app.ai.skills  # noqa: F401
+
+    await validate_pair_access(pair_id, user, db, require_active=True)
+
+    review_skill = SKILL_REGISTRY.get("review")
+    memory_skill = SKILL_REGISTRY.get("memory_write")
+    if not review_skill:
+        raise HTTPException(status_code=500, detail="复盘模块不可用")
+
+    context = {"user_input": content, "review_input": content}
+    review_output = await execute_skill(
+        review_skill, context=context, previous_results={},
+    )
+
+    # 同时提取记忆
+    memories_to_save = []
+    if memory_skill:
+        memory_output = await execute_skill(
+            memory_skill, context=context,
+            previous_results={"review": review_output},
+        )
+        if memory_output.success:
+            memories_to_save = memory_output.data.get("memories", [])
+            await batch_store_from_skill(
+                db, pair_id=pair_id, user_id=user.id, memories=memories_to_save,
+            )
+
+    await db.commit()
+    return {
+        "review": review_output.data if review_output.success else {},
+        "memories_saved": len(memories_to_save),
+    }
+
+
+@router.get("/skill/memories")
+async def skill_memories(
+    pair_id: uuid.UUID,
+    query: str = "",
+    memory_type: str | None = None,
+    limit: int = 10,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """查询长期关系记忆。"""
+    from app.services.relationship_memory import recall_memories, list_all_memories
+
+    await validate_pair_access(pair_id, user, db, require_active=True)
+
+    if query:
+        types = [memory_type] if memory_type else None
+        results = await recall_memories(
+            db, pair_id=pair_id, user_id=user.id,
+            query=query, memory_types=types, limit=limit,
+        )
+    else:
+        results = await list_all_memories(
+            db, pair_id=pair_id, user_id=user.id, limit=limit,
+        )
+
+    return {"memories": results, "total": len(results)}

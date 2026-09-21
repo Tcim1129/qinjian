@@ -52,7 +52,7 @@ def _as_uuid(
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
-# ── 危机状态 ──
+# 危机状态
 
 
 @router.get("/status/{pair_id}", response_model=CrisisStatusResponse)
@@ -125,7 +125,7 @@ async def get_crisis_status(
     )
 
 
-# ── 危机历史 ──
+# 危机历史
 
 
 @router.get("/history/{pair_id}", response_model=CrisisHistoryResponse)
@@ -204,7 +204,7 @@ async def get_crisis_history(
     return CrisisHistoryResponse(pair_id=str(pair.id), history=history)
 
 
-# ── 预警列表 ──
+# 预警列表
 
 
 @router.get("/alerts/{pair_id}", response_model=list[CrisisAlertResponse])
@@ -321,7 +321,7 @@ async def get_repair_protocol(
     return RepairProtocolResponse(**protocol)
 
 
-# ── 预警操作 ──
+# 预警操作
 
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=CrisisAlertResponse)
@@ -397,7 +397,7 @@ async def escalate_alert(
     return alert
 
 
-# ── 专业帮助资源 ──
+# 专业帮助资源
 
 
 @router.get("/resources")

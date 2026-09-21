@@ -65,7 +65,7 @@
               >
                 <div class="relationship-space-detail__break-section-head">
                   <div>
-                    <p class="eyebrow">留痕记录</p>
+                    <p class="eyebrow">处理记录</p>
                     <strong>留言</strong>
                   </div>
                   <span>{{ pendingBreakMessages.length }} 条</span>
@@ -264,7 +264,7 @@
               修改备注
             </button>
             <button class="btn btn-ghost btn-sm" type="button" @click="router.push('/timeline')">
-              看时间轴
+              看关系日历
             </button>
             <button
               v-if="pair.status === 'active'"
@@ -328,13 +328,15 @@
       <article class="relationship-space-detail__card relationship-space-detail__task-card">
         <div class="relationship-space-detail__task-head">
           <div>
-            <p class="eyebrow">今日安排</p>
+            <p class="eyebrow">{{ taskScopeTab === 'today' ? '今日安排' : '明日安排' }}</p>
             <h3>{{ taskCardTitle }}</h3>
+              <button class="btn btn-ghost btn-sm" type="button" :disabled="taskLoading || Boolean(scheduleError)" @click="openScheduleAgent()">{{ taskScopeTab === 'today' ? '让 AI 帮我选一件' : '和 AI 商量明天' }}</button>
           </div>
-          <div class="relationship-space-detail__task-switch" role="tablist" aria-label="安排日期切换">
+          <div class="relationship-space-detail__task-switch" role="group" aria-label="安排日期切换">
             <button
               class="relationship-space-detail__task-switch-item"
               :class="{ active: taskScopeTab === 'today' }"
+              :aria-pressed="taskScopeTab === 'today'"
               type="button"
               @click="setTaskScope('today')"
             >
@@ -343,6 +345,7 @@
             <button
               class="relationship-space-detail__task-switch-item"
               :class="{ active: taskScopeTab === 'tomorrow' }"
+              :aria-pressed="taskScopeTab === 'tomorrow'"
               type="button"
               @click="setTaskScope('tomorrow')"
             >
@@ -351,8 +354,9 @@
           </div>
         </div>
 
-        <div v-if="taskLoading" class="relationship-space-detail__task-empty">正在整理这一层安排...</div>
-        <div v-else-if="taskCardItems.length" class="relationship-space-detail__task-list">
+        <div v-if="taskLoading" class="relationship-space-detail__task-empty">正在加载安排…</div>
+        <div v-else-if="scheduleError" class="empty-state" role="alert">{{ scheduleError }} <button class="btn btn-ghost btn-sm" @click="loadDailyTasks">重试</button></div>
+          <div v-else-if="taskCardItems.length" class="relationship-space-detail__task-list">
           <article
             v-for="task in taskCardItems"
             :key="task.id"
@@ -362,10 +366,10 @@
               <strong>{{ task.title }}</strong>
               <p>{{ task.description || '先做一个轻一点的小动作。' }}</p>
             </div>
-            <span class="pill pill--soft">{{ task.importance_level === 'high' ? '高优先' : task.importance_level === 'low' ? '低优先' : '中优先' }}</span>
+            <span class="pill pill--soft">{{ task.status === 'completed' ? '已完成' : task.importance_level === 'high' ? '先做这件' : '待完成' }}</span>
           </article>
         </div>
-        <div v-else class="relationship-space-detail__task-empty">这一层还没有安排。</div>
+        <div v-else class="relationship-space-detail__task-empty">{{ taskScopeTab === 'today' ? '今天还没有安排' : '明天还没有安排' }}。</div>
 
         <div class="relationship-space-detail__actions">
           <button
@@ -492,10 +496,13 @@
         </div>
       </section>
     </div>
+    <ContextAgentDialog v-if="scheduleContext" :context="scheduleContext" @close="scheduleContext = null" />
   </div>
 </template>
 
 <script setup>
+import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
+import { buildDemoSchedule, buildScheduleContext, createLatestRequest, scheduleDate, demoScheduleCache } from '@/utils/taskSchedule'
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api'
@@ -526,27 +533,9 @@ function isoDate(offset = 0) {
 }
 
 function buildDemoDailyTasksPayload(scope = 'today') {
-  const base = cloneDemo(demoFixture.tasks || { tasks: [] })
-  const tasks = (base.tasks || [])
-    .filter((task) => task.source !== 'manual')
-    .map((task, index) => ({
-      ...task,
-      importance_level: task.importance_level || (index === 0 ? 'high' : index === 1 ? 'medium' : 'low'),
-      due_date: scope === 'tomorrow' ? isoDate(1) : isoDate(0),
-    }))
-  if (scope === 'tomorrow') {
-    return {
-      ...base,
-      daily_note: '明天安排已排好。',
-      planning_note: '明天安排已排好。',
-      tasks,
-    }
-  }
-  return {
-    ...base,
-    encouragement_copy: base.encouragement_copy || '今天先做第一步。',
-    tasks,
-  }
+  const saved = demoScheduleCache.read({ owner: userStore.me?.id || 'sample', pairId: pair.value?.id, date: scheduleDate(scope) })
+  if (saved) return saved
+  return { ...buildDemoSchedule(demoFixture.tasks, scope) }
 }
 
 const themeClass = computed(() => `relationship-space-detail--theme-${
@@ -828,26 +817,25 @@ onBeforeUnmount(() => {
 })
 
 async function loadDailyTasks() {
-  if (!pair.value || pair.value.status !== 'active') {
-    dailyTasksPayload.value = { tasks: [] }
-    return
-  }
-
+  const current = scheduleRequests.begin()
+  const requestScope = taskScopeTab.value
+  const requestPair = pair.value?.id
+  taskLoading.value = false
+  scheduleError.value = ''
+  dailyTasksPayload.value = { tasks: [] }
+  if (!(pair.value?.id && pair.value?.status === 'active')) return
   if (userStore.isDemoMode) {
-    dailyTasksPayload.value = buildDemoDailyTasksPayload(taskScopeTab.value)
+    dailyTasksPayload.value = buildDemoDailyTasksPayload(requestScope)
     return
   }
-
   taskLoading.value = true
   try {
-    dailyTasksPayload.value = await api.getDailyTasks(pair.value.id, {
-      forDate: taskScopeTab.value === 'tomorrow' ? isoDate(1) : isoDate(0),
-    })
-  } catch (e) {
-    dailyTasksPayload.value = { tasks: [] }
-    showToast(e.message || '这一层安排没加载出来，稍后再试')
+    const result = await api.getDailyTasks(requestPair, { forDate: scheduleDate(requestScope), dateScope: requestScope })
+    if (current()) dailyTasksPayload.value = result
+  } catch (error) {
+    if (current()) scheduleError.value = error.message || '安排没加载出来，请重试'
   } finally {
-    taskLoading.value = false
+    if (current()) taskLoading.value = false
   }
 }
 
@@ -1079,6 +1067,24 @@ function formatDateTime(value) {
   const minute = `${date.getMinutes()}`.padStart(2, '0')
   return `${month}-${day} ${hour}:${minute}`
 }
+const scheduleContext = ref(null)
+const scheduleRequests = createLatestRequest()
+const scheduleError = ref('')
+function openScheduleAgent(task = null) {
+  scheduleContext.value = buildScheduleContext(task ? [task] : taskCardItems.value, {
+    scope: taskScopeTab.value, date: scheduleDate(taskScopeTab.value), pairId: pair.value?.id || null,
+    isDemoMode: userStore.isDemoMode, single: Boolean(task),
+  })
+}
+watch(() => [userStore.token, userStore.me?.id, pair.value?.id, taskScopeTab.value], () => {
+  scheduleRequests.invalidate()
+  scheduleContext.value = null
+  dailyTasksPayload.value = { tasks: [] }
+  taskLoading.value = false
+}, { flush: 'sync' })
+watch(() => [userStore.token, userStore.me?.id], () => loadDailyTasks())
+onBeforeUnmount(() => scheduleRequests.invalidate())
+
 </script>
 
 <style scoped>

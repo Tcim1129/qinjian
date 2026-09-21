@@ -1,6 +1,10 @@
 """Timeline insight routes."""
 
+from datetime import date, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +23,7 @@ from app.models import (
 )
 from app.schemas import (
     RelationshipTimelineCurrentContextResponse,
+    RelationshipTimelineArchiveItemResponse,
     RelationshipTimelineArchiveResponse,
     RelationshipTimelineEventDetailResponse,
     RelationshipTimelineEvidenceCardResponse,
@@ -108,7 +113,7 @@ def _timeline_impact_modules_for_event(event: RelationshipEvent) -> list[str]:
 
 
 async def build_timeline_event_detail(
-    db: AsyncSession, event: RelationshipEvent
+    db: AsyncSession, event: RelationshipEvent, *, viewer: User
 ) -> dict:
     serialized = serialize_timeline_event(event)
     metrics: list[dict] = []
@@ -120,27 +125,41 @@ async def build_timeline_event_detail(
     if event.entity_type == "checkin" and event.entity_id:
         checkin = await db.get(Checkin, event.entity_id)
         if checkin:
-            metrics.extend(
-                item
-                for item in [
-                    detail_metric("情绪分", checkin.mood_score),
-                    detail_metric("互动频率", checkin.interaction_freq),
-                    detail_metric("深聊", format_bool(checkin.deep_conversation)),
-                    detail_metric("任务完成", format_bool(checkin.task_completed)),
-                ]
-                if item
-            )
-            evidence_cards.extend(
-                item
-                for item in [
-                    detail_card("记录内容", checkin.content, tone="neutral"),
+            is_owner = checkin.user_id is None or str(checkin.user_id) == str(viewer.id)
+            if is_owner:
+                metrics.extend(
+                    item
+                    for item in [
+                        detail_metric("情绪分", checkin.mood_score),
+                        detail_metric("互动频率", checkin.interaction_freq),
+                        detail_metric("深聊", format_bool(checkin.deep_conversation)),
+                        detail_metric("任务完成", format_bool(checkin.task_completed)),
+                    ]
+                    if item
+                )
+                evidence_cards.extend(
+                    item
+                    for item in [
+                        detail_card("记录内容", checkin.content, tone="neutral"),
+                        detail_card(
+                            "情绪标签",
+                            ",".join((checkin.mood_tags or {}).get("tags", [])),
+                        ),
+                    ]
+                    if item
+                )
+            else:
+                scrubbed_payload = dict(serialized.get("payload") or {})
+                scrubbed_payload.pop("text_preview", None)
+                scrubbed_payload.pop("client_context", None)
+                serialized["payload"] = scrubbed_payload or None
+                evidence_cards.append(
                     detail_card(
-                        "情绪标签",
-                        ",".join((checkin.mood_tags or {}).get("tags", [])),
-                    ),
-                ]
-                if item
-            )
+                        "记录内容",
+                        "对方在这天也留下了一条记录。原文和原媒体默认仅记录者本人可见。",
+                        tone="neutral",
+                    )
+                )
 
     elif event.entity_type == "report" and event.entity_id:
         report = await db.get(Report, event.entity_id)
@@ -203,6 +222,7 @@ async def build_timeline_event_detail(
                 for item in [
                     detail_card("任务标题", task.title, tone="progress"),
                     detail_card("任务说明", task.description),
+                    detail_card("后来怎么样", {'helped': '有帮助', 'not_yet': '还没做', 'difficult': '不太顺'}.get(payload.get('outcome')), tone="support"),
                     detail_card("主观反馈备注", payload.get("note"), tone="support"),
                 ]
                 if item
@@ -497,11 +517,32 @@ async def export_relationship_timeline_archive_item(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    _ = (item_id, pair_id, mode, user, db)
-    raise HTTPException(
-        status_code=410,
-        detail="归档导出已下线，当前仅支持在线查看长期保留的分析结果。",
+    pair_scope_id, user_scope_id = await resolve_scope(
+        pair_id=pair_id,
+        mode=mode,
+        user=user,
+        db=db,
     )
+    items, _ = await _load_archive_items(
+        db,
+        pair_scope_id=pair_scope_id,
+        user_scope_id=user_scope_id,
+        actor_user_id=user.id,
+        limit=60,
+        export_mode=True,
+    )
+    item = next((candidate for candidate in items if str(candidate["id"]) == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="归档条目不存在")
+    if item.get("item_type") == "partner_record_placeholder":
+        raise HTTPException(status_code=403, detail="该条档案不可导出")
+
+    safe_item = RelationshipTimelineArchiveItemResponse(**item)
+    response = JSONResponse(content=jsonable_encoder(safe_item))
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="qinjian-archive-{item_id}.json"'
+    )
+    return response
 
 
 @router.get("/timeline/archive/export")
@@ -511,11 +552,35 @@ async def export_relationship_timeline_archive(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    _ = (pair_id, mode, user, db)
-    raise HTTPException(
-        status_code=410,
-        detail="归档导出已下线，当前仅支持在线查看长期保留的分析结果。",
+    pair_scope_id, user_scope_id = await resolve_scope(
+        pair_id=pair_id,
+        mode=mode,
+        user=user,
+        db=db,
     )
+    items, _ = await _load_archive_items(
+        db,
+        pair_scope_id=pair_scope_id,
+        user_scope_id=user_scope_id,
+        actor_user_id=user.id,
+        limit=60,
+        export_mode=True,
+    )
+    safe_items = [RelationshipTimelineArchiveItemResponse(**item) for item in items]
+    scope = "pair" if pair_scope_id else "solo"
+    payload = {
+        "scope": scope,
+        "pair_id": pair_scope_id,
+        "user_id": user_scope_id,
+        "item_count": len(safe_items),
+        "exported_at": datetime.utcnow(),
+        "items": safe_items,
+    }
+    response = JSONResponse(content=jsonable_encoder(payload))
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="qinjian-{scope}-archive-{date.today().isoformat()}.json"'
+    )
+    return response
 
 
 @router.get(
@@ -528,7 +593,7 @@ async def get_relationship_timeline_event_detail(
     db: AsyncSession = Depends(get_db),
 ):
     event = await get_accessible_timeline_event(db, event_id=event_id, user=user)
-    detail = await build_timeline_event_detail(db, event)
+    detail = await build_timeline_event_detail(db, event, viewer=user)
 
     await record_relationship_event(
         db,

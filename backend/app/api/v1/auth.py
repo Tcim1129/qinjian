@@ -5,7 +5,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +39,7 @@ from app.services.upload_access import (
 )
 
 from app.services.login_attempts import get_login_attempt_store, LoginAttemptEntry
+from app.services.request_cooldown_store import consume_request_cooldown
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 logger = logging.getLogger(__name__)
@@ -46,8 +47,23 @@ logger = logging.getLogger(__name__)
 MIN_PASSWORD_LENGTH = 6
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+REGISTER_IP_WINDOW_SECONDS = 3600
+REGISTER_IP_MAX_ATTEMPTS = 10
+LOGIN_IP_FAILURE_THRESHOLD = 20
+LOGIN_IP_LOCK_MINUTES = 15
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return str(request.client.host) if request.client else "unknown"
+
 
 def _serialize_user_response(user: User) -> UserResponse:
+    from app.services.upload_access import set_request_actor_user_id
+
+    set_request_actor_user_id(str(user.id))
     payload = UserResponse.model_validate(user).model_dump()
     prefs = normalize_product_prefs(getattr(user, "product_prefs", None))
     payload["wechat_bound"] = bool(user.wechat_openid)
@@ -58,6 +74,7 @@ def _serialize_user_response(user: User) -> UserResponse:
     payload["preferred_language"] = str(prefs["preferred_language"])
     payload["tone_preference"] = str(prefs["tone_preference"])
     payload["response_length"] = str(prefs["response_length"])
+    payload["habit_profile"] = prefs["habit_profile"]
     payload["relationship_space_theme"] = str(
         prefs["relationship_space_theme"]
     )
@@ -296,8 +313,19 @@ async def _persist_profile_update_value(
 
 
 @router.post("/register", response_model=dict)
-async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(
+    req: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     """注册新用户"""
+    await consume_request_cooldown(
+        bucket="auth:register",
+        scope_key=_client_ip(request),
+        window_seconds=REGISTER_IP_WINDOW_SECONDS,
+        max_attempts=REGISTER_IP_MAX_ATTEMPTS,
+        limit_message="注册过于频繁",
+    )
     account_type, account_value = _resolve_account_identifier(req.account or req.email)
     nickname = req.nickname.strip()
 
@@ -336,7 +364,11 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=dict)
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    req: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     """用户登录"""
     account_type, account_value = _resolve_account_identifier(req.account or req.email)
     if len(req.password) < MIN_PASSWORD_LENGTH:
@@ -347,6 +379,21 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     store = get_login_attempt_store()
+    client_ip = _client_ip(request)
+    ip_key = f"ip:{client_ip}"
+    ip_attempt = await store.get(ip_key)
+    if not ip_attempt:
+        ip_attempt = LoginAttemptEntry(count=0, locked_until=None)
+
+    if ip_attempt.locked_until and now < ip_attempt.locked_until:
+        remaining = int((ip_attempt.locked_until - now).total_seconds() / 60)
+        raise HTTPException(
+            status_code=429,
+            detail=f"当前网络登录失败次数过多，请 {max(1, remaining)} 分钟后再试",
+        )
+    if ip_attempt.locked_until and now >= ip_attempt.locked_until:
+        ip_attempt.count = 0
+        ip_attempt.locked_until = None
 
     attempt_key = f"{account_type}:{account_value}"
     attempt = await store.get(attempt_key)
@@ -371,6 +418,10 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         if attempt.count >= 5:
             attempt.locked_until = now + timedelta(minutes=15)
         await store.set(attempt_key, attempt)
+        ip_attempt.count += 1
+        if ip_attempt.count >= LOGIN_IP_FAILURE_THRESHOLD:
+            ip_attempt.locked_until = now + timedelta(minutes=LOGIN_IP_LOCK_MINUTES)
+        await store.set(ip_key, ip_attempt)
         raise HTTPException(status_code=401, detail="密码错误，请重新输入")
 
     await store.delete(attempt_key)
@@ -649,6 +700,7 @@ async def update_me(
         or req.preferred_language is not None
         or req.tone_preference is not None
         or req.response_length is not None
+        or req.habit_profile is not None
         or req.relationship_space_theme is not None
         or req.spiritual_support_enabled is not None
         or req.living_region is not None
@@ -670,6 +722,8 @@ async def update_me(
             prefs["tone_preference"] = req.tone_preference
         if req.response_length is not None:
             prefs["response_length"] = req.response_length
+        if req.habit_profile is not None:
+            prefs["habit_profile"] = req.habit_profile.model_dump()
         if req.relationship_space_theme is not None:
             prefs["relationship_space_theme"] = req.relationship_space_theme
         if req.spiritual_support_enabled is not None:

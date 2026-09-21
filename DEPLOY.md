@@ -2,30 +2,34 @@
 
 ## 服务器信息
 
+### 当前线上服务器（qinjian.tech）
+- 服务器 IP：`52.140.193.23`
+- 访问地址：`https://qinjian.tech/`
+- 项目目录：`/home/azureuser/qinjian`
+- 登录用户：`azureuser`
+
+### 旧服务器记录
 - 服务器 IP：`129.212.216.187`
-- 域名：`https://qinjian.tech`
 - 项目目录：`/root/qinjian`
 - 登录用户：`root`
 
+> `qinjian.tech` 当前解析并提供页面的是 `52.140.193.23`。`129.212.216.187` 保留作旧记录，不作为当前网站的发布目标。部署前先以域名页面和 `/api/health` 的实际响应为准。
+
 ## 快速部署
 
-### 方式一：部署脚本
+### 方式一：部署到当前线上服务器 (52.140.193.23)
 
 ```bash
-python deploy_current_workspace.py --host 129.212.216.187 --username root --password <密码>
+python deploy_current_workspace.py --host 52.140.193.23 --username azureuser --remote-root /home/azureuser/qinjian
 ```
 
-如果本机已经配置可用的 root SSH key，也可以省略 `--password`；否则请先设置 `QJ_REMOTE_PASSWORD`，或通过 `--key-file` 指定私钥：
-
-```bash
-python deploy_current_workspace.py --host 129.212.216.187 --username root --key-file ~/.ssh/opencode_deploy
-```
+> 密码不要写进仓库或文档，优先使用 `QJ_REMOTE_PASSWORD` 环境变量，或改用 `--key-file` 指定 SSH 私钥。
 
 脚本会自动：
 
 1. 在本地构建 `web-vue3/dist`
 2. 打包 `backend`、`web-vue3`、`docker-compose.yml`、`nginx.conf`
-3. 上传到服务器 `/root/qinjian`
+3. 上传到服务器 `/home/azureuser/qinjian`
 4. 校正 `FRONTEND_ORIGIN`
 5. 执行 `docker compose up -d --build`
 
@@ -36,8 +40,8 @@ cd web-vue3
 npm install
 npm run build
 
-ssh root@129.212.216.187
-cd /root/qinjian
+ssh azureuser@52.140.193.23
+cd /home/azureuser/qinjian
 git pull
 docker compose up -d --build
 docker compose ps
@@ -45,7 +49,7 @@ docker compose ps
 
 ## 服务器环境变量
 
-在 `/root/qinjian/.env` 中至少配置：
+在 `/home/azureuser/qinjian/.env` 中至少配置：
 
 ```bash
 DB_PASSWORD=<数据库密码>
@@ -73,7 +77,7 @@ REDIS_URL=redis://redis:6379/0
 ## 服务管理
 
 ```bash
-cd /root/qinjian
+cd /home/azureuser/qinjian
 
 # 查看状态
 docker compose ps
@@ -107,4 +111,4 @@ curl https://qinjian.tech/api/health
 - 上传文件默认不通过 Nginx 直接公开，需走后端签名访问接口。
 - 生产环境默认通过 Compose 内置 Redis 承接验证码和登录风控，不再允许回退到内存。
 - 如需本地调试 API 文档，可通过后端环境变量开启 `ENABLE_API_DOCS=true`。
-- 接口总表、关键业务时序和测试覆盖矩阵见 [docs/项目说明与验证.md](docs/项目说明与验证.md)。
+- 软件功能和主要接口见 [设计说明书](docs/copyright/设计说明书.md)。

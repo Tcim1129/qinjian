@@ -82,16 +82,16 @@ export const PLAN_TYPE_LABELS = {
 }
 
 export const REACTION_SHIFT_LABELS = {
-  stable: '这次反应和最近的习惯差不多。',
-  unknown: '历史样本还不够，暂时只看这一次。',
-  more_defensive: '这次更像在防御或顶回去。',
-  more_withdrawn: '这次更像在退开或关掉沟通。',
-  more_urgent: '这次更急，更容易把压力推高。',
-  more_repair_oriented: '这次更想缓和，或重新接上。',
-  more_support_seeking: '这次更像在寻求安慰和回应。',
-  more_clarifying: '这次更像在试图先对齐理解。',
-  more_reflective: '这次更像在复盘和整理。',
-  shifted: '这次的反应模式和近期常态有变化。',
+  stable: '和最近几次差不多',
+  unknown: '记录不足，暂时无法比较',
+  more_defensive: '这次更在意解释自己的立场',
+  more_withdrawn: '这次不太想继续聊',
+  more_urgent: '这次更着急得到回复',
+  more_repair_oriented: '这次更想解决分歧',
+  more_support_seeking: '这次更希望得到安慰',
+  more_clarifying: '这次更想把事情说清楚',
+  more_reflective: '这次在回顾发生过的事',
+  shifted: '这次和平时有些不同',
 }
 
 export const BASELINE_MATCH_LABELS = {

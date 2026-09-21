@@ -1,5 +1,6 @@
 """社群轻运营：通知中心 + 基于历史状态的明日微建议。"""
 
+import asyncio
 import json
 import logging
 import re
@@ -35,6 +36,7 @@ router = APIRouter(prefix="/community", tags=["社群"])
 logger = logging.getLogger(__name__)
 TIP_GENERATE_WINDOW_SECONDS = 60
 TIP_GENERATE_MAX_ATTEMPTS = 2
+TIP_AI_TIMEOUT_SECONDS = 6
 
 # 内置兜底建议：标题维持在小卡片可读范围内。
 BUILT_IN_TIPS = {
@@ -494,11 +496,17 @@ async def _generate_personalized_tip(
         },
     ]
     try:
-        result = await chat_completion(
-            settings.AI_TEXT_MODEL,
-            messages,
-            temperature=0.75 if varied else 0.35,
+        result = await asyncio.wait_for(
+            chat_completion(
+                settings.AI_TEXT_MODEL,
+                messages,
+                temperature=0.75 if varied else 0.35,
+            ),
+            timeout=TIP_AI_TIMEOUT_SECONDS,
         )
+    except asyncio.TimeoutError:
+        logger.warning("personalized community tip timed out, using rule fallback")
+        return fallback
     except Exception:
         logger.exception("failed to generate personalized community tip")
         return fallback

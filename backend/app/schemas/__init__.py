@@ -18,7 +18,7 @@ class RequestModel(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-# ── 认证 ──
+# 认证
 
 
 class RegisterRequest(RequestModel):
@@ -72,7 +72,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-# ── 用户 ──
+# 用户
 
 
 class AvatarPresentation(BaseModel):
@@ -151,6 +151,19 @@ class PairTaskPlannerSettingsResponse(BaseModel):
     effective_settings: TaskPlannerDefaultsResponse
 
 
+class HabitProfile(RequestModel):
+    taboos: list[str] = Field(default_factory=list, max_length=16)
+    comfort_preferences: list[str] = Field(default_factory=list, max_length=16)
+    custom_notes: str = Field(default='', max_length=200)
+
+    @field_validator('taboos', 'comfort_preferences')
+    @classmethod
+    def validate_tag_lengths(cls, tags):
+        if any(len(tag.strip()) > 32 for tag in tags):
+            raise ValueError('每条相处偏好最多32个字')
+        return tags
+
+
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -166,6 +179,7 @@ class UserResponse(BaseModel):
     preferred_language: Literal["zh", "en", "mixed"] = "zh"
     tone_preference: Literal["gentle", "direct", "warm", "concise"] = "gentle"
     response_length: Literal["short", "medium", "long"] = "medium"
+    habit_profile: HabitProfile = Field(default_factory=HabitProfile)
     relationship_space_theme: Literal["classic", "stardust", "engine"] = "classic"
     spiritual_support_enabled: bool = False
     living_region: str = ""
@@ -203,6 +217,7 @@ class UserUpdateRequest(RequestModel):
     preferred_language: Literal["zh", "en", "mixed"] | None = None
     tone_preference: Literal["gentle", "direct", "warm", "concise"] | None = None
     response_length: Literal["short", "medium", "long"] | None = None
+    habit_profile: HabitProfile | None = None
     relationship_space_theme: Literal["classic", "stardust", "engine"] | None = None
     spiritual_support_enabled: bool | None = None
     living_region: str | None = Field(default=None, max_length=40)
@@ -229,7 +244,7 @@ class PasswordChangeRequest(RequestModel):
     new_password: str
 
 
-# ── 配对 ──
+# 配对
 
 
 class PairCreateRequest(RequestModel):
@@ -383,7 +398,7 @@ class UpdatePartnerNicknameRequest(RequestModel):
         return str(value or "").strip()
 
 
-# ── 打卡 ──
+# 打卡
 
 
 class ClientContextPayload(RequestModel):
@@ -449,7 +464,7 @@ class CheckinResponse(BaseModel):
         return to_client_upload_url(value)
 
 
-# ── 报告 ──
+# 报告
 
 
 class ReportResponse(BaseModel):
@@ -670,7 +685,7 @@ class PrivacyRetentionSweepResponse(BaseModel):
     manual_review: int | None = None
 
 
-# ── 关系任务 ──
+# 关系任务
 
 
 class TaskResponse(BaseModel):
@@ -712,22 +727,46 @@ class TaskUpdateRequest(RequestModel):
 
 
 class TaskFeedbackRequest(RequestModel):
-    usefulness_score: int = Field(ge=1, le=5)
-    friction_score: int = Field(ge=1, le=5)
-    relationship_shift_score: int = Field(ge=-2, le=2)
+    outcome: Literal["helped", "not_yet", "difficult", "uncertain"] | None = None
+    usefulness_score: int | None = Field(default=None, ge=1, le=5)
+    friction_score: int | None = Field(default=None, ge=1, le=5)
+    relationship_shift_score: int | None = Field(default=None, ge=-2, le=2)
     note: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def _require_feedback(self):
+        if self.outcome is None and not str(self.note or '').strip() and all(value is None for value in (
+            self.usefulness_score, self.friction_score, self.relationship_shift_score,
+        )):
+            raise ValueError("选一下实际感受，或补充一句")
+        return self
 
 
 class TaskFeedbackResponse(BaseModel):
     task_id: uuid.UUID
-    usefulness_score: int
-    friction_score: int
-    relationship_shift_score: int
+    outcome: Literal["helped", "not_yet", "difficult", "uncertain"] | None = None
+    usefulness_score: int | None = None
+    friction_score: int | None = None
+    relationship_shift_score: int | None = None
     note: str | None = None
     submitted_at: datetime
 
 
-# ── 依恋类型 ──
+class TaskResultRequest(RequestModel):
+    status: Literal["pending", "completed"]
+    feedback: TaskFeedbackRequest | None
+
+    @model_validator(mode="after")
+    def _consistent_result(self):
+        if self.feedback is not None:
+            if self.status == 'completed' and self.feedback.outcome == 'not_yet':
+                raise ValueError('已完成的安排不能选择还没做')
+            if self.status == 'pending' and self.feedback.outcome not in {'not_yet', 'difficult'}:
+                raise ValueError('未完成的安排先记录实际进展')
+        return self
+
+
+# 依恋类型
 
 
 class AttachmentStyleResponse(BaseModel):
@@ -738,7 +777,7 @@ class AttachmentStyleResponse(BaseModel):
     growth_suggestion: str | None = None
 
 
-# ── 危机预警 ──
+# 危机预警
 
 
 class InterventionSchema(BaseModel):
@@ -816,7 +855,7 @@ class CrisisEscalateRequest(RequestModel):
     reason: str | None = None
 
 
-# ── 关系智能（Insights） ──
+# 关系智能（Insights）
 
 
 class RelationshipProfileSnapshotResponse(BaseModel):
@@ -972,7 +1011,7 @@ class RelationshipTimelineEventDetailResponse(BaseModel):
 
 
 class MessageSimulationRequest(RequestModel):
-    draft: str
+    draft: str = Field(min_length=1, max_length=2000)
 
 
 class DecisionFeedbackRequest(RequestModel):
@@ -1055,7 +1094,7 @@ class RepairProtocolResponse(BaseModel):
     safety_handoff: str | None = None
 
 
-# ── 智能陪伴 (Agent) ──
+# 智能陪伴 (Agent)
 
 
 class InterventionScorecardResponse(BaseModel):
@@ -1583,6 +1622,20 @@ class AgentSessionResponse(BaseModel):
     reused: bool = False
 
 
+class AgentSessionListItemResponse(BaseModel):
+    session_id: uuid.UUID
+    pair_id: uuid.UUID | None = None
+    status: str
+    topic: str
+    last_message: str = ""
+    message_count: int = 0
+    has_extracted_checkin: bool = False
+    session_date: date
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime | None = None
+
+
 class AgentMessageResponse(BaseModel):
     id: uuid.UUID
     role: str
@@ -1605,10 +1658,19 @@ class VoiceEvidencePayload(RequestModel):
     transcript_language: AgentLabeledCodePayload | None = None
 
 
+class AgentSceneContext(RequestModel):
+    source_label: str = Field(default="当前记录", max_length=100)
+    summary: str = Field(default="", max_length=3200)
+    intent: Literal["auto", "listen", "wording", "plan", "reflect"] = "auto"
+
+
 class AgentChatRequest(RequestModel):
     content: str = ""
+    client_message_id: uuid.UUID | None = None
     surface: Literal["chat", "checkin_assist"] = "checkin_assist"
     voice_evidence: VoiceEvidencePayload | None = None
+    multi_agent: bool = False
+    scene_context: AgentSceneContext | None = None
 
     @model_validator(mode="after")
     def _validate_message_content(self):
@@ -1621,14 +1683,57 @@ class AgentChatRequest(RequestModel):
         raise ValueError("文字内容和语音转写至少填写一项")
 
 
+class AgentThoughtTraceResponse(BaseModel):
+    step_index: int
+    thought: str | None = None
+    tool_calls: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
+    duration_ms: float | None = None
+
+
 class AgentChatResponse(BaseModel):
     reply: str
     action: str
+    message_id: uuid.UUID | None = None
+    task_proposals: list[dict[str, Any]] = Field(default_factory=list)
+    trace: list[AgentThoughtTraceResponse] = []
+
+
+class AgentCheckupResponse(BaseModel):
+    """主动巡查 Agent 的产出：诊断报告 + 干预建议 + 采纳可执行的巡查动作。"""
+
+    report: str
+    health: int | None = Field(default=None, ge=0, le=100)
+    risk_level: str = "unknown"
+    risk_reason: str = ""
+    recommended_actions: list[str] = []
+    urgency: str = "monitor"
+    trace: list[AgentThoughtTraceResponse] = []
+    generated_at: datetime | None = None
 
 
 class AgentRealtimeTicketResponse(BaseModel):
     ticket: str
     expires_in: int
+
+
+class SwarmRoleStepResponse(BaseModel):
+    role: str
+    role_name: str
+    summary: str
+    status: str = "ok"
+    duration_ms: float | None = None
+
+
+class AgentSwarmResponse(BaseModel):
+    """多智能体协作产出：最终回复 + 每个角色的协作轨迹。"""
+
+    reply: str
+    action: str = "chat"
+    message_id: uuid.UUID | None = None
+    task_proposals: list[dict[str, Any]] = Field(default_factory=list)
+    swarm: list[SwarmRoleStepResponse] = []
+    trace: list[AgentThoughtTraceResponse] = []
 
 
 PairChangeRequestBundleResponse.model_rebuild()

@@ -862,27 +862,20 @@ h1, h2, h3, h4, h5, h6, strong {
   margin-bottom: 8px;
 }
 .page-enter-active {
-  transition: opacity 0.34s cubic-bezier(0.2, 0.75, 0.2, 1), transform 0.34s cubic-bezier(0.2, 0.75, 0.2, 1);
+  transition: opacity 0.18s ease;
 }
 
 .page-leave-active {
-  position: fixed;
-  top: var(--route-leave-top, 0px);
-  left: var(--route-leave-left, 0px);
-  z-index: 1;
-  width: var(--route-leave-width, 100%);
   pointer-events: none;
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transition: opacity 0.12s ease;
 }
 
 .page-enter-from {
   opacity: 0;
-  transform: translateY(14px);
 }
 
 .page-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -894,7 +887,6 @@ h1, h2, h3, h4, h5, h6, strong {
   .page-enter-from,
   .page-leave-to {
     opacity: 1;
-    transform: none;
   }
 }
 

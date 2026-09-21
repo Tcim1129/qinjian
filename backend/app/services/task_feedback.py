@@ -72,6 +72,15 @@ def _date_end(value: date) -> datetime:
     return datetime.combine(value + timedelta(days=1), time.min)
 
 
+def describe_task_feedback(payload: dict) -> str:
+    outcome = {'helped': '有帮助', 'not_yet': '还没做', 'difficult': '不太顺', 'uncertain': '还说不准'}.get(payload.get('outcome'), '')
+    parts = [str(payload.get('title') or '')[:100], outcome, str(payload.get('note') or '')[:200]]
+    for key, label in [('usefulness_score', '有用度'), ('friction_score', '费劲程度'), ('relationship_shift_score', '关系变化')]:
+        if payload.get(key) is not None:
+            parts.append(f'{label} {payload[key]}')
+    return '；'.join(part for part in parts if part)
+
+
 def summarize_feedback_map(feedback_map: dict[str, dict]) -> dict:
     feedbacks = list(feedback_map.values())
     if not feedbacks:
@@ -316,6 +325,7 @@ async def get_latest_task_feedback_map(
             "feedback_event_id": str(event.id),
             "submitted_by_user_id": str(event.user_id) if event.user_id else None,
             "submitted_at": event.occurred_at.isoformat() if event.occurred_at else None,
+            "outcome": payload.get("outcome"),
             "usefulness_score": payload.get("usefulness_score"),
             "friction_score": payload.get("friction_score"),
             "relationship_shift_score": payload.get("relationship_shift_score"),

@@ -2,7 +2,7 @@
   <div class="discover-page">
     <div class="page-head discover-head">
       <p class="eyebrow">总览</p>
-      <h2>今天常用的入口</h2>
+      <h2>全部功能</h2>
     </div>
 
     <section class="main-lines" aria-label="核心主线">
@@ -76,7 +76,7 @@ const primaryActions = [
   {
     to: '/report',
     label: '简报',
-    title: '看本期重点',
+    title: '回顾近况',
     icon: LineChart,
     iconShellClass: 'growth-card__icon-shell--mint',
     className: 'growth-card--mint',
@@ -84,8 +84,8 @@ const primaryActions = [
   },
   {
     to: '/timeline',
-    label: '时间轴',
-    title: '回看与导出',
+    label: '关系日历',
+    title: '回看往事',
     icon: Clock,
     iconShellClass: 'growth-card__icon-shell--gold',
     className: 'growth-card--gold',
@@ -96,24 +96,24 @@ const primaryActions = [
 const featuredCards = [
   {
     to: '/community',
-    label: '交流',
-    title: '关系技巧',
+    label: '交流社区',
+    title: '看看大家怎么说',
     icon: MessageSquare,
     iconShellClass: 'growth-card__icon-shell--peach',
     className: 'growth-card--peach',
   },
   {
     to: '/alignment',
-    label: '理解',
-    title: '双视角',
+    label: '双视角',
+    title: '听听彼此的想法',
     icon: Users,
     iconShellClass: 'growth-card__icon-shell--sky',
     className: 'growth-card--sky',
   },
   {
     to: '/pair',
-    label: '关系',
-    title: '我的关系',
+    label: '我的关系',
+    title: '管理关系',
     icon: UserRoundCheck,
     iconShellClass: 'growth-card__icon-shell--mint',
     className: 'growth-card--mint',
@@ -128,64 +128,64 @@ const mainLineActions = [
 const secondaryCards = [
   {
     to: '/health-test',
-    label: '状态',
-    title: '关系体检',
+    label: '关系体检',
+    title: '看看相处状态',
     icon: HeartPulse,
     iconShellClass: 'growth-card__icon-shell--rose',
     className: 'growth-card--rose',
   },
   {
     to: '/attachment-test',
-    label: '理解',
-    title: '依恋类型',
+    label: '依恋测评',
+    title: '了解相处习惯',
     icon: Link2,
     iconShellClass: 'growth-card__icon-shell--sky',
     className: 'growth-card--sky',
   },
   {
     to: '/longdistance',
-    label: '陪伴',
-    title: '异地关系',
+    label: '异地陪伴',
+    title: '远一点，也陪伴',
     icon: MapPinned,
     iconShellClass: 'growth-card__icon-shell--mint',
     className: 'growth-card--mint',
   },
   {
     to: '/challenges',
-    label: '安排',
-    title: '今日安排',
+    label: '每日安排',
+    title: '一起做件小事',
     icon: SquareCheck,
     iconShellClass: 'growth-card__icon-shell--peach',
     className: 'growth-card--peach',
   },
   {
     to: '/courses',
-    label: '课程',
-    title: '沟通课程',
+    label: '沟通课程',
+    title: '学着好好说话',
     icon: BookOpen,
     iconShellClass: 'growth-card__icon-shell--iris',
     className: 'growth-card--iris',
   },
   {
     to: '/experts',
-    label: '一对一',
-    title: '咨询梳理',
+    label: '咨询',
+    title: '了解咨询',
     icon: CircleUserRound,
     iconShellClass: 'growth-card__icon-shell--violet',
     className: 'growth-card--violet',
   },
   {
     to: '/membership',
-    label: '权益',
-    title: '会员方案',
+    label: '会员',
+    title: '查看权益',
     icon: Star,
     iconShellClass: 'growth-card__icon-shell--gold',
     className: 'growth-card--gold',
   },
   {
     to: '/message-simulation',
-    label: '预演',
-    title: '发前先过一遍',
+    label: '发前看看',
+    title: '换个说法试试',
     icon: SendHorizontal,
     iconShellClass: 'growth-card__icon-shell--peach',
     className: 'growth-card--peach',
@@ -388,8 +388,9 @@ const secondaryCards = [
   color: #d06a89;
 }
 
+.growth-card--sky .discover-entry__body span,
 .growth-card--sky .growth-card__body span {
-  color: #5d89d8;
+  color: #436eae;
 }
 
 .growth-card--iris .growth-card__body span {

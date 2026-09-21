@@ -1,5 +1,6 @@
 """Adaptive daily-task shaping based on intervention momentum."""
 
+import random
 import re
 import uuid
 
@@ -61,7 +62,7 @@ def _anchor_task_for_plan(plan_type: str | None, intensity: str) -> dict | None:
                 "category": "repair",
             },
             "steady": {
-                "title": "只对齐一个分歧点",
+                "title": "先谈一处分歧",
                 "description": "选一个最核心的误会来讲，先说感受，再说需求，不顺手带出第二件事。",
                 "target": "both",
                 "category": "repair",
@@ -135,7 +136,7 @@ SYSTEM_TASK_PACKS = {
             ),
             _task(
                 title="记下一句有用的话",
-                description="做完后写一句，留住今天最容易被听进去的表达。",
+                description="做完后记一下，这次怎么说的、对方怎样回应。",
                 category="reflection",
             ),
         ],
@@ -168,7 +169,7 @@ SYSTEM_TASK_PACKS = {
                 category="communication",
             ),
             _task(
-                title="留住今天有效的一步",
+                title="记下今天有帮助的做法",
                 description="写一句今天最值得保留的动作，明天还能继续沿用。",
                 category="reflection",
             ),
@@ -199,12 +200,12 @@ SYSTEM_TASK_PACKS = {
                 category="connection",
             ),
             _task(
-                title="对齐一个小误会",
+                title="说清一个小误会",
                 description="只挑一件最容易误会的小事，先讲版本，不翻旧账。",
                 category="communication",
             ),
             _task(
-                title="留住一个可继续的小动作",
+                title="选一件可以继续做的事",
                 description="写一句下次还愿意继续做的小动作，保持节奏就够了。",
                 category="reflection",
             ),
@@ -411,36 +412,119 @@ def build_simple_daily_tasks(strategy: dict) -> list[dict]:
     return [dict(task) for task in tasks[:3]]
 
 
-def build_daily_task_note(strategy: dict) -> str:
-    plan_type = str(strategy.get("plan_type") or "").strip().lower()
+MAX_DAILY_NOTE_LENGTH = 28
+
+
+def clamp_daily_note_length(note: str, max_chars: int = MAX_DAILY_NOTE_LENGTH) -> str:
+    cleaned = str(note or "").strip()
+    if not cleaned:
+        return "今天先选一件有空做的事。"
+    if len(cleaned) <= max_chars:
+        return cleaned
+    truncated = cleaned[:max_chars - 1].rstrip("，,、；;。.~ ") + "~"
+    return truncated
+
+
+DAILY_NOTE_POOLS: dict[tuple[str, str], list[str]] = {
+    ('conflict_repair_plan', 'light'): [
+        '今天少安排一些，先处理最重要的事。',
+        '如果累了，可以另找时间再聊。',
+        '先问对方愿不愿意继续聊。',
+        '今天不必把所有分歧都解决。',
+    ],
+    ('conflict_repair_plan', 'stretch'): [
+        '选一件双方都同意的事，试着做一次。',
+        '等双方愿意继续时，再把事情说清楚。',
+        '说清你希望对方下次怎么做。',
+        '先听完对方，再说自己的看法。',
+    ],
+    ('conflict_repair_plan', 'steady'): [
+        '一次只讨论一个问题。',
+        '先聊这次的事，不把以前的分歧都带进来。',
+        '如果越说越急，可以先暂停。',
+        '听不明白时，问清楚再回应。',
+    ],
+    ('low_connection_recovery', 'light'): [
+        '今天先把联系接回来，不用一次聊很多。',
+        '有空可以问问对方最近怎么样。',
+        '先问对方什么时候方便。',
+        '不想长聊，打个招呼也可以。',
+    ],
+    ('low_connection_recovery', 'stretch'): [
+        '有空的话，可以聊聊最近发生的事。',
+        '分享一件今天遇到的事。',
+        '也问问对方最近在忙什么。',
+        '双方都有空时，可以打个电话。',
+    ],
+    ('low_connection_recovery', 'steady'): [
+        '按约好的时间联系，有事提前说一声。',
+        '可以从最近的近况聊起。',
+        '想聊什么就说，不用硬找话题。',
+        '今天没空，可以再约时间。',
+    ],
+    ('distance_compensation_plan', 'light'): [
+        '今天少安排一些，先确认双方的时间。',
+        '发消息前先看看对方方不方便。',
+        '想分享的话，可以拍张晚饭的照片。',
+        '各自忙完后，有空再联系。',
+    ],
+    ('distance_compensation_plan', 'stretch'): [
+        '可以一起商量下次见面的安排。',
+        '想一起看电影的话，先约个时间。',
+        '睡前有空，可以打个电话。',
+        '问问对方下次见面想做什么。',
+    ],
+    ('distance_compensation_plan', 'steady'): [
+        '先按约好的时间联系。',
+        '可以分享一下今天遇到的事。',
+        '有话想说可以先留言，不必等着回复。',
+        '不能按时联系，提前告诉对方。',
+    ],
+    ('default', 'light'): [
+        '今天先选一件有空做的事。',
+        '今天少安排一些，不必每件都做。',
+        '做不完的可以调整时间。',
+        '先做现在方便做的那一件。',
+    ],
+    ('default', 'stretch'): [
+        '有余力的话，可以再选一件事。',
+        '想表达感谢的话，可以直接告诉对方。',
+        '先完成今天最重要的安排。',
+        '增加安排前，先确认对方有没有空。',
+    ],
+    ('default', 'steady'): [
+        '按今天的安排来，有变化再调整。',
+        '先确认双方的时间。',
+        '累了就休息，不必勉强完成。',
+        '做完后记一下有没有帮助。',
+    ],
+}
+
+
+def build_daily_task_note(
+    strategy: dict,
+    *,
+    randomize: bool = False,
+    choice_index: int | None = None,
+) -> str:
+    plan_type = str(strategy.get("plan_type") or "default").strip().lower()
     intensity = str(strategy.get("intensity") or "steady").strip().lower()
 
-    if plan_type == "conflict_repair_plan":
-        if intensity == "light":
-            return "今天先做轻一点的三步，先把局面慢下来。"
-        if intensity == "stretch":
-            return "今天先稳住，再把一个修复动作真正落地。"
-        return "今天就按这三步来，先把一个分歧点说清楚。"
+    key = (plan_type, intensity)
+    pool = (
+        DAILY_NOTE_POOLS.get(key)
+        or DAILY_NOTE_POOLS.get(("default", intensity))
+        or DAILY_NOTE_POOLS[("default", "steady")]
+    )
 
-    if plan_type == "low_connection_recovery":
-        if intensity == "light":
-            return "今天先把联系接回来，不用一次聊很多。"
-        if intensity == "stretch":
-            return "今天可以在稳住联系的基础上，再多说深一点。"
-        return "今天先把节奏接上，再慢慢把话说开。"
+    if choice_index is not None:
+        note = pool[choice_index % len(pool)]
+    elif randomize:
+        note = random.choice(pool)
+    else:
+        note = pool[0]
 
-    if plan_type == "distance_compensation_plan":
-        if intensity == "light":
-            return "今天先保住陪伴感，不用把安排做得太满。"
-        if intensity == "stretch":
-            return "今天先把陪伴做实，再顺手留一点期待。"
-        return "今天就按这三步来，先把远程连接做稳。"
-
-    if intensity == "light":
-        return "今天先做轻一点的三步，完成就已经很好了。"
-    if intensity == "stretch":
-        return "今天可以在稳住节奏的基础上，多走半步。"
-    return "今天就做这三步，慢慢来就好。"
+    return clamp_daily_note_length(note)
 
 
 def build_daily_pack_label(strategy: dict) -> str:
@@ -466,7 +550,7 @@ def _with_copy_preference(strategy: dict, profile: dict | None) -> dict:
         copy_mode=updated.get("copy_mode"),
     )
     updated["clinical_disclaimer"] = (
-        "任务引擎当前基于行为科学与反馈闭环做强度调整，不等于正式治疗方案，重点是提升真实执行和关系修复概率。"
+        "系统参考行为科学和使用反馈调整任务难度，帮助用户尝试改善相处方式。这些安排不属于治疗方案。"
     )
     return updated
 

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.v1.insights_routes import timeline as timeline_api
 from app.core.database import Base
-from app.models import Checkin, Pair, PairStatus, PairType, Report, ReportStatus, ReportType, User
+from app.models import Checkin, Pair, PairStatus, PairType, RelationshipEvent, Report, ReportStatus, ReportType, User
 from app.services.privacy_retention import run_privacy_retention_sweep
 from app.services.timeline_archive import ensure_checkin_archive_fields
 
@@ -55,6 +55,7 @@ async def test_archive_route_mixes_owner_record_partner_placeholder_and_report(
     partner_id = uuid.uuid4()
     pair_id = uuid.uuid4()
     record_id = uuid.uuid4()
+    active_archive_date = timeline_api.date.today()
 
     (upload_root / "images" / "owner.png").write_bytes(b"image-bytes")
     (upload_root / "voices" / "owner.mp3").write_bytes(b"voice-bytes")
@@ -109,7 +110,7 @@ async def test_archive_route_mixes_owner_record_partner_placeholder_and_report(
                     },
                 },
             },
-            checkin_date=timeline_api.date(2026, 4, 21),
+            checkin_date=active_archive_date,
         )
         ensure_checkin_archive_fields(owner_checkin)
 
@@ -120,7 +121,7 @@ async def test_archive_route_mixes_owner_record_partner_placeholder_and_report(
             content="我今天其实也想继续把误会说开。",
             mood_tags={"tags": ["期待"]},
             client_context={"intent": "daily", "risk_level": "none", "source_type": "text", "upload_policy": "full"},
-            checkin_date=timeline_api.date(2026, 4, 21),
+            checkin_date=active_archive_date,
         )
         ensure_checkin_archive_fields(partner_checkin)
 
@@ -129,7 +130,7 @@ async def test_archive_route_mixes_owner_record_partner_placeholder_and_report(
             pair_id=pair_id,
             type=ReportType.DAILY,
             status=ReportStatus.COMPLETED,
-            report_date=timeline_api.date(2026, 4, 21),
+            report_date=active_archive_date,
             content={
                 "insight": "这一天更像在从防御走回修复。",
                 "recommendations": ["先确认彼此都没有想退出", "只对齐一个误会点"],
@@ -182,7 +183,7 @@ async def test_archive_route_mixes_owner_record_partner_placeholder_and_report(
 
 
 @pytest.mark.anyio
-async def test_archive_item_export_route_is_gone(archive_db_factory):
+async def test_archive_item_export_returns_owner_safe_json_and_denies_partner_raw_export(archive_db_factory):
     db_factory, _ = archive_db_factory
     owner_id = uuid.uuid4()
     partner_id = uuid.uuid4()
@@ -216,19 +217,30 @@ async def test_archive_item_export_route_is_gone(archive_db_factory):
         async with db_factory() as session:
             yield session
 
+    current_user = {"id": owner_id}
+
     async def override_current_user():
-        return SimpleNamespace(id=partner_id)
+        return SimpleNamespace(id=current_user["id"])
 
     app = _make_local_app(override_get_db, override_current_user)
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.get(f"/timeline/archive/items/{record_id}/export?pair_id={pair_id}")
+        owner_response = client.get(f"/timeline/archive/items/{record_id}/export?pair_id={pair_id}")
+        current_user["id"] = partner_id
+        partner_response = client.get(f"/timeline/archive/items/{record_id}/export?pair_id={pair_id}")
 
-    assert response.status_code == 410, response.text
-    assert response.json()["detail"] == "归档导出已下线，当前仅支持在线查看长期保留的分析结果。"
+    assert owner_response.status_code == 200, owner_response.text
+    assert "attachment" in owner_response.headers.get("content-disposition", "")
+    owner_payload = owner_response.json()
+    assert owner_payload["id"] == str(record_id)
+    assert owner_payload["record"]["content"] == "这条记录只应该被记录者导出。"
+    assert not any(str(key).startswith("__") for key in owner_payload)
+
+    assert partner_response.status_code == 403, partner_response.text
+    assert "原文" not in partner_response.text
 
 
 @pytest.mark.anyio
-async def test_archive_export_route_is_gone(archive_db_factory):
+async def test_archive_export_returns_safe_json_without_server_paths(archive_db_factory):
     db_factory, upload_root = archive_db_factory
     owner_id = uuid.uuid4()
     record_id = uuid.uuid4()
@@ -267,8 +279,16 @@ async def test_archive_export_route_is_gone(archive_db_factory):
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/timeline/archive/export?mode=solo&item_filter=mine")
 
-    assert response.status_code == 410, response.text
-    assert response.json()["detail"] == "归档导出已下线，当前仅支持在线查看长期保留的分析结果。"
+    assert response.status_code == 200, response.text
+    assert "attachment" in response.headers.get("content-disposition", "")
+    payload = response.json()
+    assert payload["scope"] == "solo"
+    assert payload["item_count"] == 1
+    assert payload["items"][0]["record"]["content"] == "这条记录需要被导出。"
+    serialized = response.text
+    assert "__image_upload_path" not in serialized
+    assert "__voice_upload_path" not in serialized
+    assert str(upload_root) not in serialized
 
 
 @pytest.mark.anyio
@@ -384,3 +404,93 @@ async def test_archive_pagination_keeps_items_with_same_timestamp(
     first_ids = [item["id"] for item in first_payload["items"]]
     second_ids = [item["id"] for item in second_payload["items"]]
     assert len(set([*first_ids, *second_ids])) == 7
+
+
+@pytest.mark.anyio
+async def test_timeline_event_detail_locks_partner_checkin_raw_content(
+    archive_db_factory,
+):
+    db_factory, _upload_root = archive_db_factory
+    owner_id = uuid.uuid4()
+    partner_id = uuid.uuid4()
+    pair_id = uuid.uuid4()
+    checkin_id = uuid.uuid4()
+    event_id = uuid.uuid4()
+
+    secret_content = "只有我自己知道的秘密心事，绝不能原样出现在对方的时间轴详情里。"
+
+    async with db_factory() as db:
+        owner = User(
+            id=owner_id,
+            email="owner5@example.com",
+            nickname="owner",
+            password_hash="hash",
+        )
+        partner = User(
+            id=partner_id,
+            email="partner5@example.com",
+            nickname="partner",
+            password_hash="hash",
+        )
+        pair = Pair(
+            id=pair_id,
+            user_a_id=owner_id,
+            user_b_id=partner_id,
+            type=PairType.COUPLE,
+            status=PairStatus.ACTIVE,
+            invite_code="D6M2N4P8Q1",
+        )
+        checkin = Checkin(
+            id=checkin_id,
+            pair_id=pair_id,
+            user_id=partner_id,
+            content=secret_content,
+            mood_tags={"tags": ["委屈"]},
+            mood_score=2,
+            interaction_freq=3,
+            checkin_date=timeline_api.date.today(),
+        )
+        event = RelationshipEvent(
+            id=event_id,
+            pair_id=pair_id,
+            user_id=partner_id,
+            event_type="checkin.created",
+            entity_type="checkin",
+            entity_id=str(checkin_id),
+            payload={
+                "mode": "pair",
+                "mood_score": 2,
+                "text_preview": secret_content[:20],
+                "client_context": {"intent": "daily"},
+            },
+        )
+        db.add_all([owner, partner, pair, checkin, event])
+        await db.commit()
+
+    async def override_get_db():
+        async with db_factory() as session:
+            yield session
+
+    current_user = {"id": owner_id}
+
+    async def override_current_user():
+        return SimpleNamespace(id=current_user["id"])
+
+    app = _make_local_app(override_get_db, override_current_user)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        owner_response = client.get(f"/timeline/events/{event_id}")
+        current_user["id"] = partner_id
+        partner_response = client.get(f"/timeline/events/{event_id}")
+
+    assert owner_response.status_code == 200, owner_response.text
+    owner_detail = owner_response.json()
+    assert secret_content not in owner_response.text
+    cards = owner_detail.get("evidence_cards") or []
+    assert any("仅记录者本人可见" in str(card.get("body", "")) for card in cards)
+    assert not any(str(card.get("body", "")) == secret_content for card in cards)
+    event_payload = (owner_detail.get("event") or {}).get("payload") or {}
+    assert "text_preview" not in event_payload
+    assert "client_context" not in event_payload
+
+    assert partner_response.status_code == 200, partner_response.text
+    assert secret_content in partner_response.text

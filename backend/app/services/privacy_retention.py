@@ -117,6 +117,7 @@ async def _purge_user_private_data(
     user_id: uuid.UUID,
 ) -> dict[str, int]:
     counts = {
+        "saved_expressions": 0,
         "solo_checkins": 0,
         "solo_reports": 0,
         "notifications": 0,
@@ -132,6 +133,11 @@ async def _purge_user_private_data(
 
     for upload_path in await _collect_private_uploads(db, user_id):
         counts["local_uploads_removed"] += int(_safe_remove_local_upload(upload_path))
+
+    # A relationship-scoped expression is still private to its author.
+    from app.models import SavedExpression
+    expression_delete = await db.execute(delete(SavedExpression).where(SavedExpression.user_id == user_id))
+    counts["saved_expressions"] = int(expression_delete.rowcount or 0)
 
     session_ids_result = await db.execute(
         select(AgentChatSession.id).where(

@@ -21,7 +21,7 @@ SCHEDULE_LABELS = {
     "finish_current_then_switch": "当前周期结束后切换",
     "switch_now": "现在就切到下一版",
     "graduate_current_policy": "当前版本通过，可进入下一层",
-    "backoff_now": "先回退到低摩擦版本",
+    "backoff_now": "先换成更容易完成的安排",
 }
 
 PHASE_LABELS = {
@@ -292,7 +292,7 @@ def _measurement_plan(scorecard: dict, experiment: dict) -> list[dict]:
                 f"摩擦 {_format_score(_float(scorecard.get('friction_avg')))}"
             ),
             "target": "有用度 >= 4.0/5，摩擦 <= 3.0/5",
-            "why": "对这对人来说，低摩擦且主观有用，才值得继续保留。",
+            "why": "双方觉得有帮助、做起来也不吃力的安排，可以继续保留。",
         },
         {
             "id": "risk_shift",
@@ -334,7 +334,7 @@ def _backoff_when() -> list[str]:
     return [
         "风险重新升到中高位，或者冲突/低连接在继续恶化。",
         "主观摩擦明显上升，已经开始拖慢执行。",
-        "连续出现负向信号时，先回退到低摩擦版本而不是硬推。",
+        "如果连续收到不好的反馈，就先降低任务难度，不要勉强继续。",
     ]
 
 

@@ -39,7 +39,7 @@ test('active current relationship stays honest when there is no real metric yet'
   assert.equal(summary.scoreLabel, '已建立')
   assert.match(summary.trendLabel, /真实记录|已建立/)
   assert.match(summary.summary, /真实记录|已建立/)
-  assert.match(summary.nextAction, /记录|专属关系页|时间轴/)
+  assert.match(summary.nextAction, /记录|专属关系页|时间轴|关系日历/)
   assert.equal(summary.inviteMode, 'active')
 })
 

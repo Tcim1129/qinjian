@@ -92,9 +92,9 @@ def redact_sensitive_text(text: str) -> str:
     redacted = UUID_PATTERN.sub("[UUID]", redacted)
     redacted = JWT_PATTERN.sub("[TOKEN]", redacted)
     redacted = LONG_NUMBER_PATTERN.sub("[LONG_NUMBER]", redacted)
-    redacted = CONFIDENTIAL_TOKEN_PATTERN.sub("[CONFIDENTIAL_TOKEN]", redacted)
     redacted = SECRET_LABEL_PATTERN.sub(lambda match: f"{match.group(1)} [SENSITIVE]", redacted)
     redacted = BUSINESS_LABEL_PATTERN.sub(lambda match: f"{match.group(1)} [SENSITIVE]", redacted)
+    redacted = CONFIDENTIAL_TOKEN_PATTERN.sub("[CONFIDENTIAL_TOKEN]", redacted)
     for pattern in EXTRA_SENSITIVE_PATTERNS:
         redacted = pattern.sub("[CONFIDENTIAL_TERM]", redacted)
     return redacted

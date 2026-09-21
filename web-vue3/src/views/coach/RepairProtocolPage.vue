@@ -3,10 +3,11 @@
     <div class="page-head coach-head">
       <div>
         <p class="eyebrow">缓和建议</p>
-        <h2>先让局面慢下来，再决定怎么说</h2>
+        <h2>吵架之后怎么办</h2>
       </div>
       <div class="coach-head__actions">
         <button class="btn btn-ghost btn-sm" :disabled="loading" @click="handleLoadProtocol">{{ refreshButtonLabel }}</button>
+        <button class="btn btn-secondary btn-sm" :disabled="!protocol" @click="openGeneralAgent">和 AI 商量怎么做</button>
         <button class="btn btn-primary btn-sm" @click="$router.push('/alignment')">{{ alignmentButtonLabel }}</button>
       </div>
     </div>
@@ -27,6 +28,7 @@
         <p class="eyebrow">第 {{ step.sequence }} 步</p>
         <h3>{{ step.title }}</h3>
         <p>{{ step.action }}</p>
+        <button class="step-ask-btn" type="button" @click="openStepAgent(step)">问问具体怎么做 ↗</button>
       </article>
     </section>
 
@@ -38,7 +40,7 @@
         </ul>
       </article>
       <article class="card">
-        <p class="eyebrow">关系开始变稳的信号</p>
+        <p class="eyebrow">看看有没有改善</p>
         <h3>{{ protocol.success_signal }}</h3>
         <p>{{ protocol.escalation_rule }}</p>
       </article>
@@ -46,14 +48,15 @@
 
     <section v-if="protocol" class="coach-lists coach-lists--single">
       <article class="card card-accent coach-card--warning">
-        <p class="eyebrow">先照顾自己的边界</p>
+        <p class="eyebrow">注意事项</p>
         <p>{{ protocol.safety_handoff || protocol.clinical_disclaimer }}</p>
       </article>
     </section>
 
     <div v-else class="report-empty">
-       <strong>{{ loading ? '正在整理缓和步骤…' : '还没有可用的缓和建议' }}</strong>
+       <strong>{{ loading ? '正在悄悄准备温柔台阶…' : '目前气氛挺好的，还没有需要急救的降温建议哦~' }}</strong>
     </div>
+    <ContextAgentDialog v-if="agentContext" :context="agentContext" @close="agentContext = null" />
   </div>
 </template>
 
@@ -62,6 +65,7 @@ import { computed, inject, onMounted, ref } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
+import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
 import { riskLevelLabel } from '@/utils/displayText'
 import { resolveExperienceMode } from '@/utils/experienceMode'
 import { createRefreshAttemptGuard } from '@/utils/refreshGuards'
@@ -70,6 +74,7 @@ const userStore = useUserStore()
 const showToast = inject('showToast', () => {})
 const protocol = ref(null)
 const loading = ref(false)
+const agentContext = ref(null)
 const protocolRefreshGuard = createRefreshAttemptGuard({ maxAttempts: 2, windowMs: 60 * 1000 })
 
 const experienceMode = computed(() =>
@@ -118,6 +123,30 @@ function handleLoadProtocol() {
   }
   protocolRefreshGuard.markRun()
   return loadProtocol()
+}
+
+function openGeneralAgent() {
+  if (!protocol.value) return
+  agentContext.value = {
+    title: '商量缓和方案',
+    sourceLabel: `${protocol.value.title || '缓和建议'}${experienceMode.value.isDemoMode ? ' · 样例' : ''}`,
+    summary: `当前缓和方案：${protocol.value.title}\n核心建议：${protocol.value.summary}\n今天先别做：${(protocol.value.do_not || []).join('；')}`,
+    question: '看着这些缓和步骤，你觉得哪一步最难迈出去？或者需要我帮你起草一句破冰的话吗？~',
+    pairId: experienceMode.value.activePairId,
+    intent: 'plan',
+  }
+}
+
+function openStepAgent(step) {
+  if (!step) return
+  agentContext.value = {
+    title: `针对第 ${step.sequence} 步出主意`,
+    sourceLabel: `第 ${step.sequence} 步：${step.title}${experienceMode.value.isDemoMode ? ' · 样例' : ''}`,
+    summary: `步骤目标：${step.title}\n建议动作：${step.action}`,
+    question: `关于“${step.title}”，你想要具体的话术模板，还是担心对方会有什么反应？尽管和我说说看~`,
+    pairId: experienceMode.value.activePairId,
+    intent: 'wording',
+  }
 }
 </script>
 
@@ -250,5 +279,20 @@ function handleLoadProtocol() {
   .coach-page {
     width: min(100% - 20px, var(--content-max));
   }
+}
+
+.step-ask-btn {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--seal-deep);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-block;
+  text-align: left;
+}
+.step-ask-btn:hover {
+  text-decoration: underline;
 }
 </style>

@@ -55,3 +55,22 @@ credentials/
 output/
 tmp/
 tmp_playwright/
+.playwright-cli/
+.playwright-mcp/
+outputs/
+backend/.venv*
+backend/.test-dbs/
+backend/.pytest-tmp-*/
+backend/.codex-test-logs/
+
+# AI/可视化回归产物（截图、回滚备份）
+artifacts/
+!artifacts/auth-warm-palette.png
+qinjian-ui-preview/
+*.patch
+*.tar.gz
+
+# 打包/分享产物
+*.zip
+*.mp4
+*.docx

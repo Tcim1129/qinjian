@@ -1,4 +1,4 @@
-"""打卡系统接口（Phase 3 增强：支持非对称打卡 + 个人情感日记）"""
+"""打卡接口：支持双方非对称打卡与个人情感日记。"""
 
 import logging
 import uuid
@@ -740,7 +740,7 @@ async def get_checkin_streak(
     return {"streak": streak, "total_checkins": len(dates)}
 
 
-# ── 后台任务 ──
+# 后台任务
 
 
 async def _run_sentiment_analysis(

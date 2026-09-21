@@ -13,13 +13,16 @@ from app.services.relationship_algorithms import build_message_preview_baseline
 SIMULATION_TIMEOUT_SECONDS = 55
 
 
-SIMULATION_SYSTEM_PROMPT = compose_relationship_system_prompt("""你是亲密关系沟通教练。你的任务不是判断谁对谁错，而是帮助用户在发消息前，预演对方可能的感受、识别误读风险，并给出更安全但不失真诚的表达改写。
-
-请结合提供的关系画像、风险状态和当前草稿，输出一个务实、克制、可执行的判断。不要用治疗式大段安慰，也不要夸张吓人。严格输出 JSON。"""
+SIMULATION_SYSTEM_PROMPT = compose_relationship_system_prompt("""你负责亲健的“发前看看”功能，帮助用户检查准备发出的消息，并提供可供选择的改写。
+保留原话中的事实、感受、请求和明确边界，使用日常说话的语气。不要替用户示弱、撒娇或讨好，也不要把所有不满解释成缺少安全感。
+只根据提供的记录作判断。不能编造对方很忙、很辛苦等背景，也不能断言对方的想法或保证改写后会得到回应。
+指出具体措辞可能造成的误解，并说明这只是可能性。原话已经清楚、合适时，可以保留原意，不必强行改写。
+遵守结构化判断给出的风险边界，遇到威胁、控制或伤害风险时，不用委婉措辞掩盖问题。
+严格按指定字段输出 JSON。"""
 )
 
 
-SIMULATION_PROMPT = """请根据以下关系上下文和结构化判断，预演这条消息可能带来的影响。
+SIMULATION_PROMPT = """请检查下面这条待发送消息，说明可能的误解，并给出自然、清楚的表达建议。
 
 【关系上下文】
 {context_json}
@@ -27,32 +30,38 @@ SIMULATION_PROMPT = """请根据以下关系上下文和结构化判断，预演
 【用户准备发出的原话】
 {draft}
 
-【结构化判断（请以此为边界，不要把低风险写成高风险，也不要把高风险轻描淡写）】
+【结构化判断（以此为边界，不夸大低风险，也不淡化高风险）】
 {evidence_json}
 
-请输出 JSON（不要包含其他文字）：
+请输出 JSON，不要包含其他文字：
 {{
-  "partner_view": "对方最可能的第一感受或理解（40字内）",
-  "likely_impact": "这条话发出去后，互动最可能出现的走向（50字内）",
+  "partner_view": "对方可能怎样理解这句话；信息不足时说明无法判断（40字内）",
+  "likely_impact": "这句话可能怎样影响接下来的交流，不预测必然结果（50字内）",
   "risk_level": "low/medium/high",
-  "risk_reason": "为什么存在这个风险（50字内）",
-  "safer_rewrite": "在保留用户真实意思前提下，更稳、更容易听进去的改写版本（120字内）",
-  "suggested_tone": "建议采用的语气，如温和/直接但不指责/先确认再表达需求",
-  "conversation_goal": "这条消息真正更适合达成的目标（30字内）",
-  "do_list": ["建议做法1", "建议做法2"],
-  "avoid_list": ["避免做法1", "避免做法2"]
+  "risk_reason": "结合原话中的具体措辞解释风险（50字内）",
+  "safer_rewrite": "保留事实、感受、请求和边界，用用户平时说话的方式改写，不添加未经提供的背景（120字内）",
+  "suggested_tone": "适合这次交流的语气，例如平静、直接、友好",
+  "conversation_goal": "根据原话可以确认的交流目的（30字内）",
+  "do_list": ["一条具体的表达建议", "另一条具体的表达建议"],
+  "avoid_list": ["一种需要避免的表达方式", "另一种需要避免的表达方式"]
 }}"""
 
 
-def _parse_json(text: str, fallback: dict) -> dict:
+class MessageSimulationUnavailableError(RuntimeError):
+    """No usable model result. Never replace it with a canned expression."""
+
+
+def _parse_json(text: str) -> dict:
     try:
         cleaned = text.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0]
-        return json.loads(cleaned)
-    except (json.JSONDecodeError, IndexError):
-        fallback["raw_response"] = text
-        return fallback
+        parsed = json.loads(cleaned)
+        if not isinstance(parsed, dict):
+            raise ValueError()
+        return parsed
+    except (ValueError, IndexError, AttributeError, TypeError) as exc:
+        raise MessageSimulationUnavailableError("这次没能整理出完整建议，请重试。") from exc
 
 
 def _clean_string(value: object, limit: int) -> str | None:
@@ -84,8 +93,9 @@ def _merge_risk_level(ai_value: object, baseline_value: str) -> str:
     return ai_level if {"low": 1, "medium": 2, "high": 3, "severe": 4}[ai_level] >= {"low": 1, "medium": 2, "high": 3}[baseline_value] else baseline_value
 
 
-def _merge_preview_payload(candidate: dict, fallback: dict, draft: str) -> dict:
-    merged = dict(fallback)
+def _merge_preview_payload(candidate: dict, baseline: dict, draft: str) -> dict:
+    # Rules supply risk/evidence metadata, not replacement model prose.
+    merged = dict(baseline)
     for field, limit in (
         ("partner_view", 40),
         ("likely_impact", 50),
@@ -95,33 +105,25 @@ def _merge_preview_payload(candidate: dict, fallback: dict, draft: str) -> dict:
         ("conversation_goal", 30),
     ):
         value = _clean_string(candidate.get(field), limit)
-        if value:
-            merged[field] = value
+        if not value:
+            raise MessageSimulationUnavailableError("这次没能整理出完整建议，请重试。")
+        merged[field] = value
 
     for field in ("do_list", "avoid_list"):
-        values = _clean_list(candidate.get(field))
-        if values:
-            merged[field] = values
+        if not isinstance(candidate.get(field), list):
+            raise MessageSimulationUnavailableError("这次没能整理出完整建议，请重试。")
+        merged[field] = _clean_list(candidate[field])
 
+    if candidate.get("risk_level") not in {"low", "medium", "high", "severe"}:
+        raise MessageSimulationUnavailableError("这次没能整理出完整建议，请重试。")
     merged["risk_level"] = _merge_risk_level(
         candidate.get("risk_level"),
-        str(fallback.get("risk_level") or "medium"),
+        str(baseline.get("risk_level") or "medium"),
     )
-    for field in (
-        "algorithm_version",
-        "confidence",
-        "decision_trace",
-        "focus_labels",
-        "risk_score",
-        "baseline_delta",
-        "fallback_reason",
-        "shadow_result",
-        "feedback_status",
-    ):
-        if candidate.get(field) is not None:
-            merged[field] = candidate.get(field)
-    if str(merged.get("safer_rewrite") or "").strip() == draft.strip():
-        merged["safer_rewrite"] = fallback["safer_rewrite"]
+    if merged["risk_level"] != candidate["risk_level"]:
+        merged["risk_reason"] = baseline["risk_reason"]
+    merged["fallback_reason"] = None
+    merged["shadow_result"] = None
     merged.pop("raw_error", None)
     merged.pop("raw_response", None)
     return merged
@@ -145,22 +147,11 @@ async def simulate_message_preview(draft: str, context: dict) -> dict:
             chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.4),
             timeout=SIMULATION_TIMEOUT_SECONDS,
         )
-        parsed = _parse_json(result, fallback)
-        if parsed.get("raw_response"):
-            payload = dict(fallback)
-            payload["fallback_reason"] = "parse_error"
-        else:
-            payload = _merge_preview_payload(parsed, fallback, draft)
-            payload["shadow_result"] = fallback
-    except asyncio.TimeoutError:
+        payload = _merge_preview_payload(_parse_json(result), fallback, draft)
+    except (asyncio.TimeoutError, MessageSimulationUnavailableError):
         raise
     except Exception as exc:
-        fallback["raw_error"] = exc.__class__.__name__
-        fallback["fallback_reason"] = exc.__class__.__name__
-        payload = fallback
-    safer_rewrite = str(payload.get("safer_rewrite") or "").strip()
-    if not safer_rewrite or safer_rewrite == draft.strip():
-        payload["safer_rewrite"] = fallback["safer_rewrite"]
+        raise MessageSimulationUnavailableError("这次没能连上改写服务，请重试。") from exc
     payload["risk_level_label"] = risk_level_label(payload.get("risk_level"))
     payload["suggested_tone"] = translate_inline_codes(payload.get("suggested_tone", ""))
     payload["deviation_reasons"] = [

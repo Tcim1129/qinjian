@@ -1,4 +1,4 @@
-"""AI 报告生成模块（Phase 4 增强：危机分级预警 + 依恋模式适配 + Solo 日记）"""
+"""AI 报告生成：危机分级预警、依恋模式适配与单人日记。"""
 
 import json
 import base64
@@ -8,7 +8,7 @@ from app.ai.policy import compose_relationship_system_prompt
 from app.core.config import settings
 
 
-# ── 专业心理学系统 Prompt ──
+# 专业心理学系统 Prompt
 
 SYSTEM_PROMPT = compose_relationship_system_prompt("""你是亲健平台的AI关系健康顾问，具备循证心理学专业背景。
 你的分析框架基于以下权威理论：
@@ -19,7 +19,7 @@ SYSTEM_PROMPT = compose_relationship_system_prompt("""你是亲健平台的AI关
 请严格按照JSON格式输出，不要包含其他文字。""")
 
 
-# ── Prompt 模板 ──
+# Prompt 模板
 
 DAILY_REPORT_PROMPT = """以下是一对{pair_type}今天的打卡记录。请基于戈特曼理论与依恋理论框架进行分析。
 请在所有面向用户的描述里只使用“双方 / 一方 / 对方”这类称呼，不要写 A方 / B方。
@@ -215,7 +215,7 @@ async def generate_weekly_report(pair_type: str, daily_reports: list[dict]) -> d
             "overall_health_score": 50,
             "trend": "stable",
             "trend_description": "数据分析中",
-            "encouragement": "每一天的记录都是在为这段关系积蓄能量 ❤️",
+            "encouragement": "每一天的记录都是在为这段关系积蓄能量",
         },
     )
 
@@ -406,6 +406,6 @@ async def generate_milestone_report(
     result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.7)
     return _parse_ai_json(result, {
         "growth_story": "你们的故事正在被书写中...",
-        "blessing": "愿每一天都比昨天更好 ❤️",
+        "blessing": "愿每一天都比昨天更好",
     })
 

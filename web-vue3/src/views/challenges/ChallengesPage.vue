@@ -2,14 +2,15 @@
   <div class="challenges-page page-shell page-shell--wide page-stack">
     <div class="page-head page-head--split">
       <div>
-        <p class="eyebrow">{{ hasPairContext ? '今日安排' : '个人安排' }}</p>
+        <p class="eyebrow">{{ hasPairContext ? '日常安排' : '个人安排' }}</p>
         <h2>{{ hasPairContext ? '今天 / 明天安排' : '今天先做这些' }}</h2>
       </div>
       <div class="hero-actions challenge-head-actions">
-        <div v-if="hasPairContext" class="scope-switch" role="tablist" aria-label="安排日期切换">
+        <div v-if="hasPairContext" class="scope-switch" role="group" aria-label="安排日期切换">
           <button
             class="scope-switch__item"
             :class="{ active: scopeTab === 'today' }"
+              :aria-pressed="scopeTab === 'today'"
             type="button"
             @click="setScope('today')"
           >
@@ -18,6 +19,7 @@
           <button
             class="scope-switch__item"
             :class="{ active: scopeTab === 'tomorrow' }"
+              :aria-pressed="scopeTab === 'tomorrow'"
             type="button"
             @click="setScope('tomorrow')"
           >
@@ -62,6 +64,18 @@
             </div>
             <span class="pill pill--soft">{{ scopeTab === 'today' ? '当天执行' : '提前预排' }}</span>
           </div>
+          <div v-if="displayDailyNote" class="challenge-daily-note">
+            <span class="challenge-daily-note__text">“{{ displayDailyNote }}”</span>
+            <button
+              class="btn-note-rotate"
+              type="button"
+              title="换一句每日寄语"
+              @click="rotateDailyNote"
+            >
+              <RotateCcw :size="12" />
+              <span>换一句</span>
+            </button>
+          </div>
           <div v-if="scopeTab === 'today'" class="progress-track challenge-progress">
             <span class="progress-track__fill" :style="{ width: `${progressPercent}%` }"></span>
           </div>
@@ -105,8 +119,8 @@
         <div v-if="showComposer" class="card challenge-composer-card">
           <div class="card-header card-header--stack">
             <div>
-              <p class="eyebrow">{{ editingTaskId ? '编辑手动安排' : '新增手动安排' }}</p>
-              <h3>{{ scopeTab === 'tomorrow' ? '加到明天安排里' : '加到今天安排里' }}</h3>
+              <p class="eyebrow">{{ editingTaskId ? '编辑安排' : '新增安排' }}</p>
+              <h3>{{ scopeTab === 'tomorrow' ? '明天的安排' : '今天的安排' }}</h3>
             </div>
             <button class="btn btn-ghost btn-sm" type="button" @click="closeComposer">取消</button>
           </div>
@@ -114,7 +128,7 @@
           <div class="challenge-composer-grid">
             <label class="field">
               <span>安排标题</span>
-              <input v-model="taskDraft.title" class="input" type="text" maxlength="100" placeholder="比如：先留出 10 分钟" />
+              <input v-model="taskDraft.title" class="input" type="text" maxlength="100" placeholder="例如：晚上一起散步" />
             </label>
             <label class="field">
               <span>安排分类</span>
@@ -138,8 +152,8 @@
               </select>
             </label>
             <label class="field field--full">
-              <span>怎么才算完成</span>
-              <textarea v-model="taskDraft.description" class="input input-textarea" rows="3" maxlength="400" placeholder="写清做到哪一步就算完成。"></textarea>
+              <span>具体内容</span>
+              <textarea v-model="taskDraft.description" class="input input-textarea" rows="3" maxlength="400" placeholder="例如：晚饭后在楼下散步十分钟"></textarea>
             </label>
           </div>
 
@@ -154,11 +168,12 @@
           <div class="card-header card-header--stack">
             <div>
               <p class="eyebrow">{{ scopeTab === 'today' ? '今天安排' : '明天安排' }}</p>
-              <h3>{{ scopeTab === 'today' ? '按顺序往下走' : '先把明天排顺' }}</h3>
+              <h3>{{ scopeTab === 'today' ? '今天要做的事' : '明天想做的事' }}</h3>
             </div>
             <div class="hero-actions">
+              <button class="btn btn-secondary btn-sm" type="button" :disabled="loadingTasks || Boolean(scheduleError)" @click="openScheduleAgent()">{{ scopeTab === 'today' ? '让 AI 帮我选一件' : '和 AI 商量明天' }}</button>
               <button class="btn btn-ghost btn-sm" type="button" :disabled="loadingTasks" @click="loadCurrentTasks">
-                {{ loadingTasks ? '整理中...' : '自动整理' }}
+                {{ loadingTasks ? '加载中…' : '刷新' }}
               </button>
               <button class="btn btn-secondary btn-sm" type="button" @click="toggleOrderAdjust">
                 {{ isAdjustingOrder ? '取消' : '调整' }}
@@ -166,7 +181,8 @@
             </div>
           </div>
 
-          <div v-if="loadingTasks" class="empty-state">正在整理这一层安排...</div>
+          <div v-if="loadingTasks" class="empty-state">正在加载安排…</div>
+          <div v-else-if="scheduleError" class="empty-state" role="alert">{{ scheduleError }}</div>
           <TransitionGroup v-else-if="taskItems.length" name="task-row" tag="div" class="task-stack">
             <article
               v-for="(task, index) in taskItems"
@@ -195,7 +211,8 @@
                     <span class="task-card__order">{{ index + 1 }}</span>
                     <strong>{{ task.title }}</strong>
                   </div>
-                  <span class="task-card__status">{{ taskStatusLabel(task) }}</span>
+                  <button v-if="scopeTab === 'today' && task.status !== 'cancelled'" class="btn btn-ghost btn-sm" type="button" :aria-label="`${task.title}：更新结果`" @click.stop="resultTask = task">{{ taskStatusLabel(task) }} · 更新</button>
+                  <span v-else class="task-card__status">{{ scopeTab === 'tomorrow' ? '待开始' : taskStatusLabel(task) }}</span>
                 </div>
                 <div class="task-card__meta">
                   <span class="pill pill--soft">{{ task.source === 'manual' ? '手动' : '自动' }}</span>
@@ -204,7 +221,9 @@
                 </div>
                 <div v-if="expandedTaskId === task.id && !isAdjustingOrder" class="task-card__detail">
                   <p v-if="task.description">{{ task.description }}</p>
+                  <p v-if="task.feedback" class="task-feedback-saved">后来：{{ describeTaskFeedback(task.feedback) }}</p>
                   <div class="task-card__detail-actions" @click.stop>
+                    <button v-if="!isCompletedTask(task)" class="btn btn-ghost btn-sm" type="button" @click="openScheduleAgent(task)">请 AI 拆成小步</button>
                     <button
                       v-if="task.refreshable && hasPairContext && !isCompletedTask(task)"
                       class="btn btn-ghost btn-sm"
@@ -223,15 +242,15 @@
                       编辑
                     </button>
                     <button
-                      v-if="isCompletedTask(task) && task.needs_feedback"
+                      v-if="scopeTab === 'today' && task.status !== 'cancelled'"
                       class="btn btn-secondary btn-sm"
                       type="button"
                       @click="openFeedback(task.id)"
                     >
-                      评分
+                      {{ task.feedback ? '更新反馈' : '后来怎么样' }}
                     </button>
                     <button
-                      v-else-if="!isCompletedTask(task)"
+                      v-if="scopeTab === 'today' && !isCompletedTask(task)"
                       class="btn btn-secondary btn-sm"
                       type="button"
                       :disabled="completingTaskId === task.id"
@@ -239,12 +258,20 @@
                     >
                       {{ completingTaskId === task.id ? '保存中...' : '完成' }}
                     </button>
+                    <button v-if="task.feedback" class="btn btn-ghost btn-sm" type="button" @click="openTaskFollowup(task)">想想明天</button>
                   </div>
                 </div>
               </div>
 
-              <div v-if="activeFeedbackTaskId === task.id" class="task-feedback-panel">
-                <div class="task-feedback-panel__grid">
+              <div v-if="activeFeedbackTaskId === task.id" class="task-feedback-panel" @click.stop>
+                <strong>后来怎么样？</strong>
+                <div class="task-feedback-choices" role="group" aria-label="这件事的结果">
+                  <button v-for="option in feedbackOptionsFor(task)" :key="option.value" type="button" class="btn btn-sm" :class="feedbackDraftFor(task.id).outcome === option.value ? 'btn-secondary' : 'btn-ghost'" :aria-pressed="feedbackDraftFor(task.id).outcome === option.value" @click="feedbackDraftFor(task.id).outcome = option.value">{{ option.label }}</button>
+                </div>
+                <label class="field"><span>补充一句（选填）</span><textarea v-model="feedbackDraftFor(task.id).note" class="input input-textarea" rows="2" maxlength="200" placeholder="比如：今天太忙，还没找到合适的时间。"></textarea></label>
+                <details v-if="isCompletedTask(task)" class="task-feedback-ratings">
+                  <summary>再具体一点（选填）</summary>
+                  <div class="task-feedback-panel__grid">
                   <label class="field">
                     <span>有用吗</span>
                     <select v-model.number="feedbackDraftFor(task.id).usefulness_score" class="input">
@@ -266,14 +293,11 @@
                       <option v-for="option in relationshipShiftOptions" :key="`shift-${option.value}`" :value="option.value">{{ option.label }}</option>
                     </select>
                   </label>
-                  <label class="field field--full">
-                    <span>备注</span>
-                    <textarea v-model="feedbackDraftFor(task.id).note" class="input input-textarea" rows="2" maxlength="200" placeholder="比如：这样更容易做完。"></textarea>
-                  </label>
-                </div>
+                  </div>
+                </details>
                 <div class="hero-actions">
                   <button class="btn btn-primary btn-sm" type="button" :disabled="submittingFeedbackId === task.id || !isFeedbackReady(task.id)" @click="submitFeedback(task.id)">
-                    {{ submittingFeedbackId === task.id ? '保存中...' : '保存评分' }}
+                    {{ submittingFeedbackId === task.id ? '保存中...' : '记下结果' }}
                   </button>
                   <button class="btn btn-ghost btn-sm" type="button" @click="closeFeedback">先跳过</button>
                 </div>
@@ -284,16 +308,23 @@
               <button class="btn btn-primary btn-sm" type="button" @click="confirmTaskOrder">确定</button>
             </div>
           </TransitionGroup>
-          <div v-else class="empty-state">这一层还没有安排，稍后再试一次。</div>
+          <div v-else class="empty-state">{{ scopeTab === 'today' ? '今天还没有安排' : '明天还没有安排' }}</div>
         </div>
       </div>
     </template>
+    <TaskResultDialog v-if="resultTask" :task="resultTask" :pair-id="pair?.id" :date="activeDate" @close="resultTask = null" @saved="loadCurrentTasks" @analyze="scheduleContext = $event" />
+    <ContextAgentDialog v-if="scheduleContext" :context="scheduleContext" @close="scheduleContext = null" />
   </div>
 </template>
 
 <script setup>
+import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
+import TaskResultDialog from '@/components/TaskResultDialog.vue'
+import { buildDemoSchedule, buildScheduleContext, buildTaskFollowupContext, describeTaskFeedback, feedbackOutcomes, feedbackPayload, createLatestRequest, scheduleDate, demoScheduleCache } from '@/utils/taskSchedule'
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { RotateCcw } from 'lucide-vue-next'
+import { clampDailyNote, getNextDailyNote, DAILY_NOTE_CANDIDATES } from '@/utils/dailyNotes'
 import { api } from '@/api'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
 import { useUserStore } from '@/stores/user'
@@ -366,82 +397,21 @@ function createTaskDraft(scope = 'today') {
   }
 }
 
-function createFeedbackDraft() {
+function createFeedbackDraft(saved = {}) {
   return {
+    outcome: null,
     usefulness_score: null,
     friction_score: null,
     relationship_shift_score: null,
     note: '',
+    ...saved,
   }
 }
 
 function buildDemoTaskPayload(scope = 'today') {
-  const base = cloneDemo(demoFixture.tasks || { tasks: [] })
-  const tomorrowOverrides = [
-    {
-      title: '早上先发一句确认',
-      description: '只确认今天什么时候方便聊，不顺手追问原因。',
-      category: 'communication',
-      target_scope: 'self',
-    },
-    {
-      title: '午后留一个空档',
-      description: '把容易争起来的话题先放一放，留 15 分钟给自己缓冲。',
-      category: 'activity',
-      target_scope: 'self',
-    },
-    {
-      title: '晚上只复盘一个点',
-      description: '只聊今天最影响心情的一件事，说完就停。',
-      category: 'reflection',
-      target_scope: 'both',
-    },
-    {
-      title: '睡前写一句明天别踩的点',
-      description: '用一句话记下明天要避开的说法。',
-      category: 'repair',
-      target_scope: 'self',
-    },
-  ]
-  const tasks = (base.tasks || []).map((task, index) => ({
-    ...task,
-    ...(scope === 'tomorrow' ? tomorrowOverrides[index] || {} : {}),
-    id: scope === 'tomorrow' ? `${task.id}-tomorrow` : task.id,
-    importance_level: task.importance_level || (index === 0 ? 'high' : index === 1 ? 'medium' : 'low'),
-    refreshable: task.source === 'system' && (scope === 'tomorrow' || task.status !== 'completed'),
-    editable: task.source === 'manual' && (scope === 'tomorrow' || task.status !== 'completed'),
-    importance_adjustable: scope === 'tomorrow' || task.status !== 'completed',
-    status: scope === 'tomorrow' ? 'pending' : task.status,
-    feedback: scope === 'tomorrow' ? null : task.feedback,
-    needs_feedback: scope === 'tomorrow' ? false : task.needs_feedback,
-    due_date: scope === 'tomorrow' ? isoDate(1) : isoDate(0),
-  }))
-  if (scope === 'tomorrow') {
-    return {
-      ...base,
-      for_date: isoDate(1),
-      date_scope: 'tomorrow',
-      daily_note: '明天先排好，临时不合适的可以单独换。',
-      planning_note: '明天已排好，先调优先级。',
-      encouragement_copy: null,
-      manual_task_count: tasks.filter((task) => task.source === 'manual').length,
-      manual_task_limit: 10,
-      manual_task_limit_reached: false,
-      effective_settings: { ...DEFAULT_SETTINGS },
-      tasks,
-    }
-  }
-  return {
-    ...base,
-    for_date: isoDate(0),
-    date_scope: 'today',
-    encouragement_copy: base.encouragement_copy || '完成的会留住，没做完的也能调轻一点。',
-    manual_task_count: tasks.filter((task) => task.source === 'manual').length,
-    manual_task_limit: 10,
-    manual_task_limit_reached: false,
-    effective_settings: { ...DEFAULT_SETTINGS },
-    tasks,
-  }
+  const saved = demoScheduleCache.read({ owner: userStore.me?.id || 'sample', pairId: pair.value?.id, date: scheduleDate(scope) })
+  if (saved) return saved
+  return { ...buildDemoSchedule(demoFixture.tasks, scope), effective_settings: { ...DEFAULT_SETTINGS } }
 }
 
 function buildDemoPairSettings() {
@@ -499,10 +469,27 @@ const canCreateTask = computed(() => {
   return !tasksPayload.value.manual_task_limit_reached
 })
 
+const customDailyNote = ref('')
+const displayDailyNote = computed(() => {
+  if (customDailyNote.value) {
+    return clampDailyNote(customDailyNote.value)
+  }
+  const sourceNote = scopeTab.value === 'tomorrow'
+    ? (tasksPayload.value.planning_note || tasksPayload.value.daily_note)
+    : tasksPayload.value.daily_note
+  return clampDailyNote(sourceNote || DAILY_NOTE_CANDIDATES[0])
+})
+
+function rotateDailyNote() {
+  const next = getNextDailyNote(displayDailyNote.value)
+  customDailyNote.value = next
+}
+
 watch(
   () => route.query.scope,
   (value) => {
     scopeTab.value = normalizeScope(value)
+    customDailyNote.value = ''
   }
 )
 
@@ -580,33 +567,30 @@ function toggleSettingsPanel() {
 }
 
 async function loadCurrentTasks() {
+  const current = scheduleRequests.begin()
+  const requestScope = scopeTab.value
+  const requestPair = pair.value?.id
+  loadingTasks.value = false
+  scheduleError.value = ''
+  tasksPayload.value = { tasks: [] }
   if (!hasPairContext.value) {
-    soloPayload.value = loadSoloTaskPack()
+    soloPayload.value = loadSoloTaskPack({ isoDate: scheduleDate(scopeTab.value) })
     tasksPayload.value = { tasks: soloPayload.value.tasks || [] }
     return
   }
-
+  if (!(hasPairContext.value)) return
   if (userStore.isDemoMode) {
-    tasksPayload.value = buildDemoTaskPayload(scopeTab.value)
+    tasksPayload.value = buildDemoTaskPayload(requestScope)
     return
   }
-
-  if (!pair.value?.id) {
-    tasksPayload.value = { tasks: [] }
-    return
-  }
-
   loadingTasks.value = true
   try {
-    tasksPayload.value = await api.getDailyTasks(pair.value.id, {
-      forDate: activeDate.value,
-      dateScope: scopeTab.value,
-    })
+    const result = await api.getDailyTasks(requestPair, { forDate: scheduleDate(requestScope), dateScope: requestScope })
+    if (current()) tasksPayload.value = result
   } catch (error) {
-    tasksPayload.value = { tasks: [] }
-    showToast(error.message || '安排没加载出来，请稍后再试')
+    if (current()) scheduleError.value = error.message || '安排没加载出来，请重试'
   } finally {
-    loadingTasks.value = false
+    if (current()) loadingTasks.value = false
   }
 }
 
@@ -738,7 +722,9 @@ async function saveTask() {
       tasksPayload.value = { tasks: soloPayload.value.tasks || [] }
     } else if (userStore.isDemoMode) {
       showToast(editingTaskId.value ? '样例安排已更新' : '样例安排已新增')
-      tasksPayload.value = buildDemoTaskPayload(scopeTab.value)
+      const task = { ...payload, id: editingTaskId.value || `sample-manual-${Date.now()}`, source: 'manual', status: 'pending', editable: true, importance_adjustable: true, refreshable: false }
+      const items = editingTaskId.value ? taskItems.value.map(item => item.id === editingTaskId.value ? { ...item, ...task } : item) : [...taskItems.value, task]
+      tasksPayload.value = { ...tasksPayload.value, tasks: items, manual_task_count: items.filter(item => item.source === 'manual').length }
     } else if (editingTaskId.value) {
       await api.updateTask(editingTaskId.value, payload)
       await loadCurrentTasks()
@@ -988,9 +974,15 @@ function openFeedback(taskId) {
   if (!feedbackDrafts.value[taskId]) {
     feedbackDrafts.value = {
       ...feedbackDrafts.value,
-      [taskId]: createFeedbackDraft(),
+      [taskId]: createFeedbackDraft(taskItems.value.find(item => item.id === taskId)?.feedback || {}),
     }
   }
+  const task = taskItems.value.find(item => item.id === taskId)
+  if (task && !feedbackOptionsFor(task).some(option => option.value === feedbackDrafts.value[taskId].outcome)) feedbackDrafts.value[taskId].outcome = null
+}
+
+function feedbackOptionsFor(task) {
+  return feedbackOutcomes.filter(option => isCompletedTask(task) ? option.value !== 'not_yet' : ['not_yet', 'difficult'].includes(option.value))
 }
 
 function closeFeedback() {
@@ -1009,14 +1001,16 @@ function feedbackDraftFor(taskId) {
 
 function isFeedbackReady(taskId) {
   const draft = feedbackDraftFor(taskId)
-  return Number.isInteger(draft.usefulness_score)
-    && Number.isInteger(draft.friction_score)
-    && Number.isInteger(draft.relationship_shift_score)
+  const task = taskItems.value.find(item => item.id === taskId)
+  if (!task || scopeTab.value !== 'today') return false
+  return Boolean(feedbackPayload(draft)) && (isCompletedTask(task) ? draft.outcome !== 'not_yet' : ['not_yet', 'difficult'].includes(draft.outcome))
 }
 
 async function submitFeedback(taskId) {
-  const draft = feedbackDraftFor(taskId)
-  if (!isFeedbackReady(taskId)) return
+  const draft = feedbackPayload(feedbackDraftFor(taskId))
+  if (!isFeedbackReady(taskId) || submittingFeedbackId.value) return
+  const feedbackScope = JSON.stringify([userStore.token, userStore.me?.id, pair.value?.id, activeDate.value])
+  const stillCurrent = () => feedbackScope === JSON.stringify([userStore.token, userStore.me?.id, pair.value?.id, activeDate.value])
 
   submittingFeedbackId.value = taskId
   try {
@@ -1034,18 +1028,15 @@ async function submitFeedback(taskId) {
         )),
       }
     } else {
-      await api.submitTaskFeedback(taskId, {
-        usefulness_score: draft.usefulness_score,
-        friction_score: draft.friction_score,
-        relationship_shift_score: draft.relationship_shift_score,
-        note: draft.note || '',
-      })
+      await api.submitTaskFeedback(taskId, draft)
+      if (!stillCurrent()) return
       await loadCurrentTasks()
     }
-    showToast('评分已保存')
+    if (!stillCurrent()) return
+    showToast('已记下这次结果')
     closeFeedback()
   } catch (error) {
-    showToast(error.message || '评分没保存上')
+    if (stillCurrent()) showToast(error.message || '这次反馈没保存上')
   } finally {
     submittingFeedbackId.value = ''
   }
@@ -1067,9 +1058,42 @@ function taskStatusLabel(task) {
   return map[String(task?.status || 'pending').toLowerCase()] || '未完成'
 }
 
+watch(tasksPayload, payload => {
+  if (userStore.isDemoMode && payload.for_date === activeDate.value) {
+    demoScheduleCache.save({ owner: userStore.me?.id || 'sample', pairId: pair.value?.id, date: activeDate.value }, payload)
+  }
+}, { deep: true, flush: 'sync' })
+const scheduleContext = ref(null)
+const resultTask = ref(null)
+const scheduleRequests = createLatestRequest()
+const scheduleError = ref('')
+function openScheduleAgent(task = null) {
+  scheduleContext.value = buildScheduleContext(task ? [task] : taskItems.value, {
+    scope: scopeTab.value, date: scheduleDate(scopeTab.value), pairId: pair.value?.id || null,
+    isDemoMode: userStore.isDemoMode, single: Boolean(task),
+  })
+}
+function openTaskFollowup(task) {
+  scheduleContext.value = buildTaskFollowupContext(task, { pairId: pair.value?.id || null, isDemoMode: userStore.isDemoMode })
+}
+watch(() => [userStore.token, userStore.me?.id, pair.value?.id, scopeTab.value], () => {
+  scheduleRequests.invalidate()
+  scheduleContext.value = null
+  resultTask.value = null
+  activeFeedbackTaskId.value = ''
+  feedbackDrafts.value = {}
+  tasksPayload.value = { tasks: [] }
+  loadingTasks.value = false
+}, { flush: 'sync' })
+watch(() => [userStore.token, userStore.me?.id], () => loadCurrentTasks())
+onBeforeUnmount(() => scheduleRequests.invalidate())
+
 </script>
 
 <style scoped>
+.task-feedback-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.task-feedback-ratings summary { cursor: pointer; color: var(--ink-soft); font-size: 13px; margin-bottom: 10px; }
+.task-feedback-saved { color: var(--ink-soft); font-size: 14px; }
 .challenge-head-actions {
   align-items: center;
   flex-wrap: wrap;
@@ -1317,5 +1341,48 @@ function taskStatusLabel(task) {
     width: 28px;
     height: 28px;
   }
+}
+
+.challenge-daily-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  background: rgba(189, 75, 53, 0.05);
+  border-radius: 10px;
+  border-left: 3px solid var(--seal, #bd4b35);
+}
+
+.challenge-daily-note__text {
+  font-size: 13px;
+  color: var(--ink-soft, #594f48);
+  line-height: 1.5;
+  flex: 1;
+  word-break: break-all;
+}
+
+.btn-note-rotate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--ink-muted, #8a7c73);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(112, 72, 46, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-note-rotate:hover {
+  color: var(--seal, #bd4b35);
+  border-color: var(--seal, #bd4b35);
+  background: #fff;
 }
 </style>

@@ -1,25 +1,30 @@
 <template>
-  <div class="chat-page">
-    <section class="page-head chat-head">
-      <div>
+  <div class="chat-page" :class="{ 'chat-page--embedded': embedded }">
+    <section v-if="!embedded" class="page-head chat-head">
+      <div class="chat-head__title-group">
         <p class="eyebrow">聊一聊</p>
-        <h2>像聊天一样整理今天</h2>
+        <h2>有什么想聊的？</h2>
       </div>
       <div class="chat-head__actions">
-        <button class="btn btn-ghost" type="button" :disabled="startingNewTopic || voiceActive || voiceFinalizing" @click="startNewTopic">
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="startingNewTopic || voiceActive || voiceFinalizing" @click="startNewTopic">
           {{ startingNewTopic ? '切换中...' : '新话题' }}
         </button>
-        <button class="btn btn-secondary" type="button" @click="moveToCheckin">
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="runningCheckup" @click="runCheckup">
+          {{ runningCheckup ? '巡查中...' : '主动巡查' }}
+        </button>
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="collaborating" @click="runCollaboration">
+          {{ collaborating ? '协作中...' : '多智能体' }}
+        </button>
+        <button class="btn btn-secondary btn-sm" type="button" @click="moveToCheckin">
           整理成今日记录
-          <ArrowUpRight :size="16" />
+          <ArrowUpRight :size="14" />
         </button>
       </div>
     </section>
 
     <section class="chat-shell">
-      <header class="chat-shell__toolbar">
+      <header v-if="!embedded" class="chat-shell__toolbar">
         <div class="chat-shell__mode">
-          <span>录音区</span>
           <button
             class="voice-preference-trigger"
             type="button"
@@ -27,28 +32,12 @@
             aria-controls="voice-preference-panel"
             @click="voicePreferencePanelOpen = !voicePreferencePanelOpen"
           >
-            <Settings2 :size="15" />
+            <Settings2 :size="14" />
             <span class="voice-preference-trigger__full">语音偏好：{{ voicePreferenceSummary }}</span>
             <span class="voice-preference-trigger__short">语音偏好</span>
             <strong>调整</strong>
           </button>
-          <p class="chat-shell__privacy">最长 {{ recordingMaxSecondsLabel }} · {{ voiceSendPreferenceHint }}</p>
-        </div>
-        <div class="chat-shell__actions">
-          <button class="btn btn-ghost" type="button" :disabled="uploadingVoice || sending || experienceMode.isDemoMode" @click="openVoiceUpload">
-            <Upload :size="16" />
-            {{ uploadingVoice ? '上传中...' : '上传录音' }}
-          </button>
-          <button
-            class="btn"
-            :class="voiceActive ? 'btn-secondary' : 'btn-primary'"
-            type="button"
-            :disabled="sending || voiceFinalizing"
-            @click="toggleVoiceInput"
-          >
-            <component :is="voiceActive ? StopCircle : Mic" :size="16" />
-            {{ voiceButtonLabel }}
-          </button>
+          <span class="chat-shell__privacy">最长 {{ recordingMaxSecondsLabel }} · {{ voiceSendPreferenceHint }}</span>
         </div>
       </header>
 
@@ -131,6 +120,47 @@
 
       <div ref="messageListEl" class="chat-list">
         <div v-if="loadingHistory" class="empty-state">正在加载这段聊天...</div>
+        <article v-if="checkupResult" class="chat-checkup-card">
+          <header class="chat-checkup-card__head">
+            <div>
+              <span>主动巡查</span>
+              <strong>{{ checkupRiskTitle }}</strong>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" @click="checkupResult = null">
+              <X :size="14" />
+              关闭
+            </button>
+          </header>
+          <p class="chat-checkup-card__report">{{ checkupResult.report }}</p>
+          <div v-if="checkupActions.length" class="chat-checkup-card__actions">
+            <span>建议推进</span>
+            <strong v-for="(item, index) in checkupActions" :key="index">{{ item }}</strong>
+          </div>
+        </article>
+        <article v-if="swarmResult" class="chat-swarm-card">
+          <header class="chat-swarm-card__head">
+            <div>
+              <span>多智能体协作</span>
+              <strong>感知 → 分析 → 行动 → 陪伴</strong>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" @click="swarmResult = null">
+              <X :size="14" />
+              关闭
+            </button>
+          </header>
+          <p class="chat-swarm-card__meta">共 {{ swarmResult.length }} 个角色接力 · 总耗时 {{ swarmTotalTime }}毫秒</p>
+          <div class="chat-swarm-card__roles">
+            <div v-for="(step, index) in swarmResult" :key="step.role" class="chat-swarm-card__role" :class="`is-${step.status}`">
+              <div class="chat-swarm-card__role-title">
+                <span class="chat-swarm-card__role-index">{{ index + 1 }}</span>
+                <span class="chat-swarm-card__role-name">{{ step.role_name }}</span>
+                <span class="chat-swarm-card__role-status">{{ swarmStatusLabel(step) }}</span>
+                <span v-if="step.duration_ms" class="chat-swarm-card__role-time">{{ Math.round(step.duration_ms) }}ms</span>
+              </div>
+              <p class="chat-swarm-card__role-summary">{{ step.summary }}</p>
+            </div>
+          </div>
+        </article>
         <div v-else-if="!messages.length" class="empty-state">
           先说一句，或者上传一段录音。
         </div>
@@ -138,11 +168,52 @@
           v-for="message in messages"
           :key="message.id"
           class="chat-msg"
-          :class="{ 'chat-msg--user': message.role === 'user' }"
+          :class="{ 'chat-msg--user': message.role === 'user', 'chat-msg--error': message.error }"
         >
           <div class="chat-msg__avatar">{{ message.role === 'user' ? '我' : '亲健' }}</div>
           <div class="chat-msg__bubble">
             <p class="chat-msg__text">{{ message.content }}</p>
+            <div v-if="message.error" class="chat-msg__error-hint" role="alert">
+              <p>{{ message.errorMessage || '这次没收到回复，原话还在。' }}</p>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || loadingHistory || startingNewTopic" @click="sendMessage({ retryMessage: message })">重试</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || Boolean(draft.trim())" @click="editFailedMessage(message)">重新编辑</button>
+            </div>
+            <details v-if="message.payload?.scene_context?.summary" class="chat-msg__reference">
+              <summary>{{ message.payload.scene_context.source_label }} · 参考内容</summary>
+              <p>{{ message.payload.scene_context.summary }}</p>
+            </details>
+            <AgentTaskProposals v-if="message.role === 'assistant'" :message="message" :session-id="sessionId" @confirmed="markTaskConfirmed(message, $event)" />
+            <div v-if="message.role === 'assistant' && message.id === lastAssistantId" class="chat-msg__refinements">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm btn-regenerate"
+                :disabled="sending || loadingHistory || regeneratingId === message.id"
+                @click="regenerateVariant(message)"
+              >
+                <RefreshCw :size="12" :class="{ 'is-spinning': regeneratingId === message.id }" />
+                <span>{{ regeneratingId === message.id ? '换一种构思中...' : '换个说法' }}</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || loadingHistory || regeneratingId === message.id" @click="refineReply('short')">短一点</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || loadingHistory || regeneratingId === message.id" @click="refineReply(sceneContext?.intent === 'plan' ? 'lighter' : 'direct')">{{ sceneContext?.intent === 'plan' ? '换个轻松的办法' : '直接一点' }}</button>
+              <button type="button" class="btn btn-ghost btn-sm" @click="copyReply(message.content)">
+                <Copy :size="12" />
+                <span>复制</span>
+              </button>
+            </div>
+            <div v-if="!message.role || message.role === 'assistant'">
+              <button
+                v-if="summarizeAgentTools(messageTrace(message)).length"
+                class="chat-msg__trace-toggle"
+                type="button"
+                :aria-expanded="openTraceId === message.id"
+                @click="toggleTrace(message.id)"
+              >
+                <span>查看实际调用</span>
+              </button>
+              <ul v-if="openTraceId === message.id" class="chat-msg__operations">
+                <li v-for="operation in summarizeAgentTools(messageTrace(message))" :key="operation.key"><strong>{{ operation.label }}</strong><span>{{ operation.summary }}</span></li>
+              </ul>
+            </div>
             <div v-if="messageVoiceEvidence(message)" class="chat-msg__evidence">
               <audio
                 v-if="displayVoiceUrl(messageVoiceEvidence(message))"
@@ -180,35 +251,64 @@
             </div>
           </div>
         </article>
+        <div v-if="sending" class="chat-waiting" role="status" aria-live="polite"><span class="chat-spinner" aria-hidden="true"></span>正在回复…</div>
+      </div>
+      <p v-if="sendError" class="chat-send-error" role="alert">{{ sendError }}</p>
+
+      <div v-if="!embedded && demoSuggestedQuestions.length" class="chat-suggestions-bar">
+        <div class="chat-suggestions-bar__header">
+          <div class="chat-suggestions-bar__title-wrap">
+            <span class="chat-suggestions-bar__dot"></span>
+            <span class="chat-suggestions-bar__title">{{ currentDemoQA?.name ? `${currentDemoQA.name} 专属推荐` : '快捷提问' }}</span>
+            <span v-if="currentDemoQA?.scenarioDescription" class="chat-suggestions-bar__scenario">· {{ currentDemoQA.scenarioDescription }}</span>
+          </div>
+          <span class="chat-suggestions-bar__hint">点击即发</span>
+        </div>
+        <div class="chat-suggestions-bar__list">
+          <button
+            v-for="(q, idx) in demoSuggestedQuestions"
+            :key="idx"
+            type="button"
+            class="chat-suggestion-chip"
+            :disabled="sending"
+            @click="askSuggestedQuestion(q)"
+          >
+            {{ q }}
+          </button>
+        </div>
       </div>
 
       <footer class="chat-composer">
-        <label class="field">
-          <span>想说的话</span>
+        <label class="field chat-composer__field">
           <textarea
+            ref="composerInput"
             v-model="draft"
             class="input input-textarea chat-composer__input"
-            placeholder="打字或录音。"
+            :placeholder="composerPlaceholder"
+            rows="2"
+            aria-label="想说的话"
+            @keydown.enter="handleEnterKey"
           ></textarea>
         </label>
         <div class="chat-composer__actions">
-          <button class="btn btn-ghost" type="button" :disabled="uploadingVoice || sending || experienceMode.isDemoMode" @click="openVoiceUpload">
-            <Upload :size="16" />
+          <button class="btn btn-ghost btn-sm" type="button" :disabled="uploadingVoice || sending || experienceMode.isDemoMode" @click="openVoiceUpload">
+            <Upload :size="15" />
             上传录音
           </button>
           <button
-            class="btn"
+            class="btn btn-sm"
             :class="voiceActive ? 'btn-secondary' : 'btn-ghost'"
             type="button"
             :disabled="sending || voiceFinalizing"
             @click="toggleVoiceInput"
           >
-            <component :is="voiceActive ? StopCircle : Mic" :size="16" />
+            <component :is="voiceActive ? StopCircle : Mic" :size="15" />
             {{ voiceButtonLabel }}
           </button>
-          <button class="btn btn-primary" type="button" :disabled="!canSend" @click="sendMessage()">
-            <SendHorizontal :size="16" />
-            {{ sending ? '发送中...' : '发送' }}
+          <button class="btn btn-primary btn-sm btn-send" type="button" :disabled="!canSend" @click="sendMessage()">
+            <span v-if="sending" class="chat-spinner" aria-hidden="true"></span>
+            <SendHorizontal v-else :size="15" />
+            {{ sending ? '回复中...' : '发送' }}
           </button>
         </div>
       </footer>
@@ -219,21 +319,32 @@
 </template>
 
 <script setup>
-import { ArrowUpRight, Mic, SendHorizontal, Settings2, StopCircle, Trash2, Upload } from 'lucide-vue-next'
+import { ArrowUpRight, Copy, Mic, RefreshCw, SendHorizontal, Settings2, StopCircle, Trash2, Upload, X } from 'lucide-vue-next'
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { api } from '@/api'
+import { api, isRealAgentEnabled } from '@/api'
 import { inspectVoiceFile } from '@/utils/clientAi'
 import { saveChatDraftToCheckin } from '@/utils/checkinDraftBridge'
+import AgentTaskProposals from '@/components/AgentTaskProposals.vue'
+import { buildSceneContext, isChatScopeCurrent, summarizeAgentTools } from '@/utils/contextAgent'
 import { AI_WAITING_NOTICE, VOICE_TRANSCRIPTION_WAITING_NOTICE } from '@/utils/aiWaitFeedback'
 import { featureUnavailableReason, resolveExperienceMode } from '@/utils/experienceMode'
+import { getDemoPersonaQA } from '@/demo/fixtures'
+import { mergeChatHistory } from '@/utils/chatHistory'
 import {
   DEFAULT_REALTIME_MAX_SECONDS,
   describeVoiceStartError,
   formatRecordingCountdown,
   createBackendRealtimeAsr,
 } from '@/utils/realtimeVoice'
+
+const props = defineProps({
+  embedded: { type: Boolean, default: false },
+  isolated: { type: Boolean, default: false },
+  contextPairId: { type: String, default: undefined },
+  sceneContext: { type: Object, default: null },
+})
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -294,6 +405,7 @@ const sending = ref(false)
 const uploadingVoice = ref(false)
 const startingNewTopic = ref(false)
 const messages = ref([])
+const lastAssistantId = computed(() => messages.value.findLast(item => item.role === 'assistant')?.id)
 const draft = ref('')
 const sessionId = ref('')
 const sessionExpiresAt = ref('')
@@ -301,6 +413,7 @@ const voicePreferencePanelOpen = ref(false)
 const voicePreferences = reactive(readStoredVoicePreferences())
 const autoSendVoice = ref(voicePreferences.sending === 'auto')
 const voiceInput = ref(null)
+const composerInput = ref(null)
 const messageListEl = ref(null)
 const voiceController = ref(null)
 const voiceActive = ref(false)
@@ -310,20 +423,60 @@ const liveTranscript = ref('')
 const pendingVoiceEvidence = ref(null)
 const recordingMaxSeconds = DEFAULT_REALTIME_MAX_SECONDS
 const recordingRemainingSeconds = ref(DEFAULT_REALTIME_MAX_SECONDS)
+const openTraceId = ref('')
+const runningCheckup = ref(false)
+const sendError = ref('')
+const checkupResult = ref(null)
+const collaborating = ref(false)
+const swarmResult = ref(null)
+let chatDisposed = false
+let pendingSessionRequest = null
+let chatRevision = 0
 
-const activePairId = computed(() => userStore.activePairId || null)
+function captureChatScope() { return { token: userStore.token, userId: userStore.me?.id, pairId: activePairId.value, revision: chatRevision, disposed: chatDisposed } }
+function assertChatScope(scope) {
+  if (!isChatScopeCurrent(scope, captureChatScope())) throw new Error('聊天已关闭或关系已切换，请重新进入。')
+}
+
+const activePairId = computed(() => props.contextPairId !== undefined ? props.contextPairId : userStore.activePairId || null)
 const experienceMode = computed(() =>
   resolveExperienceMode({
     isDemoMode: userStore.isDemoMode,
-    activePairId: userStore.activePairId,
+    activePairId: activePairId.value,
     currentPair: userStore.currentPair,
     pairs: userStore.pairs,
   })
 )
+const currentDemoQA = computed(() => getDemoPersonaQA(activePairId.value))
+const demoSuggestedQuestions = computed(() => currentDemoQA.value?.suggestedQuestions || [])
+
+function loadPersonaQA(personaId) {
+  const qa = getDemoPersonaQA(personaId)
+  messages.value = (qa?.initialMessages || []).map(normalizeMessage)
+  scrollMessagesToBottom()
+}
+
+function handleEnterKey(event) {
+  if (event.isComposing) return
+  if (!event.shiftKey) {
+    event.preventDefault()
+    if (canSend.value) {
+      sendMessage()
+    }
+  }
+}
+
+async function askSuggestedQuestion(q) {
+  if (sending.value) return
+  draft.value = q
+  await sendMessage()
+}
+
+const realAgentDemo = computed(() => isRealAgentEnabled())
 const canSend = computed(() => {
   const hasText = Boolean(String(draft.value || '').trim())
   const hasTranscript = Boolean(String(pendingVoiceEvidence.value?.transcript_text || '').trim())
-  return !sending.value && !voiceActive.value && !voiceFinalizing.value && (hasText || hasTranscript)
+  return !loadingHistory.value && !sending.value && !voiceActive.value && !voiceFinalizing.value && (hasText || hasTranscript)
 })
 const voiceButtonLabel = computed(() => {
   if (voiceFinalizing.value) return '收尾中...'
@@ -347,7 +500,7 @@ const emotionDisplayMode = computed(() => voicePreferences.emotion)
 const shouldShowEmotionInsight = computed(() => emotionDisplayMode.value !== 'hidden')
 const shouldShowDetailedEvidence = computed(() => emotionDisplayMode.value === 'evidence')
 const composerHint = computed(() => {
-  if (experienceMode.value.isDemoMode) return featureUnavailableReason('demo-online', experienceMode.value)
+  if (experienceMode.value.isDemoMode && !realAgentDemo.value) return featureUnavailableReason('demo-online', experienceMode.value)
   if (sending.value) return '亲健正在回复。'
   if (voiceFinalizing.value) return '正在保存录音。'
   if (voiceActive.value) {
@@ -359,6 +512,21 @@ const composerHint = computed(() => {
     return '录音已就位，可直接发。'
   }
   return '支持打字、录音、上传。'
+})
+
+const composerPlaceholder = computed(() => {
+  if (experienceMode.value.isDemoMode) {
+    const activeId = String(userStore.activePairId || '')
+    if (activeId.includes('22222222')) {
+      return '想和林夏说点什么？输入你想说的话，或者点击上方推荐问题试试~'
+    } else if (activeId.includes('77777777')) {
+      return '想找周宁聊点什么？可以吐槽、调侃，或者问问怎么破冰~'
+    } else if (activeId.includes('99999999')) {
+      return '想和顾遥对齐什么？关于分工、催进度或者约球都可以问~'
+    }
+    return '把你想说的话写在这儿，或者输入你最近纠结的沟通小困扰~'
+  }
+  return '输入你想说的话，或者倾诉最近在关系里遇到的小纠结~'
 })
 
 function notify(message) {
@@ -395,11 +563,16 @@ function isAgentSessionExpired() {
 }
 
 function normalizeMessage(message) {
+  const delivery = message?.payload?._delivery
   return {
     id: message?.id || `message-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: message?.role || 'assistant',
     content: String(message?.content || '').trim(),
     payload: message?.payload || null,
+    trace: Array.isArray(message?.trace) ? message.trace : [],
+    clientMessageId: message?.role === 'user' && delivery ? message.id : null,
+    error: message?.role === 'user' && delivery && delivery.state !== 'completed',
+    errorMessage: delivery?.state === 'processing' ? '回复还未确认，请稍后重试。' : '',
   }
 }
 
@@ -570,7 +743,12 @@ function buildEvidenceForDisplay(evidence) {
 function scrollMessagesToBottom() {
   nextTick(() => {
     const container = messageListEl.value
-    if (container) container.scrollTop = container.scrollHeight
+    if (container) {
+      container.scrollTop = container.scrollHeight
+      setTimeout(() => {
+        if (container) container.scrollTop = container.scrollHeight
+      }, 60)
+    }
   })
 }
 
@@ -596,40 +774,64 @@ function stopVoiceInput({ discard = false } = {}) {
 }
 
 async function ensureAgentSession({ forceNew = false } = {}) {
-  if (experienceMode.value.isDemoMode) {
+  if (experienceMode.value.isDemoMode && !realAgentDemo.value) {
     throw new Error(featureUnavailableReason('demo-online', experienceMode.value))
   }
   const expired = !forceNew && sessionId.value && isAgentSessionExpired()
   if (expired) {
     sessionId.value = ''
     sessionExpiresAt.value = ''
-    messages.value = []
+    messages.value = messages.value.filter(message => message.error || message.deliveryPending)
   }
   if (sessionId.value && !forceNew) return sessionId.value
-
-  const session = await api.createAgentSession(activePairId.value, {
-    forceNew,
-    surface: 'chat',
-  })
-  sessionId.value = session.session_id || session.id
-  sessionExpiresAt.value = session.expires_at || ''
-  const history = await api.getAgentMessages(sessionId.value).catch(() => [])
-  messages.value = Array.isArray(history)
-    ? history.filter((item) => item.role === 'user' || item.role === 'assistant').map(normalizeMessage)
-    : []
-  scrollMessagesToBottom()
-  return sessionId.value
+  if (pendingSessionRequest && !forceNew) return pendingSessionRequest
+  const scope = captureChatScope()
+  assertChatScope(scope)
+  const request = (async () => {
+    const session = await api.createAgentSession(scope.pairId, {
+      forceNew: forceNew || (props.isolated && !sessionId.value),
+      surface: 'chat',
+    })
+    assertChatScope(scope)
+    const resolvedId = session.session_id || session.id
+    const history = await api.getAgentMessages(resolvedId).catch(() => [])
+    assertChatScope(scope)
+    sessionId.value = resolvedId
+    sessionExpiresAt.value = session.expires_at || ''
+    if (forceNew) messages.value = []
+    else if (Array.isArray(history) && history.length) {
+      const normalizedHistory = history.filter((item) => item.role === 'user' || item.role === 'assistant').map(normalizeMessage)
+      messages.value = mergeChatHistory(normalizedHistory, messages.value)
+    }
+    scrollMessagesToBottom()
+    return resolvedId
+  })()
+  pendingSessionRequest = request
+  try { return await request }
+  finally { if (pendingSessionRequest === request) pendingSessionRequest = null }
 }
 
 async function loadInitialSession() {
-  if (experienceMode.value.isDemoMode) return
+  const scope = captureChatScope()
+  if (experienceMode.value.isDemoMode) {
+    if (props.isolated) messages.value = []
+    else loadPersonaQA(activePairId.value)
+    if (realAgentDemo.value) {
+      ensureAgentSession().catch((err) => {
+        console.warn('Demo session prewarm skipped:', err)
+      })
+    }
+    return true
+  }
   loadingHistory.value = true
   try {
     await ensureAgentSession()
+    return true
   } catch (error) {
-    notify(error.message || '暂时无法打开聊天页')
+    if (isChatScopeCurrent(scope, captureChatScope())) notify(error.message || '暂时无法打开聊天页')
+    return false
   } finally {
-    loadingHistory.value = false
+    if (isChatScopeCurrent(scope, captureChatScope())) loadingHistory.value = false
   }
 }
 
@@ -637,67 +839,208 @@ function clearPendingVoiceEvidence() {
   pendingVoiceEvidence.value = null
 }
 
-async function sendMessage({ overrideContent = null, overrideEvidence = null } = {}) {
-  const currentDraft = String(overrideContent ?? draft.value ?? '').trim()
-  const currentEvidence = normalizeVoiceEvidence(overrideEvidence ?? pendingVoiceEvidence.value)
+function newClientMessageId() {
+  // getRandomValues also works on non-HTTPS local/LAN origins.
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 15) | 64
+  bytes[8] = (bytes[8] & 63) | 128
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+function editFailedMessage(message) {
+  if (sending.value || draft.value.trim()) return
+  draft.value = message.content
+  focusComposer()
+}
+
+async function sendMessage({ overrideContent = null, overrideEvidence = null, retryMessage = null } = {}) {
+  if (chatDisposed || loadingHistory.value || sending.value || startingNewTopic.value) return false
+  if (retryMessage && (!messages.value.includes(retryMessage) || !retryMessage.error)) return false
+  sendError.value = ''
+  const sendScope = captureChatScope()
+  const currentDraft = String(retryMessage?.content ?? overrideContent ?? draft.value ?? '').trim()
+  const currentEvidence = retryMessage
+    ? normalizeVoiceEvidence(retryMessage.payload?.voice_evidence)
+    : normalizeVoiceEvidence(overrideEvidence ?? pendingVoiceEvidence.value)
   const finalContent = currentDraft || String(currentEvidence?.transcript_text || '').trim()
   if (!finalContent) {
     notify('先写一句，或者先准备一段录音')
     return false
   }
-  if (experienceMode.value.isDemoMode) {
-    notify(featureUnavailableReason('demo-online', experienceMode.value))
-    return false
-  }
 
-  const optimisticId = `local-user-${Date.now()}`
-  const optimisticMessage = normalizeMessage({
+  const clientMessageId = retryMessage?.clientMessageId || newClientMessageId()
+  const optimisticId = `local-user-${clientMessageId}`
+  const scene = retryMessage?.payload?.scene_context || (props.sceneContext ? buildSceneContext(props.sceneContext) : null)
+  const optimisticMessage = retryMessage || reactive(normalizeMessage({
     id: optimisticId,
     role: 'user',
     content: finalContent,
     payload: {
       surface: 'chat',
+      ...(scene ? { scene_context: scene } : {}),
       ...(currentEvidence ? { voice_evidence: buildEvidenceForDisplay(currentEvidence) } : {}),
     },
-  })
-  const previousDraft = draft.value
-  const previousEvidence = pendingVoiceEvidence.value
-  draft.value = ''
-  if (!overrideEvidence || overrideEvidence === pendingVoiceEvidence.value) {
-    pendingVoiceEvidence.value = null
+  }))
+  optimisticMessage.clientMessageId = clientMessageId
+  optimisticMessage.error = false
+  optimisticMessage.errorMessage = ''
+  optimisticMessage.deliveryPending = true
+  // 用户消息立即推入聊天列表，始终予以保留
+  if (!retryMessage) {
+    draft.value = ''
+    if (!overrideEvidence || overrideEvidence === pendingVoiceEvidence.value) pendingVoiceEvidence.value = null
+    messages.value.push(optimisticMessage)
   }
-  messages.value.push(optimisticMessage)
   scrollMessagesToBottom()
 
+  // 样例只提供可浏览的历史；新消息始终使用真实接口。
   sending.value = true
   try {
     const resolvedSessionId = await ensureAgentSession()
-    notify(AI_WAITING_NOTICE)
-    const response = await api.chatWithAgent(resolvedSessionId, {
-      content: currentDraft,
+    assertChatScope(sendScope)
+
+    // 标注为虚构的关系背景，不能要求助手扮演另一方。
+    const demoScene = (experienceMode.value.isDemoMode && currentDemoQA.value) ? {
+      intent: 'auto',
+      source_label: `${currentDemoQA.value.name}（${currentDemoQA.value.roleLabel}）`,
+      summary: `【虚构关系样例】用户正在讨论与${currentDemoQA.value.name}（${currentDemoQA.value.roleLabel}）的相处。背景：${currentDemoQA.value.scenarioDescription || ''}。你仍是亲健助手，不扮演对方，不把样例当作用户真实经历。`,
+    } : null
+    const effectiveScene = scene || demoScene
+
+    const request = optimisticMessage.request || {
+      client_message_id: clientMessageId,
+      content: currentDraft || finalContent,
       surface: 'chat',
       voice_evidence: buildEvidenceForRequest(currentEvidence),
-    })
-    messages.value.push(normalizeMessage({
-      id: `local-assistant-${Date.now()}`,
+      ...(effectiveScene ? { scene_context: effectiveScene } : {}),
+    }
+    optimisticMessage.request = request
+    const response = await api.chatWithAgent(resolvedSessionId, request)
+    assertChatScope(sendScope)
+    if (!String(response?.reply || response?.content || '').trim()) throw new Error('这次没有收到回复，请重试。')
+    optimisticMessage.deliveryPending = false
+    optimisticMessage.id = clientMessageId
+    const assistantMessage = normalizeMessage({
+      id: response?.message_id || `local-assistant-${Date.now()}`,
       role: 'assistant',
-      content: response?.reply || response?.content || '我在，我们继续。',
-      payload: null,
-    }))
+      content: response?.reply || response?.content,
+      payload: {
+        task_proposals: response?.task_proposals || [],
+        ...(effectiveScene ? { scene_context: effectiveScene } : {}),
+      },
+      trace: Array.isArray(response?.trace) ? response.trace : [],
+    })
+    if (!messages.value.some(message => message.id === assistantMessage.id)) messages.value.push(assistantMessage)
     scrollMessagesToBottom()
     return true
   } catch (error) {
-    messages.value = messages.value.filter((item) => item.id !== optimisticId)
-    draft.value = previousDraft || finalContent
-    if (!pendingVoiceEvidence.value && previousEvidence) {
-      pendingVoiceEvidence.value = previousEvidence
-    }
-    notify(error.message || '这轮消息没有发出去，请稍后再试')
+    if (!isChatScopeCurrent(sendScope, captureChatScope())) return false
+
+    // 标记乐观消息失败状态，但不从消息流中移除，保留用户输入事实
+    optimisticMessage.error = true
+    optimisticMessage.deliveryPending = false
+    optimisticMessage.errorMessage = error.message || '这次没能收到回复，请重试。'
+    sendError.value = error.message || '这次没能收到回复，请重试。'
+    notify(sendError.value)
     return false
   } finally {
-    sending.value = false
+    if (isChatScopeCurrent(sendScope, captureChatScope())) sending.value = false
   }
 }
+
+function applySuggestedPrompt(text) {
+  draft.value = String(text || '').trim()
+  nextTick(() => focusComposer())
+}
+
+function focusComposer() {
+  composerInput.value?.focus?.()
+}
+
+async function beginScene(text) {
+  applySuggestedPrompt(text)
+  const ready = await loadInitialSession()
+  if (!ready || chatDisposed) return false
+  return sendMessage()
+}
+
+const regeneratingId = ref('')
+
+async function regenerateVariant(targetMessage) {
+  if (sending.value || loadingHistory.value || regeneratingId.value) return
+  if (!targetMessage) return
+  const scope = captureChatScope()
+
+  const msgIdx = messages.value.findIndex((m) => m.id === targetMessage.id)
+  let previousUserMessage = null
+  if (msgIdx > 0) {
+    for (let i = msgIdx - 1; i >= 0; i--) {
+      if (messages.value[i].role === 'user') {
+        previousUserMessage = messages.value[i]
+        break
+      }
+    }
+  }
+  const originalQuestion = previousUserMessage?.content || targetMessage.content || '请根据当前设定换一种说法'
+
+  regeneratingId.value = targetMessage.id
+  notify('正在按当前人物背景，换一种角度重新构思...')
+
+  try {
+    const resolvedSessionId = await ensureAgentSession()
+    assertChatScope(scope)
+    const demoSceneContext = experienceMode.value.isDemoMode && currentDemoQA.value ? {
+      intent: 'auto',
+      source_label: `${currentDemoQA.value.name}（${currentDemoQA.value.roleLabel}）`,
+      summary: `【${currentDemoQA.value.name}专属场景】${currentDemoQA.value.scenarioDescription}`,
+    } : null
+
+    const prompt = `针对之前的提问「${originalQuestion}」，请换一种更加自然贴切、有生活感或者更轻松幽默的切入角度和口吻重新回复。严格遵循人设背景与避雷偏好，提供高情绪价值，给出可直接做的小事或可直接说的原话。`
+
+    const response = await api.chatWithAgent(resolvedSessionId, {
+      content: prompt,
+      surface: 'chat',
+      ...(props.sceneContext ? { scene_context: buildSceneContext(props.sceneContext) } : (demoSceneContext ? { scene_context: demoSceneContext } : {})),
+    })
+
+    assertChatScope(scope)
+    const newReply = response?.reply || response?.content
+    if (!String(newReply || '').trim()) throw new Error('这次没有收到回复，请重试。')
+    if (newReply) {
+      targetMessage.content = newReply
+      if (Array.isArray(response?.trace) && response.trace.length) {
+        targetMessage.trace = response.trace
+      }
+      scrollMessagesToBottom()
+      notify('已换一种说法重新构思~')
+      return
+    }
+  } catch (err) {
+    if (isChatScopeCurrent(scope, captureChatScope())) {
+      notify(err.message || '换个说法暂时受阻，请稍后重试')
+    }
+  } finally {
+    regeneratingId.value = ''
+  }
+}
+
+function refineReply(kind) {
+  const prompts = {
+    short: '再短一点，保留我原本的意思。',
+    direct: '说得直接一点，但不要替我下结论，也不要变成指责。',
+    lighter: '这个办法对我来说有点费劲，换一个更轻松的。',
+  }
+  if (draft.value.trim()) { notify('先发出或清空正在写的话，再调整回复'); return }
+  return sendMessage({ overrideContent: prompts[kind] })
+}
+
+async function copyReply(text) {
+  try { await navigator.clipboard.writeText(text); notify('已复制') }
+  catch { notify('暂时无法复制，可以长按选中文字') }
+}
+
+defineExpose({ applySuggestedPrompt, focusComposer, beginScene })
 
 async function handleUploadedVoiceFile(file) {
   const inspected = await inspectVoiceFile(file).catch(() => null)
@@ -853,15 +1196,14 @@ async function toggleVoiceInput() {
 
 async function startNewTopic() {
   if (startingNewTopic.value || sending.value || voiceActive.value || voiceFinalizing.value) return
-  if (experienceMode.value.isDemoMode) {
+  if (experienceMode.value.isDemoMode && !realAgentDemo.value) {
     notify(featureUnavailableReason('demo-online', experienceMode.value))
     return
   }
   startingNewTopic.value = true
+  chatRevision++
+  pendingSessionRequest = null
   try {
-    sessionId.value = ''
-    sessionExpiresAt.value = ''
-    messages.value = []
     await ensureAgentSession({ forceNew: true })
     notify('已经切到新的聊天话题')
   } catch (error) {
@@ -880,8 +1222,117 @@ function moveToCheckin() {
     notify('先留下一句，再整理成今日记录')
     return
   }
-  saveChatDraftToCheckin(content)
+  if (!saveChatDraftToCheckin(content)) {
+    notify('草稿没保存成功，请重新登录后再试')
+    return
+  }
   router.push('/checkin')
+}
+
+function messageTrace(message) {
+  return Array.isArray(message?.trace) ? message.trace : []
+}
+
+function markTaskConfirmed(message, { proposalId, taskId }) {
+  message.payload = { ...message.payload, task_proposals: (message.payload?.task_proposals || []).map(item => item.proposal_id === proposalId ? { ...item, confirmed_task_id: taskId } : item) }
+  notify('已加入安排')
+}
+
+function toggleTrace(id) {
+  openTraceId.value = openTraceId.value === id ? '' : id
+}
+
+const checkupRiskTitle = computed(() => {
+  const risk = checkupResult.value?.risk_level
+  const map = {
+    severe: '风险偏高 · 建议尽快关注',
+    high: '风险偏高 · 建议尽快关注',
+    medium: '有一定波动 · 建议近期关注',
+    low: '整体平稳',
+    monitor: '整体平稳',
+  }
+  return map[risk] || '巡查完成'
+})
+
+const checkupActions = computed(() => {
+  const raw = checkupResult.value?.recommended_actions
+  return Array.isArray(raw) ? raw.slice(0, 4) : []
+})
+
+const swarmTotalTime = computed(() => {
+  const total = (swarmResult.value || []).reduce((sum, step) => sum + (Number(step?.duration_ms) || 0), 0)
+  return Math.round(total)
+})
+
+async function runCheckup() {
+  if (runningCheckup.value) return
+  const scope = captureChatScope()
+  runningCheckup.value = true
+  try {
+    const resolvedSessionId = experienceMode.value.isDemoMode && !realAgentDemo.value
+      ? ('demo-' + Date.now())
+      : await ensureAgentSession()
+    notify('亲健正在主动巡查这段关系...')
+    assertChatScope(scope)
+    const result = await api.runAgentCheckup(resolvedSessionId)
+    assertChatScope(scope)
+    checkupResult.value = {
+      report: result?.report || '本次巡查完成。',
+      health: result?.health ?? null,
+      risk_level: result?.risk_level || 'monitor',
+      risk_reason: result?.risk_reason || '',
+      recommended_actions: Array.isArray(result?.recommended_actions) ? result.recommended_actions : [],
+      urgency: result?.urgency || 'monitor',
+      generated_at: result?.generated_at || null,
+    }
+    scrollMessagesToBottom()
+  } catch (error) {
+    notify(error.message || '这次巡查没有完成，请稍后再试')
+  } finally {
+    runningCheckup.value = false
+  }
+}
+
+function swarmStatusLabel(step) {
+  const map = { ok: '完成', skip: '跳过', error: '失败', fallback: '兜底' }
+  return map[step?.status] || '完成'
+}
+
+async function runCollaboration() {
+  if (collaborating.value) return
+  const scope = captureChatScope()
+  const content = String(draft.value || '').trim()
+  if (!content) {
+    notify('先写一句，再让智能体团队协作。')
+    return
+  }
+  collaborating.value = true
+  try {
+    const resolvedSessionId = experienceMode.value.isDemoMode && !realAgentDemo.value
+      ? ('demo-' + Date.now())
+      : await ensureAgentSession()
+    assertChatScope(scope)
+    const result = await api.collaborateWithAgent(resolvedSessionId, {
+      content,
+      surface: 'chat',
+      multi_agent: true,
+    })
+    assertChatScope(scope)
+    swarmResult.value = Array.isArray(result?.swarm) ? result.swarm : []
+    messages.value.push(normalizeMessage({
+      id: result?.message_id || `local-swarm-${Date.now()}`,
+      role: 'assistant',
+      content: result?.reply || '智能体团队完成了协作。',
+      payload: { surface: 'chat', multi_agent: true, task_proposals: result?.task_proposals || [] },
+      trace: Array.isArray(result?.trace) ? result.trace : [],
+    }))
+    draft.value = ''
+    scrollMessagesToBottom()
+  } catch (error) {
+    notify(error.message || '这是一个多智能体的协作，这次没完成，请稍后再试')
+  } finally {
+    collaborating.value = false
+  }
 }
 
 watch(
@@ -899,93 +1350,174 @@ watch(autoSendVoice, (value) => {
   }
 })
 
+watch(
+  () => [activePairId.value, userStore.token, userStore.me?.id],
+  async () => {
+    chatRevision++
+    pendingSessionRequest = null
+    sending.value = false
+    sendError.value = ''
+    sessionId.value = ''
+    sessionExpiresAt.value = ''
+    startingNewTopic.value = false
+    draft.value = ''
+    messages.value = []
+    pendingVoiceEvidence.value = null
+    checkupResult.value = null
+    swarmResult.value = null
+    runningCheckup.value = false
+    collaborating.value = false
+    voiceController.value?.cleanup?.()
+    cleanupVoiceState()
+
+    await loadInitialSession()
+  },
+  { flush: 'sync' }
+)
+
 onMounted(() => {
   loadInitialSession()
 })
 
 onBeforeUnmount(() => {
+  chatDisposed = true
   voiceController.value?.cleanup?.()
   cleanupVoiceState()
 })
 </script>
 
 <style scoped>
+.chat-waiting { display: flex; align-items: center; gap: 9px; padding: 10px 14px; color: var(--ink-soft); font-size: 13px; }
+.chat-spinner { display: inline-block; width: 15px; height: 15px; flex-shrink: 0; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: chat-turn 0.85s linear infinite; }
+.chat-send-error { margin: 2px 14px; color: #ac4934; font-size: 13px; }
+@keyframes chat-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .chat-spinner { animation-duration: 2.5s; } }
+.chat-msg__reference { color: var(--ink-soft); font-size: 13px; margin-top: 10px; }
+.chat-msg__reference summary { cursor: pointer; }
+.chat-msg__reference p { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+.btn-regenerate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary-600, #d97706);
+  font-weight: 500;
+}
+.is-spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.chat-msg__refinements { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.chat-msg__operations { padding: 0; list-style: none; font-size: 13px; display: grid; gap: 8px; }
+.chat-msg__operations li { display: grid; gap: 3px; }
+.chat-msg__operations span { color: var(--ink-soft); }
+
+/* 主容器：视口自适应高度 */
 .chat-page {
   width: min(var(--content-max), calc(100% - 32px));
   margin: 0 auto;
-  padding-bottom: 32px;
-  display: grid;
-  gap: 16px;
+  padding-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(100dvh - var(--header-height, 58px) - 20px);
+  min-height: 420px;
+  box-sizing: border-box;
+}
+
+#app-shell.has-tabbar .chat-page {
+  height: calc(100dvh - var(--header-height, 58px) - var(--tabbar-height, 58px) - env(safe-area-inset-bottom, 0px) - 16px);
+}
+
+.chat-page--embedded {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
 }
 
 .chat-head {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chat-head__title-group h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.chat-head__title-group .eyebrow {
+  margin-bottom: 2px;
+  font-size: 12px;
 }
 
 .chat-head__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
 
 .chat-shell {
-  display: grid;
-  gap: 14px;
-  padding: 20px;
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
   border: 1px solid var(--border-strong);
-  border-radius: 28px;
+  border-radius: 24px;
   background:
     radial-gradient(circle at top left, rgba(215, 104, 72, 0.08), transparent 26%),
     linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(249, 244, 238, 0.9));
   box-shadow: 0 16px 34px rgba(56, 42, 30, 0.05);
+  overflow: hidden;
 }
 
+/* 顶部轻量工具栏 */
 .chat-shell__toolbar {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .chat-shell__mode {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.chat-shell__mode > span,
-.chat-shell__privacy,
-.chat-live-card span,
-.chat-live-card__timer,
-.chat-pending-card__head span {
+.chat-shell__privacy {
   color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.chat-shell__privacy,
-.chat-live-card__timer {
+  font-size: 12px;
   margin: 0;
 }
 
 .voice-preference-trigger {
-  width: fit-content;
-  max-width: 100%;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 5px 10px;
   border: 1px solid rgba(189, 75, 53, 0.18);
   border-radius: 999px;
-  background: rgba(255, 253, 250, 0.78);
+  background: rgba(255, 253, 250, 0.88);
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
-  box-shadow: 0 8px 18px rgba(56, 42, 30, 0.05);
+  font-size: 12px;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(56, 42, 30, 0.04);
+  transition: all 0.15s ease;
 }
 
 .voice-preference-trigger svg {
@@ -994,7 +1526,7 @@ onBeforeUnmount(() => {
 
 .voice-preference-trigger strong {
   color: var(--seal-deep);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .voice-preference-trigger__short {
@@ -1009,39 +1541,39 @@ onBeforeUnmount(() => {
 .voice-preference-panel {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid rgba(68, 52, 40, 0.1);
-  border-radius: 22px;
-  background: rgba(255, 253, 250, 0.86);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border-radius: 18px;
+  background: rgba(255, 253, 250, 0.92);
+  flex-shrink: 0;
 }
 
 .voice-preference-panel__group {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .voice-preference-panel__group > span {
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .voice-preference-panel__options {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .voice-preference-option {
-  padding: 7px 10px;
+  padding: 5px 9px;
   border: 1px solid rgba(68, 52, 40, 0.1);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.75);
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -1052,34 +1584,22 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-.chat-shell__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .chat-live-card,
-.chat-pending-card,
-.chat-composer,
-.chat-list {
+.chat-pending-card {
   border: 1px solid rgba(68, 52, 40, 0.1);
-  border-radius: 24px;
-  background: rgba(255, 251, 247, 0.82);
-}
-
-.chat-live-card,
-.chat-pending-card,
-.chat-composer {
-  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 251, 247, 0.9);
+  padding: 12px 14px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .chat-live-card strong,
 .chat-pending-card strong {
   color: #17385e;
   font-family: var(--font-serif);
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .chat-live-card p,
@@ -1088,17 +1608,9 @@ onBeforeUnmount(() => {
 .chat-msg__transcript,
 .voice-insight-card p {
   margin: 0;
-  line-height: 1.8;
+  line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.chat-live-card p,
-.chat-pending-card__transcript,
-.chat-msg__transcript {
-  max-height: 10.8em;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .chat-pending-card__head {
@@ -1112,14 +1624,19 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+/* 消息列表保留历史滚动，独立页面另提供充足的阅读高度。 */
 .chat-list {
-  min-height: clamp(180px, 26vh, 240px);
-  max-height: 56vh;
+  flex: 1 1 0%;
+  min-height: 0;
   overflow-y: auto;
-  padding: 18px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  border: 1px solid rgba(68, 52, 40, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 251, 247, 0.85);
+  scrollbar-width: thin;
 }
 
 .chat-msg {
@@ -1133,13 +1650,13 @@ onBeforeUnmount(() => {
 }
 
 .chat-msg__avatar {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
   border: 1px solid rgba(67, 98, 115, 0.22);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--moss-soft);
   color: var(--moss-deep);
   font-size: 12px;
@@ -1153,20 +1670,44 @@ onBeforeUnmount(() => {
 }
 
 .chat-msg__bubble {
-  max-width: min(72ch, 78%);
-  padding: 14px 16px;
+  max-width: min(72ch, 80%);
+  padding: 12px 15px;
   border: 1px solid var(--border);
-  border-radius: 20px;
-  background: rgba(255, 253, 250, 0.92);
+  border-radius: 18px;
+  background: rgba(255, 253, 250, 0.94);
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .chat-msg--user .chat-msg__bubble {
   border-color: rgba(189, 75, 53, 0.22);
-  background: rgba(243, 216, 208, 0.52);
+  background: rgba(243, 216, 208, 0.55);
 }
 
+.chat-msg--error .chat-msg__bubble {
+  border-color: rgba(189, 75, 53, 0.4);
+  background: rgba(253, 235, 230, 0.9);
+}
+
+.chat-msg__error-hint {
+  margin: 2px 0 0;
+  color: #ac4934;
+  font-size: 12px;
+}
+
+.chat-msg__trace-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--seal-deep);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 语音线索与证据卡片 */
 .chat-msg__evidence {
   padding-top: 10px;
   border-top: 1px dashed rgba(68, 52, 40, 0.12);
@@ -1176,17 +1717,16 @@ onBeforeUnmount(() => {
 
 .voice-insight-card {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px 12px;
   border: 1px solid rgba(78, 116, 91, 0.18);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(235, 242, 232, 0.82), rgba(255, 253, 250, 0.88));
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(235, 242, 232, 0.82), rgba(255, 253, 250, 0.88));
 }
 
 .voice-insight-card__body {
   display: grid;
-  gap: 7px;
+  gap: 6px;
 }
 
 .voice-insight-card__body > span,
@@ -1200,32 +1740,33 @@ onBeforeUnmount(() => {
 .voice-insight-card p {
   color: var(--ink-soft);
   font-size: 13px;
+  margin: 0;
 }
 
 .voice-insight-tags,
 .voice-insight-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px;
 }
 
 .voice-insight-tags strong {
-  padding: 7px 11px;
+  padding: 5px 9px;
   border: 1px solid rgba(189, 75, 53, 0.2);
   border-radius: 999px;
   background: rgba(255, 246, 241, 0.92);
   color: var(--seal-deep);
   font-family: var(--font-serif);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .voice-insight-meta span {
-  padding: 5px 8px;
+  padding: 4px 7px;
   border: 1px solid rgba(68, 52, 40, 0.08);
   border-radius: 999px;
   background: rgba(255, 253, 250, 0.74);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -1234,24 +1775,235 @@ onBeforeUnmount(() => {
   background: rgba(255, 253, 250, 0.62);
 }
 
+.chat-checkup-card,
+.chat-swarm-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.chat-checkup-card {
+  border: 1px solid rgba(189, 75, 53, 0.25);
+  background: linear-gradient(135deg, rgba(243, 216, 208, 0.42), rgba(255, 253, 250, 0.9));
+}
+
+.chat-swarm-card {
+  border: 1px solid rgba(78, 116, 91, 0.24);
+  background: linear-gradient(135deg, rgba(235, 242, 232, 0.5), rgba(255, 253, 250, 0.92));
+}
+
+.chat-checkup-card__head,
+.chat-swarm-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.chat-swarm-card__roles {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-swarm-card__role {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-left: 3px solid rgba(78, 116, 91, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 253, 250, 0.8);
+}
+
+.chat-swarm-card__role-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-swarm-card__role-index {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--moss-deep);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.chat-swarm-card__role-name {
+  color: var(--moss-deep);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.chat-swarm-card__role-status {
+  color: var(--ink-soft);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(78, 116, 91, 0.1);
+}
+
+.chat-swarm-card__role-time {
+  color: var(--ink-soft);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* 快捷提问栏：吸附在输入框上方，横向平滑滚动 */
+.chat-suggestions-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px dashed rgba(68, 52, 40, 0.16);
+  flex-shrink: 0;
+}
+
+.chat-suggestions-bar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.chat-suggestions-bar__title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-suggestions-bar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--seal, #d76848);
+  flex-shrink: 0;
+}
+
+.chat-suggestions-bar__title {
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.chat-suggestions-bar__scenario {
+  color: var(--ink-soft);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-suggestions-bar__hint {
+  color: var(--ink-soft);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.chat-suggestions-bar__list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-suggestion-chip {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  max-width: 360px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.chat-suggestion-chip:hover:not(:disabled) {
+  border-color: var(--seal);
+  background: rgba(215, 104, 72, 0.08);
+  transform: translateY(-1px);
+}
+
+/* 底部输入框区域 */
+.chat-composer {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(68, 52, 40, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 251, 247, 0.94);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-composer__field {
+  margin: 0;
+}
+
 .chat-composer__input {
-  min-height: 140px;
-  font-size: 16px;
-  line-height: 1.85;
-  background: rgba(255, 254, 251, 0.92);
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 50px;
+  max-height: 110px;
+  font-size: 15px;
+  line-height: 1.55;
+  background: rgba(255, 254, 251, 0.95);
+  resize: vertical;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(68, 52, 40, 0.12);
 }
 
 .chat-composer__actions {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   flex-wrap: wrap;
-  gap: 10px;
 }
 
+.btn-send {
+  min-width: 72px;
+}
+
+/* 独立聊天页允许整页向下滚动，不让推荐区和输入框挤压消息。 */
+@media (min-width: 601px) {
+  .chat-page:not(.chat-page--embedded),
+  #app-shell.has-tabbar .chat-page:not(.chat-page--embedded) {
+    height: auto;
+    min-height: calc(100dvh - var(--header-height, 58px) - 20px);
+    padding-bottom: 28px;
+  }
+
+  .chat-page:not(.chat-page--embedded) .chat-shell {
+    flex: 0 0 auto;
+  }
+
+  .chat-page:not(.chat-page--embedded) .chat-list {
+    flex: 0 0 auto;
+    height: clamp(480px, 65dvh, 900px);
+    box-sizing: border-box;
+  }
+}
+
+/* 响应式断点优化 */
 @media (max-width: 900px) {
-  .chat-head,
-  .chat-shell__toolbar {
-    flex-direction: column;
-    align-items: stretch;
+  .chat-page {
+    width: min(100% - 20px, var(--content-max));
   }
 
   .voice-preference-panel {
@@ -1259,45 +2011,113 @@ onBeforeUnmount(() => {
   }
 
   .chat-msg__bubble {
-    max-width: calc(100% - 48px);
+    max-width: calc(100% - 44px);
   }
 }
 
 @media (max-width: 600px) {
   .chat-page {
-    width: min(100% - 20px, var(--content-max));
+    width: 100%;
+    padding: 0 8px 6px;
+    height: calc(100dvh - var(--header-height, 58px) - 10px);
+    gap: 6px;
   }
 
-  .chat-shell {
-    padding: 16px;
-    border-radius: 24px;
+  #app-shell.has-tabbar .chat-page {
+    height: calc(100dvh - var(--header-height, 58px) - var(--tabbar-height, 58px) - env(safe-area-inset-bottom, 0px) - 10px);
   }
 
-  .chat-list,
-  .chat-composer,
-  .chat-live-card,
-  .chat-pending-card {
-    border-radius: 20px;
+  .chat-head {
+    gap: 6px;
+    margin-bottom: 2px;
   }
 
-  .chat-composer__actions,
-  .chat-head__actions,
-  .chat-shell__actions {
-    flex-direction: column;
+  .chat-head__title-group .eyebrow {
+    display: none;
   }
 
-  .chat-composer__actions .btn,
-  .chat-head__actions .btn,
-  .chat-shell__actions .btn {
+  .chat-head__title-group h2 {
+    font-size: 16px;
+  }
+
+  .chat-head__actions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
     width: 100%;
   }
 
-  .voice-preference-trigger {
-    width: fit-content;
-    justify-content: flex-start;
-    justify-self: start;
-    padding: 6px 9px;
+  .chat-head__actions .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 4px 8px;
     font-size: 12px;
+  }
+
+  .chat-shell {
+    padding: 8px 10px;
+    border-radius: 16px;
+    gap: 6px;
+  }
+
+  .chat-shell__toolbar {
+    gap: 6px;
+  }
+
+  .chat-shell__privacy {
+    font-size: 11px;
+  }
+
+  .chat-list {
+    padding: 10px;
+    border-radius: 14px;
+    gap: 10px;
+  }
+
+  .chat-suggestions-bar {
+    padding: 6px 10px;
+    border-radius: 12px;
+    gap: 4px;
+  }
+
+  .chat-suggestion-chip {
+    padding: 4px 10px;
+    font-size: 11px;
+    max-width: 260px;
+  }
+
+  .chat-composer {
+    padding: 6px 8px;
+    border-radius: 14px;
+    gap: 5px;
+  }
+
+  .chat-composer__input {
+    min-height: 40px;
+    max-height: 80px;
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+
+  .chat-composer__actions {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .chat-composer__actions .btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .voice-preference-trigger {
+    padding: 3px 8px;
+    font-size: 11px;
   }
 
   .voice-preference-trigger__full {

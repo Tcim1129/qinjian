@@ -137,7 +137,17 @@ def connect_client(
     else:
         connect_kwargs.update({"look_for_keys": True, "allow_agent": True})
 
-    client.connect(host, **connect_kwargs)
+    last_exc = None
+    for attempt in range(1, 4):
+        try:
+            client.connect(host, **connect_kwargs)
+            return client
+        except (paramiko.SSHException, OSError) as exc:
+            last_exc = exc
+            if attempt < 3:
+                time.sleep(2)
+    if last_exc:
+        raise last_exc
     return client
 
 
@@ -219,8 +229,8 @@ def create_remote_env_if_missing(sftp: paramiko.SFTPClient, remote_root: str) ->
                 f"AI_BASE_URL={ai_base_url}",
                 "SILICONFLOW_API_KEY=",
                 "SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1",
-                "AI_MULTIMODAL_MODEL=moonshot/kimi-k2.6",
-                "AI_TEXT_MODEL=Pro/deepseek-ai/DeepSeek-V3.2",
+                "AI_MULTIMODAL_MODEL=qwen3.8-flash",
+                "AI_TEXT_MODEL=deepseek-v4.1-flash",
                 f"ASR_PROVIDER={asr_provider}",
                 f"OPENAI_COMPATIBLE_ASR_MODEL={openai_compatible_asr_model}",
                 f"REALTIME_ASR_PROVIDER={realtime_asr_provider}",
@@ -242,6 +252,57 @@ def create_remote_env_if_missing(sftp: paramiko.SFTPClient, remote_root: str) ->
         remote_file.write(env_content)
 
     return True
+
+
+def sync_remote_model_env(sftp: paramiko.SFTPClient, remote_root: str) -> None:
+    env_path = posixpath.join(remote_root, ".env")
+    if not remote_exists(sftp, env_path):
+        return
+    with sftp.open(env_path, "r") as f:
+        content = f.read().decode("utf-8")
+
+    desired = {
+        "AI_TEXT_MODEL": os.getenv("AI_TEXT_MODEL", "deepseek-v4.1-flash"),
+        "AI_TEXT_FALLBACK_MODEL": os.getenv(
+            "AI_TEXT_FALLBACK_MODEL", "deepseek-v4.1-flash"
+        ),
+    }
+    # 仅在本机显式提供时才覆盖网关地址与密钥，避免把远端已有配置清空
+    explicit_base_url = os.getenv("AI_BASE_URL", "").strip()
+    if explicit_base_url:
+        desired["AI_BASE_URL"] = explicit_base_url
+    explicit_api_key = (
+        os.getenv("AI_API_KEY", "").strip() or os.getenv("SILICONFLOW_API_KEY", "").strip()
+    )
+    if explicit_api_key:
+        desired["AI_API_KEY"] = explicit_api_key
+    else:
+        print(
+            "提示：本机未设置 AI_API_KEY / SILICONFLOW_API_KEY，"
+            "将保留远端 .env 中已有的 AI_API_KEY 不变。"
+        )
+    lines = content.splitlines()
+    new_lines = []
+    found_keys = set()
+    for line in lines:
+        matched = False
+        for k, v in desired.items():
+            if line.startswith(f"{k}="):
+                new_lines.append(f"{k}={v}")
+                found_keys.add(k)
+                matched = True
+                break
+        if not matched:
+            new_lines.append(line)
+    for k, v in desired.items():
+        if k not in found_keys:
+            new_lines.append(f"{k}={v}")
+
+    new_content = "\n".join(new_lines) + "\n"
+    if new_content != content:
+        with sftp.open(env_path, "w") as f:
+            f.write(new_content)
+        print("已更新远端 .env 中的文本模型配置。")
 
 
 def prune_remote_root(client: paramiko.SSHClient, remote_root: str) -> tuple[int, str, str]:
@@ -386,7 +447,12 @@ def build_web_vue3_dist() -> bool:
 
 
 def deploy(
-    host: str, username: str, password: str, remote_root: str, key_file: str = ""
+    host: str,
+    username: str,
+    password: str,
+    remote_root: str,
+    key_file: str = "",
+    allow_demo_agent: bool = False,
 ) -> int:
     if not host or not username:
         print(
@@ -447,10 +513,21 @@ def deploy(
             if env_code != 0:
                 print(env_error.strip() or "更新 RELAXED_TEST_ACCOUNT_EMAILS 失败")
                 return 3
+        if allow_demo_agent:
+            env_code, env_output, env_error = set_remote_env_value(
+                client, remote_root, "ALLOW_DEMO_AGENT", "true"
+            )
+            if env_output.strip():
+                print(env_output.strip())
+            if env_code != 0:
+                print(env_error.strip() or "更新 ALLOW_DEMO_AGENT 失败")
+                return 3
+            print("已显式开启演示模式: ALLOW_DEMO_AGENT=true（仅用于演示/路演环境）")
         if env_created:
             print("服务器缺少 .env，已自动生成基础生产配置。")
             print("当前未检测到本机 SILICONFLOW_API_KEY，AI 功能可能暂不可用。")
         print(f"已设置前端来源: {frontend_origin}")
+        sync_remote_model_env(sftp, remote_root)
         if RELAXED_TEST_ACCOUNT_EMAILS:
             account_count = len(
                 [
@@ -617,6 +694,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--password", default=PASSWORD)
     parser.add_argument("--key-file", default=KEY_FILE)
     parser.add_argument("--remote-root", default=REMOTE_ROOT)
+    parser.add_argument(
+        "--allow-demo-agent",
+        action="store_true",
+        help="在远端 .env 显式开启 ALLOW_DEMO_AGENT=true（仅演示/路演服务器使用）",
+    )
     return parser.parse_args()
 
 
@@ -629,5 +711,6 @@ if __name__ == "__main__":
             arguments.password,
             arguments.remote_root,
             arguments.key_file,
+            arguments.allow_demo_agent,
         )
     )

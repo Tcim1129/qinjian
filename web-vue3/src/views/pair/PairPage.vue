@@ -2,7 +2,7 @@
   <div class="pair-page page-shell page-shell--wide page-stack" :class="themeClass">
     <div class="page-head pair-page__head">
       <p class="eyebrow">关系管理</p>
-      <h2>每段关系现在是什么状态</h2>
+      <h2>我的关系</h2>
     </div>
 
     <section v-if="showPairOverview" id="pair-list" class="pair-overview">

@@ -1,8 +1,11 @@
 # ADR-001：亲健 Web 主线与迁移期间双前端边界
 
-- 状态：已接受
+- 状态：已失效（保留作历史决策记录）
 - 日期：2026-07-17
 - 范围：阶段 0 与后续 Web 收敛；不授权小程序、App、支付或生产部署
+
+> 失效说明：本 ADR 假设仓库长期并存两套前端。实际演进结果是 `qinjian-ui-preview` 已下线移除，
+> `web-vue3` 成为唯一 Web 前端，下文的双前端门槛与「不删除任一前端」约束均已不再适用。
 
 ## 背景
 
@@ -13,7 +16,7 @@
 
 两套路由模式也不同：新版使用 hash history，旧版使用 history。此差异属于迁移风险，不能用“页面看起来已有”代替深链、刷新和 Nginx 回退验证。
 
-当前代码而非规划文档是实现真值。业务接口以 `backend/app/api/v1`、新版 `src/services/realApi.js` 和旧版 `src/api/index.js` 的实际契约为准；产品取舍以 `docs/product/product-boundary.md` 为准；两端当前差异以 `current-feature-matrix.md` 为准。
+当前代码而非规划文档是实现真值。业务接口以 `backend/app/api/v1` 与 `web-vue3/src/api/index.js` 的实际契约为准；产品取舍以 `docs/product/product-boundary.md` 为准。
 
 ## 决策
 

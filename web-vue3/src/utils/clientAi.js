@@ -33,6 +33,13 @@ const INTENT_RULES = {
   reflection: ['复盘', '总结', '为什么', '规律', '趋势', '回顾', '变化'],
 }
 
+const EMOTION_BASE_WEIGHT = {
+  positive: 1.2,
+  negative: 2.6,
+}
+
+const NEGATED_MOOD_PREFIX = /(不|没|没有|不是|并不|并不是|不再|已经不|已经没有|并没有)$/
+
 function isDigit(char) {
   return /\d/.test(String(char || ''))
 }
@@ -121,6 +128,17 @@ function classifyIntent(text, riskLevel) {
   return 'daily'
 }
 
+function countEmotionWord(text, word) {
+  let count = 0
+  let index = text.indexOf(word)
+  while (index !== -1) {
+    const prefix = text.slice(Math.max(0, index - 8), index)
+    if (!NEGATED_MOOD_PREFIX.test(prefix)) count += 1
+    index = text.indexOf(word, index + word.length)
+  }
+  return count
+}
+
 export function analyzeEmotion(text) {
   const normalized = String(text || '').trim()
   if (!normalized) {
@@ -129,6 +147,10 @@ export function analyzeEmotion(text) {
       sentimentLabel: '等你写下',
       moodTags: [],
       moodLabel: '等你写下',
+      primaryMood: null,
+      secondaryMoods: [],
+      emotionWeights: [],
+      score: 0,
       confidence: 0,
       reason: '先留下一句原话，亲健会在本地判断情绪倾向。',
     }
@@ -136,25 +158,36 @@ export function analyzeEmotion(text) {
 
   const matches = EMOTION_RULES.map((rule) => ({
     ...rule,
-    score: rule.words.filter((word) => normalized.includes(word)).length,
-  })).filter((rule) => rule.score > 0)
+    rawScore: rule.words.reduce((sum, word) => sum + countEmotionWord(normalized, word), 0),
+  }))
+    .filter((rule) => rule.rawScore > 0)
+    .map((rule) => ({
+      tag: rule.tag,
+      tone: rule.tone,
+      score: Number((rule.rawScore * (EMOTION_BASE_WEIGHT[rule.tone] || 1)).toFixed(2)),
+    }))
+    .sort((a, b) => b.score - a.score)
 
   const positive = matches.filter((rule) => rule.tone === 'positive').reduce((sum, rule) => sum + rule.score, 0)
   const negative = matches.filter((rule) => rule.tone === 'negative').reduce((sum, rule) => sum + rule.score, 0)
   const sentiment = negative > positive ? 'negative' : positive > negative ? 'positive' : 'neutral'
   const moodTags = matches
-    .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map((rule) => rule.tag)
 
   const moodLabel = moodTags[0] || (sentiment === 'negative' ? '有压力' : sentiment === 'positive' ? '有修复感' : '平静')
   const confidence = matches.length ? Math.min(0.95, 0.55 + matches[0].score * 0.16 + moodTags.length * 0.08) : 0.35
+  const score = matches.length ? Math.min(10, Math.round((positive + negative) * 2)) : 0
 
   return {
     sentiment,
     sentimentLabel: sentiment === 'negative' ? '偏负向' : sentiment === 'positive' ? '偏正向' : '平静',
     moodTags,
     moodLabel,
+    primaryMood: moodTags[0] || null,
+    secondaryMoods: moodTags.slice(1),
+    emotionWeights: matches,
+    score,
     confidence: Number(confidence.toFixed(2)),
     reason: moodTags.length
       ? `识别到 ${moodTags.join('、')} 相关表达。`
@@ -227,9 +260,10 @@ export function buildClientGuidance(precheck) {
   if (!precheck) return '写下内容后，亲健会先在本地识别情绪、风险和隐私线索。'
   if (precheck.risk_level === 'high') return '本地识别到高风险信号，建议先停下来，优先找可信任的人或专业支持。'
   if (precheck.intent === 'emergency') return '这次更像正在处理眼前冲突，先让表达降一点刺激，再决定下一步。'
+  if (precheck.device_meta?.image?.storage?.mode === 'analysis_only') return '这张图只保留分析结果。'
   if (precheck.upload_policy === 'redacted_only') return '内容里有隐私线索，提交时会优先带上脱敏版本。'
   if (precheck.upload_policy === 'local_only') return '当前更适合先本地留存，等你确认后再同步。'
-  if (precheck.intent === 'reflection') return '这次更像复盘材料，后续可以和时间轴一起看变化。'
+  if (precheck.intent === 'reflection') return '这次更像复盘材料，后续可以和关系日历一起看变化。'
   return '情绪和上下文已在本地预检，提交后再进入后端深分析。'
 }
 

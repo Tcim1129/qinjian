@@ -72,7 +72,8 @@ def test_agent_chat_route_converts_url_session_id_to_uuid(monkeypatch):
     def noop_privacy_scope(**_kwargs):
         yield
 
-    monkeypatch.setattr(agent_api, "create_chat_completion", fake_chat_completion)
+    import app.ai.agent_loop as agent_loop_module
+    monkeypatch.setattr(agent_loop_module, "create_chat_completion", fake_chat_completion)
     monkeypatch.setattr(agent_api, "record_user_interaction_event", noop_record_event)
     monkeypatch.setattr(agent_api, "privacy_audit_scope", noop_privacy_scope)
 
@@ -89,16 +90,18 @@ def test_agent_chat_route_converts_url_session_id_to_uuid(monkeypatch):
             )
 
         assert response.status_code == 200, response.text
-        assert response.json() == {
-            "reply": "I hear the concern, and we can take it one steady step at a time.",
-            "action": "chat",
-        }
+        body = response.json()
+        assert body["reply"] == "I hear the concern, and we can take it one steady step at a time."
+        assert body["action"] == "chat"
+        # trace 是 Agent 推理痕迹数组（即使是纯文本回复也会记录一步思考）
+        assert isinstance(body["trace"], list)
+        assert body["trace"][0]["thought"] == "I hear the concern, and we can take it one steady step at a time."
     finally:
         asyncio.run(engine.dispose())
         db_path.unlink(missing_ok=True)
 
 
-def test_agent_chat_returns_gentle_fallback_when_ai_call_fails(monkeypatch):
+def test_agent_chat_returns_error_without_preset_reply_when_ai_call_fails(monkeypatch):
     db_dir = Path(__file__).resolve().parents[1] / ".test-dbs"
     db_dir.mkdir(exist_ok=True)
     db_path = db_dir / f"agent-chat-fallback-{uuid.uuid4().hex}.db"
@@ -150,7 +153,8 @@ def test_agent_chat_returns_gentle_fallback_when_ai_call_fails(monkeypatch):
     def noop_privacy_scope(**_kwargs):
         yield
 
-    monkeypatch.setattr(agent_api, "create_chat_completion", failing_chat_completion)
+    import app.ai.agent_loop as agent_loop_module
+    monkeypatch.setattr(agent_loop_module, "create_chat_completion", failing_chat_completion)
     monkeypatch.setattr(agent_api, "record_user_interaction_event", noop_record_event)
     monkeypatch.setattr(agent_api, "privacy_audit_scope", noop_privacy_scope)
 
@@ -166,11 +170,16 @@ def test_agent_chat_returns_gentle_fallback_when_ai_call_fails(monkeypatch):
                 json={"content": "Please respond gently."},
             )
 
-        assert response.status_code == 200, response.text
-        payload = response.json()
-        assert payload["action"] == "chat"
-        assert "我这边连接有点慢" in payload["reply"]
-        assert "timeout" not in payload["reply"].lower()
+        assert response.status_code == 502, response.text
+        assert 'reply' not in response.json()
+        assert '重试' in response.json()['detail']
+        async def assert_no_assistant_reply():
+            from sqlalchemy import select
+            from app.models import AgentChatMessage
+            async with sessionmaker() as db:
+                result = await db.execute(select(AgentChatMessage).where(AgentChatMessage.session_id == state['session_id'], AgentChatMessage.role == 'assistant'))
+                assert result.scalars().all() == []
+        asyncio.run(assert_no_assistant_reply())
     finally:
         asyncio.run(engine.dispose())
         db_path.unlink(missing_ok=True)
@@ -315,7 +324,8 @@ def test_agent_chat_surface_chat_persists_voice_evidence(monkeypatch):
     def noop_privacy_scope(**_kwargs):
         yield
 
-    monkeypatch.setattr(agent_api, "create_chat_completion", fake_chat_completion)
+    import app.ai.agent_loop as agent_loop_module
+    monkeypatch.setattr(agent_loop_module, "create_chat_completion", fake_chat_completion)
     monkeypatch.setattr(agent_api, "record_user_interaction_event", noop_record_event)
     monkeypatch.setattr(agent_api, "privacy_audit_scope", noop_privacy_scope)
 
@@ -347,8 +357,9 @@ def test_agent_chat_surface_chat_persists_voice_evidence(monkeypatch):
 
         assert response.status_code == 200, response.text
         assert response.json()["action"] == "chat"
-        assert seen["tools"] is None
-        assert seen["tool_choice"] == "none"
+        # ReAct 循环在首轮会传入工具 schema（若非最后一步），因此 tools 应为非空 schema 列表。
+        assert isinstance(seen["tools"], list) and len(seen["tools"]) > 0
+        assert seen["tool_choice"] == "auto"
 
         assert history.status_code == 200, history.text
         payload = history.json()

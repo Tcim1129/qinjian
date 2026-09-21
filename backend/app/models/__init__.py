@@ -4,14 +4,58 @@ import uuid
 from datetime import date, datetime, timezone
 from enum import Enum as PyEnum
 
-from sqlalchemy import String, Text, ForeignKey, Date, Enum, Float, JSON, Integer
+from sqlalchemy import String, Text, ForeignKey, Date, Enum, Float, JSON, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.types import CHAR, TypeDecorator
+
+
+class UUID(TypeDecorator):
+    """跨数据库兼容的 UUID 类型：PostgreSQL 原生 UUID，SQLite CHAR(36) 避免 float 精度丢失与 NUMERIC 转换"""
+    impl = CHAR(36)
+    cache_ok = True
+
+    def __init__(self, as_uuid=True, *args, **kwargs):
+        self.as_uuid = as_uuid
+        super().__init__(*args, **kwargs)
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=self.as_uuid))
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == "postgresql":
+            return value
+        else:
+            if not isinstance(value, uuid.UUID):
+                try:
+                    return str(uuid.UUID(str(value)))
+                except (ValueError, TypeError):
+                    return str(value)
+            return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if self.as_uuid:
+            if not isinstance(value, uuid.UUID):
+                try:
+                    return uuid.UUID(str(value))
+                except (ValueError, TypeError, AttributeError):
+                    return value
+            return value
+        else:
+            return str(value)
+
 
 from app.core.database import Base
 
 
-# ── 枚举 ──
+# 枚举
 
 
 class PairType(str, PyEnum):
@@ -106,7 +150,7 @@ def enum_values(enum_cls: type[PyEnum]) -> Enum:
     )
 
 
-# ── 模型 ──
+# 模型
 
 
 class User(Base):
@@ -172,7 +216,7 @@ class Pair(Base):
     invite_code: Mapped[str] = mapped_column(
         String(10), unique=True, index=True
     )  # 高熵邀请码，降低枚举撞库风险
-    # ── 解绑字段 ──
+    # 解绑字段
     unbind_requested_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
@@ -181,14 +225,14 @@ class Pair(Base):
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
 
-    # ── 依恋类型（Phase 4 新增）──
+    # 依恋类型
     attachment_style_a: Mapped[str | None] = mapped_column(String(20), nullable=True)
     attachment_style_b: Mapped[str | None] = mapped_column(String(20), nullable=True)
     attachment_analyzed_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    # ── 异地标记（Phase 4 新增）──
+    # 异地标记
     is_long_distance: Mapped[bool | None] = mapped_column(default=False, nullable=True)
 
-    # ── 自定义伴侣昵称（给伴侣设置备注名）──
+    # 自定义伴侣昵称（给伴侣设置备注名）
     custom_partner_nickname_a: Mapped[str | None] = mapped_column(
         String(50), nullable=True
     )
@@ -289,7 +333,7 @@ class Checkin(Base):
     archive_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     archive_tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
-    # ── 结构化四步打卡字段 ──
+    # 结构化四步打卡字段
     mood_score: Mapped[int | None] = mapped_column(nullable=True)
     interaction_freq: Mapped[int | None] = mapped_column(nullable=True)
     interaction_initiative: Mapped[str | None] = mapped_column(
@@ -337,7 +381,7 @@ class Report(Base):
     pair: Mapped["Pair"] = relationship(back_populates="reports")
 
 
-# ── 关系树（游戏化） ──
+# 关系树（游戏化）
 
 
 class TreeLevel(str, PyEnum):
@@ -394,7 +438,7 @@ class RelationshipTree(Base):
     pair: Mapped["Pair"] = relationship()
 
 
-# ── 关系任务（Phase 4：依恋模式适配） ──
+# 关系任务（依恋模式适配）
 
 
 class RelationshipTask(Base):
@@ -430,7 +474,7 @@ class RelationshipTask(Base):
     )
 
 
-# ── 异地互动活动（Phase 4：场景延伸） ──
+# 异地互动活动
 
 
 class LongDistanceActivity(Base):
@@ -450,7 +494,7 @@ class LongDistanceActivity(Base):
     )
 
 
-# ── 关系里程碑（Phase 4：关键节点服务） ──
+# 关系里程碑（关键节点服务）
 
 
 class Milestone(Base):
@@ -469,7 +513,7 @@ class Milestone(Base):
     )
 
 
-# ── 社群技巧（Phase 4：体验升级） ──
+# 社群技巧
 
 
 class CommunityTip(Base):
@@ -487,7 +531,7 @@ class CommunityTip(Base):
     )
 
 
-# ── 用户通知（Phase 4：体验升级） ──
+# 用户通知
 
 
 class UserNotification(Base):
@@ -506,7 +550,7 @@ class UserNotification(Base):
     )
 
 
-# ── 危机预警记录（Crisis Level Grading System） ──
+# 危机预警记录（Crisis Level Grading System）
 
 
 class CrisisAlert(Base):
@@ -552,7 +596,7 @@ class CrisisAlert(Base):
     report: Mapped["Report"] = relationship()
 
 
-# ── AI Agent 聊天会话存储 (Phase 5：陪伴打卡升级) ──
+# AI Agent 聊天会话存储
 
 
 class AgentChatSession(Base):
@@ -604,7 +648,7 @@ class AgentChatMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     # 若为 tool_calls/function_call，将字典存入 payload
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    
+
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
@@ -613,7 +657,27 @@ class AgentChatMessage(Base):
     session: Mapped["AgentChatSession"] = relationship(back_populates="messages")
 
 
-# ── 关系智能层（Relationship Intelligence Layer） ──
+class AgentThought(Base):
+    __tablename__ = "agent_thoughts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agent_chat_sessions.id"), index=True)
+    step_index: Mapped[int] = mapped_column(Integer, default=0)
+    thought: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tool_calls_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tool_results_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    # 关系
+    session: Mapped["AgentChatSession"] = relationship()
+
+
+# 关系智能层（Relationship Intelligence Layer）
 
 
 class RelationshipEvent(Base):
@@ -880,6 +944,99 @@ class UserInteractionEvent(Base):
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    user: Mapped["User"] = relationship()
+    pair: Mapped["Pair"] = relationship()
+
+
+# 长期关系记忆
+
+
+class RelationshipMemory(Base):
+    """跨会话的长期关系记忆条目。
+
+    memory_type:
+      - person:   出现过的关键人物及其关系角色
+      - event:    重要事件的结构化摘要
+      - strategy: 过去用过的处理策略及效果
+      - pattern:  反复出现的互动模式
+    """
+    __tablename__ = "relationship_memories"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pairs.id"), index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), index=True
+    )
+    memory_type: Mapped[str] = mapped_column(
+        String(20), index=True
+    )  # person / event / strategy / pattern
+    subject: Mapped[str] = mapped_column(
+        String(100), index=True
+    )  # 关键人物名或事件标题
+    content: Mapped[dict] = mapped_column(JSON)
+    source_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_chat_sessions.id"), nullable=True
+    )
+    importance: Mapped[int] = mapped_column(
+        Integer, default=3
+    )  # 1-5
+    last_referenced_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    user: Mapped["User"] = relationship()
+    pair: Mapped["Pair"] = relationship()
+
+
+class SavedExpression(Base):
+    """Owner-only confirmed text. Pair context never grants another person access."""
+    __tablename__ = "saved_expressions"
+    __table_args__ = (Index("ix_saved_expressions_owner_scope", "user_id", "pair_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    pair_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pairs.id", ondelete="SET NULL"), nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    # Erase text but retain a minimal tombstone so a delayed PUT cannot restore it.
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class SkillAnalysisRecord(Base):
+    """保存每次深度分析的结果。"""
+    __tablename__ = "skill_analysis_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    pair_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pairs.id"), index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), index=True
+    )
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_chat_sessions.id"), nullable=True
+    )
+    user_input: Mapped[str] = mapped_column(Text)
+    primary_intent: Mapped[str] = mapped_column(String(20))
+    delivery_json: Mapped[dict] = mapped_column(JSON)
+    selected_proposal_id: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)

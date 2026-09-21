@@ -29,7 +29,28 @@ DEFAULT_PRODUCT_PREFS: dict[str, object] = {
         "scale": 1.0,
     },
     "task_planner_defaults": normalize_task_planner_defaults(None),
+    "habit_profile": {
+        "taboos": [],
+        "comfort_preferences": [],
+        "custom_notes": "",
+    },
 }
+
+DEFAULT_SUGGESTED_TABOOS = (
+    "反感长篇大论的说教",
+    "疲惫时不喜被追问细节",
+    "讨厌做家务时居高临下邀功",
+    "反感空洞的加油打气",
+    "抗拒被查岗或催促表态",
+    "冷战时别硬逼马上说清楚",
+)
+
+DEFAULT_SUGGESTED_COMFORT_PREFERENCES = (
+    "疲惫时先给一杯温水或安静陪伴",
+    "有事直接给解决方案不用绕弯",
+    "先接住感受再讨论对错",
+    "看重实际行动胜过口头安慰",
+)
 
 DEFAULT_CHECKIN_MOODS = (
     "开心",
@@ -128,6 +149,48 @@ def _normalize_hidden_default_moods(raw: object) -> list[str]:
     ]
 
 
+MAX_HABIT_TAGS = 16
+MAX_HABIT_TAG_LENGTH = 32
+MAX_HABIT_NOTES_LENGTH = 200
+
+
+def _normalize_habit_tags(raw: object) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        val = str(item or "").replace("\n", " ").replace("\r", " ").strip()
+        val = " ".join(val.split())
+        val = val.rstrip("，、；;")
+        if not val:
+            continue
+        val = val[:MAX_HABIT_TAG_LENGTH]
+        key = val.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(val)
+        if len(normalized) >= MAX_HABIT_TAGS:
+            break
+    return normalized
+
+
+def _normalize_habit_profile(raw: object) -> dict[str, object]:
+    default = {
+        "taboos": [],
+        "comfort_preferences": [],
+        "custom_notes": "",
+    }
+    if not isinstance(raw, dict):
+        return default
+    return {
+        "taboos": _normalize_habit_tags(raw.get("taboos")),
+        "comfort_preferences": _normalize_habit_tags(raw.get("comfort_preferences")),
+        "custom_notes": str(raw.get("custom_notes") or "").strip()[:MAX_HABIT_NOTES_LENGTH],
+    }
+
+
 def normalize_product_prefs(raw: dict | None) -> dict[str, object]:
     payload = dict(DEFAULT_PRODUCT_PREFS)
     if not isinstance(raw, dict):
@@ -178,6 +241,9 @@ def normalize_product_prefs(raw: dict | None) -> dict[str, object]:
     )
     payload["task_planner_defaults"] = normalize_task_planner_defaults(
         raw.get("task_planner_defaults")
+    )
+    payload["habit_profile"] = _normalize_habit_profile(
+        raw.get("habit_profile")
     )
 
     return payload

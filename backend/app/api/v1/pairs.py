@@ -682,6 +682,7 @@ async def join_pair(
     if pair.user_b_id and str(pair.user_b_id) != str(user.id):
         raise HTTPException(status_code=409, detail="这段关系已经有待确认加入请求")
 
+    requested_type = PairType(req.type)
     pair.user_b_id = user.id
     pair.status = PairStatus.PENDING
     pair.type = None
@@ -690,7 +691,7 @@ async def join_pair(
         pair_id=pair.id,
         kind=PairChangeRequestKind.JOIN_REQUEST,
         status=PairChangeRequestStatus.PENDING,
-        requested_type=PairType(req.type),
+        requested_type=requested_type,
         requester_user_id=user.id,
         approver_user_id=pair.user_a_id,
     )
@@ -1388,7 +1389,7 @@ async def get_pair_summary(
     )
 
 
-# ── 兼容旧解绑接口（统一转入新的断绝关系流程）──
+# 兼容旧解绑接口（统一转入新的断绝关系流程）
 
 
 @router.post("/request-unbind", response_model=dict)

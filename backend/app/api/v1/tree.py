@@ -24,15 +24,6 @@ from app.models import (
 
 router = APIRouter(prefix="/tree", tags=["关系树"])
 
-LEVEL_EMOJI = {
-    TreeLevel.SEED: "🌰",
-    TreeLevel.SPROUT: "🌱",
-    TreeLevel.SAPLING: "🌿",
-    TreeLevel.TREE: "🌳",
-    TreeLevel.BIG_TREE: "🏔️",
-    TreeLevel.FOREST: "🌲",
-}
-
 LEVEL_NAME = {
     TreeLevel.SEED: "种子",
     TreeLevel.SPROUT: "萌芽",
@@ -208,7 +199,6 @@ async def _serialize_tree_status(
         "growth_points": tree.growth_points,
         "level": tree.level.value,
         "level_name": LEVEL_NAME.get(tree.level, "种子"),
-        "level_emoji": LEVEL_EMOJI.get(tree.level, "🌰"),
         "next_level_at": next_threshold,
         "progress_percent": _progress_percent(tree.growth_points, next_threshold),
         "milestones": tree.milestones or [],
@@ -246,7 +236,6 @@ def _demo_status(*, collected: set[str] | None = None) -> dict:
         "growth_points": 368 + sum(ENERGY_RULES[key]["points"] for key in collected),
         "level": "tree",
         "level_name": "小树",
-        "level_emoji": "🌳",
         "next_level_at": 700,
         "progress_percent": 52,
         "milestones": [],
@@ -343,7 +332,7 @@ async def water_tree(
 
     today = current_local_date()
     if tree.last_watered == today:
-        raise HTTPException(status_code=400, detail="今天已经浇过水了，明天再来吧 💧")
+        raise HTTPException(status_code=400, detail="今天已经浇过水了，明天再来吧")
 
     tree.last_watered = today
     level_up = _apply_growth(tree, 5)

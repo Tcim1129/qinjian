@@ -56,7 +56,7 @@ def decode_access_token(token: str) -> str | None:
 
 
 def create_realtime_ws_ticket(user_id: str) -> str:
-    """签发实时语音短时票据。"""
+    """生成实时语音连接使用的临时访问令牌。"""
     issued_at = datetime.now(timezone.utc)
     expire = issued_at + timedelta(seconds=settings.REALTIME_ASR_TICKET_EXPIRE_SECONDS)
     payload = {
@@ -71,7 +71,7 @@ def create_realtime_ws_ticket(user_id: str) -> str:
 
 
 def decode_realtime_ws_ticket(ticket: str) -> str | None:
-    """校验实时语音短时票据。"""
+    """检查实时语音连接的临时访问令牌是否有效。"""
     if not ticket:
         return None
 

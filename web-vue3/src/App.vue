@@ -3,13 +3,8 @@
     <AppHeader v-if="showChrome" />
     <main class="app-main">
       <router-view v-slot="{ Component, route }">
-        <transition
-          name="page"
-          @before-leave="prepareRouteLeave"
-          @after-leave="resetRouteLeave"
-          @leave-cancelled="resetRouteLeave"
-        >
-          <component :is="Component" :key="route.fullPath" class="route-view" />
+        <transition name="page" mode="out-in">
+          <component :is="Component" :key="route.name" class="route-view" />
         </transition>
       </router-view>
     </main>
@@ -29,7 +24,7 @@ import TabBar from '@/components/TabBar.vue'
 const userStore = useUserStore()
 const route = useRoute()
 const isMobileViewport = ref(false)
-const showChrome = computed(() => userStore.isLoggedIn && route.name !== 'auth')
+const showChrome = computed(() => userStore.isLoggedIn && route.name !== 'auth' && route.name !== 'relationship-agent')
 const showMobileTabBar = computed(() => showChrome.value && isMobileViewport.value)
 const appShellClasses = computed(() => ({
   'has-tabbar': showMobileTabBar.value,
@@ -52,21 +47,6 @@ function warmLoggedInRoutes() {
   if (userStore.isLoggedIn) {
     warmCoreRouteComponents()
   }
-}
-
-function prepareRouteLeave(el) {
-  const measuredRect = el.getBoundingClientRect()
-  const leaveRect = window.__qjRouteLeaveRect || measuredRect
-
-  el.style.setProperty('--route-leave-top', `${leaveRect.top}px`)
-  el.style.setProperty('--route-leave-left', `${leaveRect.left}px`)
-  el.style.setProperty('--route-leave-width', `${leaveRect.width}px`)
-}
-
-function resetRouteLeave(el) {
-  el.style.removeProperty('--route-leave-top')
-  el.style.removeProperty('--route-leave-left')
-  el.style.removeProperty('--route-leave-width')
 }
 
 function syncMobileViewport(event) {

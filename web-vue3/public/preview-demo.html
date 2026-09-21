@@ -9,7 +9,7 @@
   <body>
     <script>
       const params = new URLSearchParams(window.location.search)
-      const route = params.get('route') || '/'
+      const route = params.get('route') || '/relationship-agent'
       const safeRoute = route.startsWith('/') && !route.startsWith('//') ? route : '/'
 
       window.sessionStorage.setItem('qj_token', 'demo-mode')

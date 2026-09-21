@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from types import SimpleNamespace
 
 from app.api.v1 import auth
 from app.api.v1.auth import (
@@ -26,6 +27,10 @@ from app.schemas import (
     WechatLoginRequest,
 )
 from app.services import login_attempts, phone_code_store
+
+
+def _fake_request():
+    return SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
 
 
 @pytest.fixture
@@ -60,6 +65,7 @@ async def test_register_accepts_phone_account_and_allows_phone_password_login(
             nickname="手机用户",
             password="123456",
         ),
+        _fake_request(),
         db=db_session,
     )
 
@@ -68,6 +74,7 @@ async def test_register_accepts_phone_account_and_allows_phone_password_login(
 
     login_response = await login(
         LoginRequest(account="13800138000", password="123456"),
+        _fake_request(),
         db=db_session,
     )
 
@@ -87,10 +94,12 @@ async def test_login_accepts_both_email_and_phone_for_same_account(db_session):
 
     email_login = await login(
         LoginRequest(account="tester@example.com", password="123456"),
+        _fake_request(),
         db=db_session,
     )
     phone_login = await login(
         LoginRequest(account="13800138001", password="123456"),
+        _fake_request(),
         db=db_session,
     )
 
@@ -166,6 +175,7 @@ async def test_register_keeps_legacy_email_field_compatible(db_session):
             nickname="legacy",
             password="123456",
         ),
+        _fake_request(),
         db=db_session,
     )
 
@@ -173,6 +183,7 @@ async def test_register_keeps_legacy_email_field_compatible(db_session):
 
     login_response = await login(
         LoginRequest(email="Legacy@Example.com", password="123456"),
+        _fake_request(),
         db=db_session,
     )
 
@@ -193,6 +204,7 @@ async def test_register_can_upgrade_existing_phone_code_account(db_session):
 
     response = await register(
         RegisterRequest(account=phone, nickname="正式账号", password="123456"),
+        _fake_request(),
         db=db_session,
     )
 
@@ -210,6 +222,7 @@ async def test_register_rejects_passwords_shorter_than_six_chars(db_session):
                 nickname="tester",
                 password="12345",
             ),
+            _fake_request(),
             db=db_session,
         )
 
