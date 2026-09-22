@@ -1,235 +1,146 @@
 <template>
-  <view class="container">
-    <view class="header">
-      <text class="title">关系简报</text>
+  <view class="report-page">
+    <!-- 顶部标题卡片 -->
+    <view class="header-card">
+      <view class="header-row">
+        <text class="page-title">双人共鸣简报</text>
+        <view class="pair-tag-badge">
+          <text>{{ userStore.partnerName || '林夏' }} 的空间</text>
+        </view>
+      </view>
+      <text class="page-sub">基于双方日常记录与情感频率，由亲健 AI 深度复盘</text>
     </view>
 
-    <view class="tabs">
-      <view 
-        v-for="tab in tabs" 
+    <!-- 简报周期分段器 -->
+    <view class="segmented-tabs">
+      <view
+        v-for="tab in tabs"
         :key="tab.key"
-        :class="['tab', activeTab === tab.key ? 'active' : '']"
+        :class="['tab-item', activeTab === tab.key ? 'active' : '']"
         @click="activeTab = tab.key"
       >
-        {{ tab.label }}
+        <text class="tab-label">{{ tab.label }}</text>
       </view>
     </view>
 
-    <!-- 日报 -->
-    <view v-if="activeTab === 'daily'" class="report-content">
-      <view v-if="dailyReport" class="report-card">
-        <view class="score-section">
-          <view class="score-circle">
-            <text class="score-value">{{ dailyReport.health_score }}</text>
-            <text class="score-label">健康分</text>
+    <!-- 日报视图 -->
+    <view v-if="activeTab === 'daily'" class="report-body">
+      <view class="content-card">
+        <view class="score-hero">
+          <view class="score-ring">
+            <text class="score-number">{{ dailyReport.health_score }}</text>
+            <text class="score-text">健康分</text>
           </view>
-          <view class="score-desc">
-            <text class="status">{{ getStatusText(dailyReport.health_score) }}</text>
-            <text class="date">{{ todayDate }}</text>
+          <view class="score-detail">
+            <text class="score-status">{{ getStatusText(dailyReport.health_score) }}</text>
+            <text class="score-date">{{ todayDate }}</text>
+            <text class="score-note">双方今日互动频率舒适，情绪感知处于良性共振状态</text>
           </view>
         </view>
 
-        <view class="section">
-          <text class="section-title">今日摘要</text>
-          <text class="section-content">{{ dailyReport.summary }}</text>
+        <view class="section-block">
+          <text class="section-title">今日核心摘要</text>
+          <text class="section-desc">{{ dailyReport.summary }}</text>
         </view>
 
-        <view class="section">
-          <text class="section-title">关键观察</text>
-          <view class="observation-list">
-            <view 
-              v-for="(item, index) in dailyReport.observations" 
-              :key="index"
-              class="observation-item"
+        <view class="section-block">
+          <text class="section-title">敏锐观察</text>
+          <view class="bullet-list">
+            <view
+              v-for="(item, idx) in dailyReport.observations"
+              :key="idx"
+              class="bullet-row"
             >
-              <text class="bullet">•</text>
-              <text class="text">{{ item }}</text>
+              <text class="bullet-dot">•</text>
+              <text class="bullet-text">{{ item }}</text>
             </view>
           </view>
         </view>
 
-        <view class="section">
-          <text class="section-title">建议动作</text>
-          <view class="action-list">
-            <view 
-              v-for="(action, index) in dailyReport.suggestions" 
-              :key="index"
-              class="action-item"
+        <view class="section-block">
+          <text class="section-title">今日微小温暖动作</text>
+          <view class="action-suggestions">
+            <view
+              v-for="(sug, idx) in dailyReport.suggestions"
+              :key="idx"
+              class="suggestion-pill"
             >
-              <text class="number">{{ index + 1 }}</text>
-              <text class="text">{{ action }}</text>
+              <text class="pill-num">{{ idx + 1 }}</text>
+              <text class="pill-text">{{ sug }}</text>
             </view>
           </view>
         </view>
-      </view>
-
-      <view v-else class="empty">
-        <text class="text">今天还没有记录</text>
-        <button @click="goCheckin" size="mini" type="primary">去记录</button>
       </view>
     </view>
 
-    <!-- 周报 -->
-    <view v-if="activeTab === 'weekly'" class="report-content">
-      <view v-if="weeklyReport" class="report-card">
-        <view class="trend-section">
-          <text class="trend-title">本周健康趋势</text>
-          <view class="trend-chart">
-            <view 
-              v-for="(day, index) in weeklyReport.daily_scores" 
-              :key="index"
-              class="chart-bar"
-            >
-              <view 
-                class="bar"
-                :style="{ height: (day.score / 100 * 200) + 'rpx' }"
-              ></view>
-              <text class="bar-label">{{ day.label }}</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="section">
-          <text class="section-title">本周关系状态</text>
-          <text class="section-content">{{ weeklyReport.summary }}</text>
-        </view>
-
-        <view class="section">
-          <text class="section-title">本周互动情况</text>
-          <view class="stats-grid">
-            <view class="stat-item">
-              <text class="stat-value">{{ weeklyReport.checkin_days }}</text>
-              <text class="stat-label">记录天数</text>
-            </view>
-            <view class="stat-item">
-              <text class="stat-value">{{ weeklyReport.interaction_count }}</text>
-              <text class="stat-label">互动次数</text>
-            </view>
-            <view class="stat-item">
-              <text class="stat-value">{{ weeklyReport.avg_feeling }}</text>
-              <text class="stat-label">平均感受</text>
-            </view>
-            <view class="stat-item">
-              <text class="stat-value">{{ weeklyReport.conflict_count }}</text>
-              <text class="stat-label">冲突次数</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="section">
-          <text class="section-title">下周建议</text>
-          <view class="action-list">
-            <view 
-              v-for="(action, index) in weeklyReport.suggestions" 
-              :key="index"
-              class="action-item"
-            >
-              <text class="number">{{ index + 1 }}</text>
-              <text class="text">{{ action }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <view v-else class="empty">
-        <text class="text">本周还没有足够的数据</text>
-      </view>
-    </view>
-
-    <!-- 月报 -->
-    <view v-if="activeTab === 'monthly'" class="report-content">
-      <view v-if="monthlyReport" class="report-card">
-        <view class="month-header">
-          <text class="month-title">{{ currentMonth }}</text>
-          <view class="month-stats">
-            <view class="month-stat">
-              <text class="value">{{ monthlyReport.avg_score }}</text>
-              <text class="label">平均健康分</text>
-            </view>
-            <view class="month-stat">
-              <text class="value">{{ monthlyReport.record_rate }}%</text>
-              <text class="label">记录率</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="section">
-          <text class="section-title">本月关系回顾</text>
-          <text class="section-content">{{ monthlyReport.summary }}</text>
-        </view>
-
-        <view class="section">
-          <text class="section-title">本月亮点时刻</text>
-          <view class="highlight-list">
-            <view 
-              v-for="(item, index) in monthlyReport.highlights" 
-              :key="index"
-              class="highlight-item"
-            >
-              <text class="date">{{ item.date }}</text>
-              <text class="content">{{ item.content }}</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="section">
-          <text class="section-title">成长与改善</text>
-          <text class="section-content">{{ monthlyReport.growth }}</text>
-        </view>
-      </view>
-
-      <view v-else class="empty">
-        <text class="text">本月数据不足</text>
-      </view>
-    </view>
-
-    <!-- 趋势 -->
-    <view v-if="activeTab === 'trend'" class="report-content">
-      <view class="trend-card">
-        <text class="card-title">健康分趋势（近30天）</text>
-        <view class="line-chart">
-          <!-- 这里可以集成 uCharts 或其他图表库 -->
-          <text class="placeholder">趋势图表</text>
-        </view>
-      </view>
-
-      <view class="trend-card">
-        <text class="card-title">情绪分布</text>
-        <view class="emotion-stats">
-          <view 
-            v-for="emotion in emotionStats" 
-            :key="emotion.name"
-            class="emotion-bar"
+    <!-- 周报视图 -->
+    <view v-else-if="activeTab === 'weekly'" class="report-body">
+      <view class="content-card">
+        <text class="section-title">本周健康趋势波动</text>
+        <view class="trend-chart-box">
+          <view
+            v-for="(day, idx) in weeklyReport.daily_scores"
+            :key="idx"
+            class="chart-col"
           >
-            <text class="emotion-name">{{ emotion.name }}</text>
-            <view class="bar-container">
-              <view 
-                class="bar-fill"
-                :style="{ width: emotion.percent + '%' }"
+            <view class="bar-track">
+              <view
+                class="bar-filled"
+                :style="{ height: `${(day.score / 100) * 160}rpx` }"
               ></view>
             </view>
-            <text class="emotion-count">{{ emotion.count }}</text>
+            <text class="bar-score">{{ day.score }}</text>
+            <text class="bar-day">{{ day.label }}</text>
+          </view>
+        </view>
+
+        <view class="section-block">
+          <text class="section-title">本周关系态势分析</text>
+          <text class="section-desc">{{ weeklyReport.summary }}</text>
+        </view>
+
+        <view class="stats-overview-grid">
+          <view class="metric-box">
+            <text class="metric-val">{{ weeklyReport.checkin_days }} 天</text>
+            <text class="metric-key">打卡记录</text>
+          </view>
+          <view class="metric-box">
+            <text class="metric-val">{{ weeklyReport.interaction_count }} 次</text>
+            <text class="metric-key">互动沟通</text>
+          </view>
+          <view class="metric-box">
+            <text class="metric-val">{{ weeklyReport.avg_feeling }}</text>
+            <text class="metric-key">平均心境分</text>
           </view>
         </view>
       </view>
+    </view>
 
-      <view class="trend-card">
-        <text class="card-title">互动频率</text>
-        <view class="frequency-grid">
-          <view 
-            v-for="(day, index) in interactionGrid" 
-            :key="index"
-            :class="['grid-cell', getCellClass(day.count)]"
-            :title="`${day.date}: ${day.count}次`"
-          ></view>
+    <!-- 月报视图 -->
+    <view v-else class="report-body">
+      <view class="content-card">
+        <view class="section-block">
+          <text class="section-title">月度关系深度复盘</text>
+          <text class="section-desc">{{ monthlyReport.summary }}</text>
         </view>
-        <view class="legend">
-          <text>少</text>
-          <view class="legend-item level-0"></view>
-          <view class="legend-item level-1"></view>
-          <view class="legend-item level-2"></view>
-          <view class="legend-item level-3"></view>
-          <text>多</text>
+
+        <view class="section-block">
+          <text class="section-title">月度高光时刻</text>
+          <view class="highlight-list">
+            <view
+              v-for="(hl, idx) in monthlyReport.highlights"
+              :key="idx"
+              class="highlight-card"
+            >
+              <text class="hl-date">{{ hl.date }}</text>
+              <text class="hl-content">{{ hl.content }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="growth-box">
+          <text class="growth-badge">✨ 关系成长感悟</text>
+          <text class="growth-text">{{ monthlyReport.growth }}</text>
         </view>
       </view>
     </view>
@@ -238,534 +149,419 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
 
 const activeTab = ref('daily')
 const tabs = [
   { key: 'daily', label: '日报' },
   { key: 'weekly', label: '周报' },
-  { key: 'monthly', label: '月报' },
-  { key: 'trend', label: '趋势' }
+  { key: 'monthly', label: '月报' }
 ]
-
-// 模拟数据
-const dailyReport = ref({
-  health_score: 85,
-  summary: '今天你们进行了深度沟通，双方都表达了各自的想法。整体氛围积极，关系健康度保持良好。',
-  observations: [
-    '主动分享了工作中的困扰',
-    '对方给予了积极回应',
-    '共同规划了周末安排',
-    '情绪表达真诚自然'
-  ],
-  suggestions: [
-    '继续保持主动分享的习惯',
-    '可以尝试一起做一件新鲜的事',
-    '注意倾听对方的深层需求'
-  ]
-})
-
-const weeklyReport = ref({
-  daily_scores: [
-    { label: '周一', score: 75 },
-    { label: '周二', score: 80 },
-    { label: '周三', score: 85 },
-    { label: '周四', score: 78 },
-    { label: '周五', score: 88 },
-    { label: '周六', score: 92 },
-    { label: '周日', score: 85 }
-  ],
-  summary: '本周关系整体稳定向好，互动质量有所提升。周末的深度交流效果尤其明显。',
-  checkin_days: 7,
-  interaction_count: 23,
-  avg_feeling: 8.2,
-  conflict_count: 1,
-  suggestions: [
-    '保持每天至少一次深度对话',
-    '尝试共同完成一个小目标',
-    '注意观察对方的情绪变化'
-  ]
-})
-
-const monthlyReport = ref({
-  avg_score: 82,
-  record_rate: 87,
-  summary: '本月关系稳定发展，双方在沟通方式上有明显进步。遇到分歧时能够更加理性地处理，互相理解的能力在增强。',
-  highlights: [
-    { date: '9月5日', content: '一起完成了周末郊游计划，关系升温' },
-    { date: '9月12日', content: '成功化解了一次工作压力带来的情绪波动' },
-    { date: '9月20日', content: '共同规划了未来三个月的目标' }
-  ],
-  growth: '本月最大的进步是学会了在冲突时先暂停冷静，而不是立即争论。双方都在努力理解对方的感受，这是关系成熟的重要标志。'
-})
-
-const emotionStats = ref([
-  { name: '开心', count: 45, percent: 90 },
-  { name: '平静', count: 38, percent: 76 },
-  { name: '温暖', count: 32, percent: 64 },
-  { name: '焦虑', count: 12, percent: 24 },
-  { name: '失落', count: 8, percent: 16 }
-])
-
-const interactionGrid = ref(
-  Array.from({ length: 90 }, (_, i) => ({
-    date: `Day ${i + 1}`,
-    count: Math.floor(Math.random() * 5)
-  }))
-)
 
 const todayDate = computed(() => {
   const now = new Date()
   return `${now.getMonth() + 1}月${now.getDate()}日`
 })
 
-const currentMonth = computed(() => {
-  const now = new Date()
-  return `${now.getFullYear()}年${now.getMonth() + 1}月`
+const dailyReport = ref({
+  health_score: 88,
+  summary: '今天你们进行了深度自然的沟通，双方都坦诚表达了真实想法。整体氛围温润，关系健康度处于高舒适期。',
+  observations: [
+    '下班后主动分享了生活细节，消解了一整天的疲惫感',
+    '双方在面对工作压力时互给空间，未将负面情绪迁怒于彼此',
+    '情绪共鸣自然真诚，对周末日程达成了初步默契'
+  ],
+  suggestions: [
+    '晚上睡前留出 15 分钟温和对齐，不谈复杂规划',
+    '明天尝试给对方带一份微小的小惊喜或热饮',
+    '继续保持疲惫时先深呼吸、给彼此留白的习惯'
+  ]
 })
 
-const getStatusText = (score) => {
-  if (score >= 85) return '关系健康'
-  if (score >= 70) return '整体良好'
-  if (score >= 60) return '需要关注'
-  return '建议改善'
-}
+const weeklyReport = ref({
+  daily_scores: [
+    { label: '一', score: 78 },
+    { label: '二', score: 82 },
+    { label: '三', score: 85 },
+    { label: '四', score: 80 },
+    { label: '五', score: 90 },
+    { label: '六', score: 94 },
+    { label: '日', score: 88 }
+  ],
+  summary: '本周关系整体稳定向好，互动质量显著提升。周末的深度长谈帮助双方彻底解开了近期的分工困惑。',
+  checkin_days: 7,
+  interaction_count: 24,
+  avg_feeling: 8.5
+})
 
-const getCellClass = (count) => {
-  if (count === 0) return 'level-0'
-  if (count <= 1) return 'level-1'
-  if (count <= 3) return 'level-2'
-  return 'level-3'
-}
+const monthlyReport = ref({
+  summary: '本月关系保持高质量发展，双方在表达需求和倾听彼此上有明显进阶。面对分歧时能够先看见情绪再解决问题，互相包容度极高。',
+  highlights: [
+    { date: '9月5日', content: '共同完成了关于未来工作与居住规划的深层沟通' },
+    { date: '9月14日', content: '在双方均面临加班压力时，默契给予安静陪伴' },
+    { date: '9月21日', content: '达成 100 天连续记录里程碑' }
+  ],
+  growth: '本月最大的进步是在疲惫和分歧时能够先给彼此 20 分钟冷静期，不再急于用指责证明对错。这是关系迈向成熟最宝贵的基石。'
+})
 
-const goCheckin = () => {
-  uni.switchTab({ url: '/pages/checkin/checkin' })
+function getStatusText(score) {
+  if (score >= 85) return '极佳 · 高度默契'
+  if (score >= 70) return '良好 · 节奏舒适'
+  return '平稳 · 需多留白'
 }
 </script>
 
-<style scoped>
-.container {
+<style scoped lang="scss">
+@import '@/styles/tokens.scss';
+
+.report-page {
   min-height: 100vh;
-  background: #f5f5f5;
-  padding: 20rpx;
+  padding: 24rpx 32rpx 60rpx;
+  box-sizing: border-box;
 }
 
-.header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 40rpx 30rpx;
-  border-radius: 20rpx;
-  margin-bottom: 20rpx;
+.header-card {
+  background: $color-paper-strong;
+  border: 1px solid $color-paper-line-strong;
+  border-radius: $radius-lg;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: $shadow-sm;
 }
 
-.title {
-  font-size: 40rpx;
-  font-weight: bold;
-  color: #fff;
-}
-
-.tabs {
-  display: flex;
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 10rpx;
-  margin-bottom: 20rpx;
-  overflow-x: auto;
-}
-
-.tab {
-  flex: 1;
-  text-align: center;
-  padding: 20rpx;
-  font-size: 26rpx;
-  color: #666;
-  border-radius: 15rpx;
-  white-space: nowrap;
-}
-
-.tab.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  font-weight: bold;
-}
-
-.report-content {
-  margin-bottom: 20rpx;
-}
-
-.report-card {
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 30rpx;
-}
-
-.score-section {
+.header-row {
   display: flex;
   align-items: center;
-  padding: 40rpx 0;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 30rpx;
+  justify-content: space-between;
 }
 
-.score-circle {
-  width: 180rpx;
-  height: 180rpx;
+.page-title {
+  font-family: $font-serif;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: $color-ink;
+}
+
+.pair-tag-badge {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: $color-moss-deep;
+  background: $color-moss-soft;
+  padding: 6rpx 18rpx;
+  border-radius: 12rpx;
+}
+
+.page-sub {
+  font-size: 24rpx;
+  color: $color-ink-faint;
+  margin-top: 8rpx;
+  display: block;
+}
+
+.segmented-tabs {
+  display: flex;
+  background: rgba(245, 238, 231, 0.74);
+  border: 1px solid rgba(68, 52, 40, 0.14);
+  border-radius: 16rpx;
+  padding: 6rpx;
+  margin-bottom: 28rpx;
+}
+
+.tab-item {
+  flex: 1;
+  height: 68rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12rpx;
+  transition: all 0.2s ease;
+
+  &.active {
+    background: #fffdfa;
+    box-shadow: 0 4rpx 14rpx rgba(74, 52, 36, 0.08);
+
+    .tab-label {
+      color: $color-seal-deep;
+      font-weight: 800;
+    }
+  }
+}
+
+.tab-label {
+  font-size: 28rpx;
+  color: $color-ink-soft;
+  font-weight: 600;
+}
+
+.content-card {
+  background: $color-paper-strong;
+  border: 1px solid $color-paper-line-strong;
+  border-radius: $radius-lg;
+  padding: 32rpx;
+  box-shadow: $shadow-sm;
+}
+
+.score-hero {
+  display: flex;
+  align-items: center;
+  gap: 28rpx;
+  padding-bottom: 30rpx;
+  border-bottom: 1px solid rgba(68, 52, 40, 0.1);
+  margin-bottom: 28rpx;
+}
+
+.score-ring {
+  width: 150rpx;
+  height: 150rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: rgba(95, 135, 111, 0.15);
+  border: 4rpx solid $color-moss;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-right: 30rpx;
 }
 
-.score-value {
+.score-number {
+  font-family: $font-serif;
   font-size: 56rpx;
-  font-weight: bold;
-  color: #fff;
+  font-weight: 800;
+  color: $color-moss;
+  line-height: 1;
 }
 
-.score-label {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.8);
+.score-text {
+  font-size: 20rpx;
+  color: $color-ink-soft;
+  margin-top: 4rpx;
 }
 
-.score-desc {
+.score-detail {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.status {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
-  display: block;
-  margin-bottom: 10rpx;
+.score-status {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: $color-ink;
 }
 
-.date {
-  font-size: 24rpx;
-  color: #999;
+.score-date {
+  font-size: 22rpx;
+  color: $color-ink-faint;
+  margin-top: 4rpx;
 }
 
-.section {
-  margin-bottom: 40rpx;
+.score-note {
+  font-size: 22rpx;
+  color: $color-ink-soft;
+  margin-top: 8rpx;
+  line-height: 1.4;
+}
+
+.section-block {
+  margin-bottom: 28rpx;
 }
 
 .section-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
-  display: block;
-  margin-bottom: 20rpx;
-}
-
-.section-content {
+  font-family: $font-serif;
   font-size: 28rpx;
-  line-height: 1.8;
-  color: #666;
-}
-
-.observation-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15rpx;
-}
-
-.observation-item {
-  display: flex;
-  align-items: flex-start;
-}
-
-.bullet {
-  font-size: 32rpx;
-  color: #667eea;
-  margin-right: 15rpx;
-  line-height: 1.6;
-}
-
-.observation-item .text {
-  flex: 1;
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: #666;
-}
-
-.action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.action-item {
-  display: flex;
-  align-items: flex-start;
-  padding: 20rpx;
-  background: #f9f9f9;
-  border-radius: 10rpx;
-}
-
-.number {
-  width: 40rpx;
-  height: 40rpx;
-  background: #667eea;
-  color: #fff;
-  border-radius: 50%;
-  text-align: center;
-  line-height: 40rpx;
-  font-size: 24rpx;
-  margin-right: 20rpx;
-}
-
-.action-item .text {
-  flex: 1;
-  font-size: 26rpx;
-  line-height: 1.8;
-  color: #333;
-}
-
-/* 周报样式 */
-.trend-section {
-  padding: 30rpx 0;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 30rpx;
-}
-
-.trend-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
+  font-weight: 800;
+  color: $color-ink;
   display: block;
-  margin-bottom: 30rpx;
+  margin-bottom: 12rpx;
 }
 
-.trend-chart {
+.section-desc {
+  font-size: 26rpx;
+  color: $color-ink-soft;
+  line-height: 1.6;
+  background: rgba(246, 240, 234, 0.6);
+  padding: 20rpx;
+  border-radius: 12rpx;
+  display: block;
+}
+
+.bullet-list {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 250rpx;
-  padding: 20rpx 0;
+  flex-direction: column;
+  gap: 12rpx;
 }
 
-.chart-bar {
+.bullet-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+}
+
+.bullet-dot {
+  color: $color-seal;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
+.bullet-text {
   flex: 1;
+  font-size: 24rpx;
+  color: $color-ink;
+  line-height: 1.5;
+}
+
+.action-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.suggestion-pill {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  background: rgba(215, 104, 72, 0.08);
+  border: 1px solid rgba(215, 104, 72, 0.2);
+  padding: 14rpx 20rpx;
+  border-radius: 12rpx;
+}
+
+.pill-num {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: $color-seal;
+  color: #fffdfa;
+  font-size: 20rpx;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pill-text {
+  font-size: 24rpx;
+  color: $color-ink;
+  font-weight: 600;
+}
+
+/* 趋势图表 */
+.trend-chart-box {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 30rpx 10rpx 20rpx;
+  height: 240rpx;
+}
+
+.chart-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.bar-track {
+  width: 24rpx;
+  height: 160rpx;
+  background: rgba(246, 240, 234, 0.8);
+  border-radius: 12rpx;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar-filled {
+  width: 100%;
+  background: $color-moss;
+  border-radius: 12rpx;
+  transition: height 0.3s ease;
+}
+
+.bar-score {
+  font-size: 18rpx;
+  color: $color-ink-faint;
+  font-weight: 600;
+}
+
+.bar-day {
+  font-size: 22rpx;
+  color: $color-ink-soft;
+}
+
+.stats-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.metric-box {
+  background: rgba(246, 240, 234, 0.6);
+  border-radius: 14rpx;
+  padding: 20rpx 10rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.bar {
-  width: 60rpx;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10rpx 10rpx 0 0;
-  margin-bottom: 10rpx;
+.metric-val {
+  font-family: $font-serif;
+  font-size: 32rpx;
+  font-weight: 800;
+  color: $color-seal-deep;
 }
 
-.bar-label {
+.metric-key {
   font-size: 20rpx;
-  color: #999;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20rpx;
-}
-
-.stat-item {
-  padding: 30rpx;
-  background: #f9f9f9;
-  border-radius: 15rpx;
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 48rpx;
-  font-weight: bold;
-  color: #667eea;
-  display: block;
-  margin-bottom: 10rpx;
-}
-
-.stat-label {
-  font-size: 24rpx;
-  color: #999;
-}
-
-/* 月报样式 */
-.month-header {
-  padding: 30rpx 0;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 30rpx;
-}
-
-.month-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
-  display: block;
-  margin-bottom: 30rpx;
-}
-
-.month-stats {
-  display: flex;
-  gap: 40rpx;
-}
-
-.month-stat {
-  text-align: center;
-}
-
-.month-stat .value {
-  font-size: 56rpx;
-  font-weight: bold;
-  color: #667eea;
-  display: block;
-  margin-bottom: 10rpx;
-}
-
-.month-stat .label {
-  font-size: 24rpx;
-  color: #999;
+  color: $color-ink-faint;
+  margin-top: 4rpx;
 }
 
 .highlight-list {
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 14rpx;
 }
 
-.highlight-item {
-  padding: 25rpx;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border-left: 4rpx solid #667eea;
-  border-radius: 10rpx;
+.highlight-card {
+  background: rgba(246, 240, 234, 0.6);
+  border-radius: 12rpx;
+  padding: 18rpx 20rpx;
 }
 
-.highlight-item .date {
-  font-size: 24rpx;
-  color: #667eea;
-  display: block;
-  margin-bottom: 10rpx;
-}
-
-.highlight-item .content {
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: #333;
-}
-
-/* 趋势样式 */
-.trend-card {
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 30rpx;
-  margin-bottom: 20rpx;
-}
-
-.card-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
-  display: block;
-  margin-bottom: 30rpx;
-}
-
-.line-chart {
-  height: 400rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f9f9f9;
-  border-radius: 10rpx;
-}
-
-.placeholder {
-  font-size: 40rpx;
-  color: #ccc;
-}
-
-.emotion-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-.emotion-bar {
-  display: flex;
-  align-items: center;
-  gap: 15rpx;
-}
-
-.emotion-name {
-  width: 100rpx;
-  font-size: 26rpx;
-  color: #333;
-}
-
-.bar-container {
-  flex: 1;
-  height: 30rpx;
-  background: #f0f0f0;
-  border-radius: 15rpx;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-radius: 15rpx;
-}
-
-.emotion-count {
-  width: 60rpx;
-  text-align: right;
-  font-size: 24rpx;
-  color: #999;
-}
-
-.frequency-grid {
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  gap: 6rpx;
-  margin-bottom: 20rpx;
-}
-
-.grid-cell {
-  width: 100%;
-  padding-bottom: 100%;
-  border-radius: 4rpx;
-}
-
-.level-0 { background: #ebedf0; }
-.level-1 { background: #c6e48b; }
-.level-2 { background: #7bc96f; }
-.level-3 { background: #239a3b; }
-
-.legend {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10rpx;
+.hl-date {
   font-size: 20rpx;
-  color: #999;
-}
-
-.legend-item {
-  width: 20rpx;
-  height: 20rpx;
-  border-radius: 4rpx;
-}
-
-/* 空状态 */
-.empty {
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 100rpx 30rpx;
-  text-align: center;
-}
-
-.empty .text {
-  font-size: 28rpx;
-  color: #999;
+  color: $color-seal-deep;
+  font-weight: 700;
   display: block;
-  margin-bottom: 40rpx;
+}
+
+.hl-content {
+  font-size: 24rpx;
+  color: $color-ink;
+  margin-top: 4rpx;
+  display: block;
+}
+
+.growth-box {
+  background: rgba(240, 213, 184, 0.45);
+  border: 1px solid rgba(68, 52, 40, 0.14);
+  border-radius: 14rpx;
+  padding: 24rpx;
+}
+
+.growth-badge {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: $color-seal-deep;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.growth-text {
+  font-size: 24rpx;
+  color: $color-ink;
+  line-height: 1.6;
 }
 </style>

@@ -163,6 +163,9 @@
           <button class="demo-btn" @click="handleEnterDemo">
             进入体验样例 (免登录探索)
           </button>
+          <view class="debug-helper-wrap" @click="quickFillDebugAccount">
+            <text class="debug-helper-text">⚡ 调试便捷：一键填入测试账号与验证码</text>
+          </view>
         </view>
       </view>
     </view>
@@ -325,6 +328,15 @@ function handleEnterDemo() {
   setTimeout(() => {
     uni.switchTab({ url: '/pages/home/home' })
   }, 400)
+}
+
+function quickFillDebugAccount() {
+  mode.value = 'login'
+  loginMethod.value = 'phone'
+  phone.value = '13800138000'
+  code.value = '123456'
+  agreementAccepted.value = true
+  uni.showToast({ title: '已自动填入测试手机号与验证码', icon: 'none' })
 }
 </script>
 
@@ -620,5 +632,22 @@ function handleEnterDemo() {
   &:active {
     background: rgba(244, 221, 212, 0.7);
   }
+}
+
+.debug-helper-wrap {
+  margin-top: 18rpx;
+  padding: 10rpx 20rpx;
+  background: rgba(240, 213, 184, 0.3);
+  border-radius: 12rpx;
+
+  &:active {
+    background: rgba(240, 213, 184, 0.6);
+  }
+}
+
+.debug-helper-text {
+  font-size: 22rpx;
+  color: $color-ink-soft;
+  font-weight: 600;
 }
 </style>
