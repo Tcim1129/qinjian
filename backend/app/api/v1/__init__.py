@@ -13,6 +13,7 @@ from .milestones import router as milestones_router
 from .community import router as community_router
 from .agent import router as agent_router
 from .expressions import router as expressions_router
+from .mobile import router as mobile_router
 
 
 def _load_optional_router(module_name: str):
@@ -44,6 +45,7 @@ api_router.include_router(milestones_router)
 api_router.include_router(community_router)
 api_router.include_router(agent_router)
 api_router.include_router(expressions_router)
+api_router.include_router(mobile_router)
 if tasks_router is not None:
     api_router.include_router(tasks_router)
 if insights_router is not None:

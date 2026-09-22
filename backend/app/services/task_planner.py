@@ -37,6 +37,7 @@ from app.services.task_adaptation import (
     build_daily_task_note,
     clamp_daily_note_length,
 )
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 
 import os
 import sys
@@ -440,9 +441,12 @@ async def _build_recent_status_lines(
 
     checkins_result = await db.execute(
         select(Checkin)
-        .where(Checkin.pair_id == pair_id)
+        .where(
+            Checkin.pair_id == pair_id,
+            # 任务对双方可见，只能基于对伴侣可见的记录生成
+            Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
+        )
         .order_by(desc(Checkin.checkin_date), desc(Checkin.created_at))
-        .limit(4)
     )
     for checkin in checkins_result.scalars().all():
         parts = []

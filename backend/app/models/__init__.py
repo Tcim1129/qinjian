@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime, timezone
 from enum import Enum as PyEnum
 
-from sqlalchemy import String, Text, ForeignKey, Date, Enum, Float, JSON, Integer, Index
+from sqlalchemy import String, Text, ForeignKey, Date, Enum, Float, JSON, Integer, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import CHAR, TypeDecorator
@@ -345,6 +345,17 @@ class Checkin(Base):
     checkin_date: Mapped[date] = mapped_column(Date)
     raw_retention_until: Mapped[datetime | None] = mapped_column(nullable=True)
     raw_deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # 可见性（默认共享摘要：伴侣可见去敏摘要，原文仅本人；private 为逐条显式选择）
+    visibility_scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="shared_summary", server_default="shared_summary"
+    )
+    visibility_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    sharing_confirmed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    visibility_updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
@@ -352,6 +363,129 @@ class Checkin(Base):
     # 关系
     user: Mapped["User"] = relationship(back_populates="checkins")
     pair: Mapped["Pair"] = relationship(back_populates="checkins")
+
+
+class CheckinVisibilityEvent(Base):
+    """追加式可见性审计：只增不改，记录每次变更与失效的派生结果。"""
+
+    __tablename__ = "checkin_visibility_events"
+    __table_args__ = (
+        Index("ix_checkin_visibility_events_checkin_created", "checkin_id", "created_at"),
+        Index(
+            "uq_checkin_visibility_events_client_request",
+            "client_request_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    checkin_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("checkins.id", ondelete="CASCADE"), index=True
+    )
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    from_scope: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    to_scope: Mapped[str] = mapped_column(String(20))
+    from_version: Mapped[int | None] = mapped_column(nullable=True)
+    to_version: Mapped[int] = mapped_column(Integer)
+    sharing_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    client_request_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    invalidated: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+class MobileMediaUpload(Base):
+    """移动端媒体上传会话：预检 → 上传 → 状态查询 / 取消。"""
+
+    __tablename__ = "mobile_media_uploads"
+    __table_args__ = (
+        Index("ix_mobile_media_uploads_owner_request", "user_id", "client_request_id", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    client_request_id: Mapped[str] = mapped_column(String(96))
+    media_kind: Mapped[str] = mapped_column(String(10))
+    content_type: Mapped[str] = mapped_column(String(80))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="ready")
+    media_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class MobileOfflineDraft(Base):
+    """移动端离线草稿：只保存用户本机确认过的私有草稿元数据与内容。"""
+
+    __tablename__ = "mobile_offline_drafts"
+    __table_args__ = (
+        Index("ix_mobile_offline_drafts_owner_draft", "user_id", "client_draft_id", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    client_draft_id: Mapped[str] = mapped_column(String(96))
+    relationship_space_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("pairs.id", ondelete="SET NULL"), nullable=True
+    )
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    visibility_scope: Mapped[str] = mapped_column(String(20), default="private")
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    local_updated_at: Mapped[datetime] = mapped_column(nullable=False)
+    server_updated_at: Mapped[datetime] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+class MobilePushRegistration(Base):
+    """移动端推送注册状态：安装标识、权限状态与注册状态。"""
+
+    __tablename__ = "mobile_push_registrations"
+    __table_args__ = (
+        Index(
+            "ix_mobile_push_registrations_owner_install",
+            "user_id",
+            "installation_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    installation_id: Mapped[str] = mapped_column(String(96))
+    platform: Mapped[str] = mapped_column(String(10))
+    provider: Mapped[str] = mapped_column(String(20), default="unipush")
+    push_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    permission_state: Mapped[str] = mapped_column(String(20), default="unknown")
+    registration_state: Mapped[str] = mapped_column(String(20), default="unregistered")
+    revocation_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
 class Report(Base):

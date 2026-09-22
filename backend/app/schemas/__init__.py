@@ -1737,3 +1737,906 @@ class AgentSwarmResponse(BaseModel):
 
 
 PairChangeRequestBundleResponse.model_rebuild()
+
+
+# ── 移动端（/mobile/*）契约 ──
+
+
+class MobileCheckinClientContext(RequestModel):
+    source_type: Literal["text", "image", "voice", "mixed"]
+    intent: Literal["daily", "emergency", "crisis", "reflection"]
+    risk_level: Literal["none", "watch", "high"] | None = None
+    risk_hits: list[str] | None = None
+    client_tags: list[str] | None = None
+    ai_assist_enabled: bool | None = None
+
+
+class MobileScopeRequest(RequestModel):
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+
+
+class MobileCheckinCreateRequest(MobileScopeRequest):
+    client_request_id: str = Field(min_length=8, max_length=96)
+    content: str
+    mood_score: int | None = None
+    mood_tags: list[str] | None = None
+    image_url: str | None = None
+    voice_url: str | None = None
+    visibility_scope: Literal["private", "shared_summary"] | None = None
+    sharing_confirmed: bool = False
+    client_context: MobileCheckinClientContext | None = None
+
+
+class MobileCheckinCreateResponse(BaseModel):
+    record_id: uuid.UUID
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+    checkin_date: date
+    deduplicated: bool = False
+    visibility_scope: Literal["private", "shared_summary"]
+    processing_status: Literal["queued", "safety_handoff"] = "queued"
+    safety_mode: bool = False
+    safety_handoff: str | None = None
+    data_minimized: bool = True
+
+
+class MobileCheckinDetailRequest(RequestModel):
+    record_id: uuid.UUID
+    known_detail_version: str | None = None
+
+
+class MobileCheckinDetailResponse(BaseModel):
+    record_id: uuid.UUID
+    relationship_space_id: uuid.UUID | None = None
+    is_owner: bool
+    visibility_scope: Literal["private", "shared_summary"]
+    content: str | None = None
+    image_url: str | None = None
+    voice_url: str | None = None
+    mood_tags: list[str] = Field(default_factory=list)
+    title: str | None = None
+    summary: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    locked_reason: str | None = None
+    detail_version: str
+    not_modified: bool = False
+    data_minimized: bool = True
+
+
+class MobileCheckinVisibilityRequest(RequestModel):
+    record_id: uuid.UUID
+    known_version: str | None = None
+
+
+class MobileCheckinVisibilityResponse(BaseModel):
+    record_id: uuid.UUID
+    relationship_space_id: uuid.UUID | None = None
+    visibility_scope: Literal["private", "shared_summary"]
+    sharing_active: bool
+    partner_can_use_summary: bool
+    partner_can_read_original: bool
+    version: str
+    not_modified: bool = False
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileCheckinVisibilityChangeRequest(RequestModel):
+    record_id: uuid.UUID
+    expected_version: str
+    visibility_scope: Literal["private", "shared_summary"]
+    sharing_confirmed: bool = False
+    client_request_id: str | None = Field(default=None, max_length=96)
+
+
+class MobileCheckinVisibilityChangeResponse(MobileCheckinVisibilityResponse):
+    sharing_revoked: bool = False
+    alignment_results_invalidated: int = 0
+    derived_insights_invalidated: int = 0
+    snapshots_invalidated: int = 0
+    reports_invalidated: int = 0
+
+
+class MobileClientPreflightRequest(RequestModel):
+    client_type: Literal["app", "mini_program"]
+    platform: Literal["android", "ios"] | None = None
+
+
+class MobileClientLoginMethodResponse(BaseModel):
+    method: str
+    enabled: bool
+
+
+class MobileClientPreflightResponse(BaseModel):
+    preflight_version: Literal["v1"] = "v1"
+    client_type: Literal["app", "mini_program"]
+    minimum_age: int = 18
+    adult_confirmation_required: bool = True
+    service_terms_version: str
+    privacy_policy_version: str
+    login_methods: list[MobileClientLoginMethodResponse] = Field(default_factory=list)
+    refresh_after_seconds: int = 3600
+
+
+class MobileBootstrapRequest(RequestModel):
+    known_state_version: str | None = None
+
+
+class MobileBootstrapAccountResponse(BaseModel):
+    user_id: uuid.UUID
+    nickname: str
+    wechat_bound: bool = False
+
+
+class MobileBootstrapRelationshipResponse(BaseModel):
+    space_id: uuid.UUID
+    relationship_type: str
+    title: str | None = None
+    role: str
+    member_count: int = 2
+
+
+class MobileBootstrapRealtimeVoiceResponse(BaseModel):
+    available: bool = False
+    reason_code: Literal["provider_unconfigured", "provider_unsupported"] | None = None
+    fallback_action: Literal["none", "use_voice_upload"] = "use_voice_upload"
+
+
+class MobileBootstrapNotificationsResponse(BaseModel):
+    delivery_channel: Literal["app_push", "wechat_subscription"]
+    delivery_available: bool = False
+    delivery_reason_code: Literal["provider_unconfigured"] | None = None
+    registration_provider: Literal["unipush"] | None = None
+    active_push_registered: bool = False
+
+
+class MobileBootstrapResponse(BaseModel):
+    bootstrap_version: Literal["v5"] = "v5"
+    state_version: str
+    not_modified: bool = False
+    server_time: datetime
+    cache_ttl_seconds: int = 60
+    account: MobileBootstrapAccountResponse | None = None
+    relationships: list[MobileBootstrapRelationshipResponse] = Field(default_factory=list)
+    notifications: MobileBootstrapNotificationsResponse | None = None
+    realtime_voice: MobileBootstrapRealtimeVoiceResponse | None = None
+
+
+class MobileTodayRequest(MobileScopeRequest):
+    known_state_version: str | None = None
+
+
+class MobileTodayCheckinResponse(BaseModel):
+    my_completed: bool
+    partner_completed: bool | None = None
+    both_completed: bool | None = None
+    can_submit: bool = True
+    submitted_at: datetime | None = None
+
+
+class MobileTodayTaskItemResponse(BaseModel):
+    task_id: uuid.UUID
+    title: str
+
+
+class MobileTodayTaskSummaryResponse(BaseModel):
+    pending_count: int = 0
+    completed_count: int = 0
+    skipped_count: int = 0
+    next_task: MobileTodayTaskItemResponse | None = None
+
+
+class MobileTodayResponse(BaseModel):
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+    relationship_ready: bool
+    date: str
+    state_version: str
+    not_modified: bool = False
+    checkin: MobileTodayCheckinResponse | None = None
+    tasks: MobileTodayTaskSummaryResponse | None = None
+    safety_mode: bool = False
+    safety_handoff: str | None = None
+    data_minimized: bool = True
+
+
+class MobileMessageSimulationRequest(MobileScopeRequest):
+    draft: str
+    client_request_id: str | None = Field(default=None, max_length=96)
+
+
+class MessageSimulationStructuredResult(BaseModel):
+    original_intent: str
+    received_meaning: str
+    risks: list[str] = Field(default_factory=list)
+    rewrite: str
+    boundaries: list[str] = Field(default_factory=list)
+    ai_label: str = "AI辅助·待你确认"
+    safety_category: Literal["normal", "threat", "violence", "self_harm"] = "normal"
+    delivery_action: Literal["copy_only"] = "copy_only"
+    can_send: Literal[False] = False
+
+
+class MobileMessageSimulationResponse(BaseModel):
+    simulation_id: str
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+    structured_result: MessageSimulationStructuredResult
+    safety_mode: bool = False
+    safety_handoff: str | None = None
+    feedback_status: Literal[
+        "pending_feedback", "more_like_me", "misunderstood_intent", "too_soft", "not_helpful"
+    ] = "pending_feedback"
+    deduplicated: bool = False
+    delivery_action: Literal["copy_only"] = "copy_only"
+    can_send: Literal[False] = False
+    data_minimized: bool = True
+
+
+class MobileMessageSimulationFeedbackRequest(RequestModel):
+    simulation_id: uuid.UUID
+    known_feedback_version: str | None = None
+    feedback_type: Literal["more_like_me", "misunderstood_intent", "too_soft", "not_helpful"]
+    note: str | None = Field(default=None, max_length=200)
+
+
+class MobileMessageSimulationFeedbackResponse(BaseModel):
+    simulation_id: uuid.UUID
+    feedback_status: str
+    accepted: bool = True
+    data_minimized: bool = True
+
+
+class MobileRealtimeVoiceTicketRequest(RequestModel):
+    reason: Literal["initial", "reconnect"] = "initial"
+    local_buffer_confirmed: Literal[True]
+    client_request_id: str | None = Field(default=None, max_length=96)
+
+
+class MobileRealtimeVoiceTicketResponse(BaseModel):
+    ticket: str
+    deduplicated: bool = False
+    websocket_path: str = "/api/v1/agent/asr/realtime"
+    ticket_refresh_endpoint: str = "/api/v1/mobile/realtime-voice/tickets"
+    expires_in: int
+    session_max_seconds: int = 300
+    stop_timeout_seconds: int = 5
+    protocol_version: Literal["v1"] = "v1"
+    input_audio_format: Literal["pcm"] = "pcm"
+    sample_rate: Literal[16000] = 16000
+    server_resume_supported: Literal[False] = False
+    resume_mode: Literal["restart_segment_from_local_buffer"] = "restart_segment_from_local_buffer"
+    local_buffer_required: Literal[True] = True
+    max_reconnect_attempts: int = 3
+    max_chunk_bytes: int = 16384
+
+
+class MobileTimelineRequest(MobileScopeRequest):
+    limit: int = Field(default=20, ge=1, le=50)
+    cursor: str | None = None
+    known_page_version: str | None = None
+
+
+class MobileTimelineItemResponse(BaseModel):
+    item_id: str
+    kind: Literal["my_record", "partner_summary", "report"]
+    occurred_at: datetime
+    local_date: str
+    title: str
+    summary: str
+    visibility_scope: Literal["private", "shared_summary", "shared_report"]
+    is_mine: bool
+    can_manage_visibility: bool = False
+    original_available: bool = False
+    ai_generated: bool = False
+
+
+class MobileTimelineResponse(BaseModel):
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+    page_version: str
+    not_modified: bool = False
+    item_count: int = 0
+    items: list[MobileTimelineItemResponse] = Field(default_factory=list)
+    next_cursor: str | None = None
+    has_more: bool = False
+    data_minimized: bool = True
+
+
+class MobileMediaPreflightRequest(RequestModel):
+    client_request_id: str = Field(min_length=8, max_length=96)
+    media_kind: Literal["image", "voice"]
+    content_type: str
+    size_bytes: int = Field(ge=1)
+    purpose: Literal["checkin", "journal", "offline_draft"] = "checkin"
+    relationship_space_id: uuid.UUID | None = None
+    private_storage_confirmed: Literal[True]
+
+
+class MobileMediaPreflightResponse(BaseModel):
+    upload_ticket: str
+    upload_endpoint: Literal["/api/v1/mobile/media/upload"] = "/api/v1/mobile/media/upload"
+    media_kind: Literal["image", "voice"]
+    content_type: str
+    size_bytes: int
+    visibility_scope: Literal["private"] = "private"
+    expires_at: datetime
+    expires_in: int
+    max_size_bytes: int
+    deduplicated: bool = False
+
+
+class MobileMediaUploadResponse(BaseModel):
+    media_id: str
+    media_kind: Literal["image", "voice"]
+    content_type: str
+    size_bytes: int
+    visibility_scope: Literal["private"] = "private"
+    access_url: str
+    access_expires_in: int = 300
+    discard_endpoint: Literal["/api/v1/mobile/media/discard"] = "/api/v1/mobile/media/discard"
+
+
+class MobileMediaAccessRequest(RequestModel):
+    media_id: str
+    record_id: uuid.UUID | None = None
+
+
+class MobileMediaAccessResponse(BaseModel):
+    media_id: str
+    access_url: str
+    expires_in: int = 300
+
+
+class MobileMediaDiscardRequest(RequestModel):
+    media_id: str
+    client_request_id: str = Field(min_length=8, max_length=96)
+    discard_confirmed: Literal[True]
+
+
+class MobileMediaDiscardResponse(BaseModel):
+    media_id: str
+    discarded_at: datetime
+    discarded: bool = True
+    access_revoked: bool = True
+    file_removed: bool = False
+    upload_grants_removed: int = 0
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileCheckinCorrectionRequest(RequestModel):
+    record_id: uuid.UUID
+    expected_detail_version: str
+    client_request_id: str = Field(min_length=8, max_length=96)
+    content: str | None = None
+    mood_score: int | None = None
+    mood_tags: list[str] | None = None
+
+
+class MobileCheckinCorrectionResponse(BaseModel):
+    record_id: uuid.UUID
+    detail_version: str
+    corrected_at: datetime
+    corrected_fields: list[str] = Field(default_factory=list)
+    visibility_scope: Literal["private", "shared_summary"]
+    sharing_revoked: bool = False
+    alignment_results_invalidated: int = 0
+    derived_insights_invalidated: int = 0
+    snapshots_invalidated: int = 0
+    reports_invalidated: int = 0
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileCheckinDeleteRequest(RequestModel):
+    record_id: uuid.UUID
+    expected_detail_version: str
+    client_request_id: str = Field(min_length=8, max_length=96)
+    deletion_confirmed: Literal[True]
+
+
+class MobileCheckinDeleteResponse(BaseModel):
+    record_id: uuid.UUID
+    deleted_at: datetime
+    deleted: bool = True
+    shared_access_revoked: bool = True
+    media_removed: int = 0
+    alignment_results_invalidated: int = 0
+    derived_insights_invalidated: int = 0
+    snapshots_invalidated: int = 0
+    reports_invalidated: int = 0
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileNotificationListRequest(RequestModel):
+    limit: int = Field(default=20, ge=1, le=50)
+    unread_only: bool = False
+    cursor_before: datetime | None = None
+
+
+class MobileNotificationItemResponse(BaseModel):
+    notification_id: uuid.UUID
+    notification_type: str
+    content: str
+    target_path: str | None = None
+    is_read: bool = False
+    created_at: datetime
+
+
+class MobileNotificationListResponse(BaseModel):
+    items: list[MobileNotificationItemResponse] = Field(default_factory=list)
+    next_cursor: str | None = None
+    unread_count: int = 0
+    data_minimized: bool = True
+
+
+class MobileNotificationReadRequest(RequestModel):
+    notification_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+    read_confirmed: Literal[True]
+
+
+class MobileNotificationReadAllRequest(RequestModel):
+    read_all_confirmed: Literal[True]
+
+
+class MobileNotificationReadResponse(BaseModel):
+    updated_count: int = 0
+    unread_count: int = 0
+    data_minimized: bool = True
+
+
+class MobileWeeklySummaryRequest(RequestModel):
+    relationship_space_id: uuid.UUID
+    known_summary_version: str | None = None
+
+
+class MobileWeeklySummaryResponse(BaseModel):
+    relationship_space_id: uuid.UUID
+    status: Literal["not_available", "pending", "ready", "failed"]
+    summary_version: str
+    not_modified: bool = False
+    report_date: date | None = None
+    generated_at: datetime | None = None
+    source_window_days: int = 7
+    trend: Literal["improving", "stable", "declining", "unknown"] | None = None
+    summary: str | None = None
+    highlights: list[str] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    encouragement: str | None = None
+    limitation_note: str | None = None
+    safety_mode: bool = False
+    safety_handoff: str | None = None
+    data_minimized: bool = True
+    ai_generated: bool = False
+    full_report_available: bool = False
+
+
+class MobileActionListRequest(MobileScopeRequest):
+    status: Literal["pending", "completed", "skipped"] | None = None
+
+
+class MobileActionItemResponse(BaseModel):
+    action_id: uuid.UUID
+    relationship_space_id: uuid.UUID
+    title: str
+    category: str
+    target_scope: Literal["self", "both"] = "both"
+    importance_level: Literal["low", "medium", "high"] = "medium"
+    status: Literal["pending", "completed", "skipped"] = "pending"
+    due_date: date
+    completed_at: datetime | None = None
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileActionCompleteRequest(RequestModel):
+    relationship_space_id: uuid.UUID
+    action_id: uuid.UUID
+
+
+class MobileActionFeedbackRequest(RequestModel):
+    relationship_space_id: uuid.UUID
+    action_id: uuid.UUID
+    known_feedback_version: str | None = None
+    usefulness_score: int = Field(ge=0, le=5)
+    friction_score: int = Field(ge=0, le=5)
+    relationship_shift_score: int = Field(ge=0, le=5)
+    note: str | None = Field(default=None, max_length=200)
+
+
+class MobileActionFeedbackResponse(BaseModel):
+    action_id: uuid.UUID
+    relationship_space_id: uuid.UUID
+    accepted: bool = True
+    submitted_at: datetime
+    feedback_version: str
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileMediaCancelRequest(RequestModel):
+    upload_ticket: str
+    cancellation_confirmed: Literal[True]
+
+
+class MobileMediaCancelResponse(BaseModel):
+    cancelled_at: datetime
+    cancelled: bool = True
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileMediaStatusRequest(RequestModel):
+    client_request_id: str = Field(min_length=8, max_length=96)
+
+
+class MobileMediaStatusResponse(BaseModel):
+    client_request_id: str
+    status: Literal["ready", "uploaded", "cancelled", "expired"]
+    media_id: str | None = None
+    expires_at: datetime
+    upload_required: bool = True
+    data_minimized: bool = True
+
+
+class MobileRuntimePrivacyGuardPolicyRequest(RequestModel):
+    platform: Literal["android", "ios"]
+    biometric_state: Literal["enrolled", "not_enrolled", "unavailable", "locked_out"]
+    device_credential_available: bool
+    screen_capture_protection_supported: bool
+
+
+class MobileRuntimePrivacyGuardPolicyResponse(BaseModel):
+    access_mode: Literal["full", "restricted"]
+    unlock_method: Literal["biometric", "device_credential", "unavailable"]
+    device_credential_fallback_available: bool
+    lock_on_cold_start: bool = True
+    lock_on_resume_after_seconds: int = 30
+    obscure_app_switcher: bool = True
+    screen_capture_policy: Literal["block", "obscure_and_warn"]
+    sensitive_views_available: bool
+    policy_version: str
+    biometric_data_collected: Literal[False] = False
+    data_minimized: bool = True
+
+
+class MobileRuntimeReleaseCheckRequest(RequestModel):
+    platform: Literal["android", "ios"]
+    app_version: str
+    build_number: int
+
+
+class MobileRuntimeReleaseCheckResponse(BaseModel):
+    status: Literal["supported", "update_available", "update_required", "policy_unavailable"]
+    update_available: bool = False
+    update_required: bool = False
+    policy_ready: bool = False
+    reason_code: Literal["update_url_unconfigured"] | None = None
+    next_action: Literal["none", "open_update_url", "retry_later"] = "none"
+    minimum_version: str
+    minimum_build: int
+    latest_version: str
+    latest_build: int
+    update_url: str | None = None
+    message: str
+    check_interval_seconds: int = 86400
+
+
+class MobileNotificationQuietHours(BaseModel):
+    enabled: bool = False
+    start: str | None = None
+    end: str | None = None
+
+
+class MobileNotificationPreferenceResponse(BaseModel):
+    category: Literal[
+        "task_reminder",
+        "relationship_activity",
+        "milestone",
+        "safety_support",
+        "product_update",
+    ]
+    enabled: bool = True
+    in_app_enabled: bool = True
+    wechat_subscription_enabled: bool = False
+    app_push_enabled: bool = False
+    quiet_hours: MobileNotificationQuietHours = Field(default_factory=MobileNotificationQuietHours)
+    daily_limit: int = 5
+    subscription_state: Literal["active", "unsubscribed"] = "unsubscribed"
+    preference_version: str = "v1"
+
+
+class MobileNotificationPreferencesStatusResponse(BaseModel):
+    preferences: list[MobileNotificationPreferenceResponse] = Field(default_factory=list)
+    data_minimized: bool = True
+
+
+class MobileNotificationPreferenceChangeRequest(RequestModel):
+    category: Literal[
+        "task_reminder",
+        "relationship_activity",
+        "milestone",
+        "safety_support",
+        "product_update",
+    ]
+    base_version: str
+    enabled: bool | None = None
+    in_app_enabled: bool | None = None
+    quiet_hours: MobileNotificationQuietHours | None = None
+    daily_limit: int | None = Field(default=None, ge=0, le=50)
+    update_confirmed: Literal[True]
+
+
+class MobileNotificationPreferenceMutationResponse(BaseModel):
+    preference: MobileNotificationPreferenceResponse
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileNotificationPreferenceSubscriptionRequest(RequestModel):
+    category: Literal[
+        "task_reminder",
+        "relationship_activity",
+        "milestone",
+        "safety_support",
+        "product_update",
+    ]
+    base_version: str
+    action: Literal["unsubscribe", "resubscribe"]
+    subscription_change_confirmed: Literal[True]
+
+
+class MobileRuntimeDiagnosticRequest(RequestModel):
+    client_event_id: str = Field(min_length=8, max_length=96)
+    event_type: Literal["crash", "performance"]
+    platform: Literal["android", "ios"]
+    app_version: str
+    build_number: int
+    occurred_at: datetime
+    diagnostics_consent: bool = False
+    crash_fingerprint_sha256: str | None = None
+    metric_name: Literal[
+        "cold_start_ms", "api_latency_ms", "frame_stall_ms", "memory_peak_mb"
+    ] | None = None
+    metric_value: float | None = None
+    network_type: Literal["wifi", "cellular", "offline", "unknown"] | None = None
+    app_state: Literal["foreground", "background", "unknown"] | None = None
+
+
+class MobileRuntimeDiagnosticResponse(BaseModel):
+    accepted: bool
+    deduplicated: bool = False
+    diagnostic_id: str | None = None
+    reason: str | None = None
+
+
+class MobileRuntimeDiagnosticsPreferenceChangeRequest(RequestModel):
+    diagnostics_enabled: bool
+
+
+class MobileRuntimeDiagnosticsPreferenceResponse(BaseModel):
+    diagnostics_enabled: bool = False
+
+
+class MobileCheckinMediaChangeRequest(RequestModel):
+    record_id: uuid.UUID
+    expected_detail_version: str
+    client_request_id: str = Field(min_length=8, max_length=96)
+    media_kind: Literal["image", "voice"]
+    operation: Literal["attach", "remove", "replace"]
+    replacement_media_id: str | None = None
+
+
+class MobileCheckinMediaChangeResponse(BaseModel):
+    record_id: uuid.UUID
+    detail_version: str
+    changed_at: datetime
+    media_kind: Literal["image", "voice"]
+    operation: Literal["attach", "remove", "replace"]
+    media_id: str | None = None
+    visibility_scope: Literal["private", "shared_summary"]
+    sharing_revoked: bool = False
+    access_revoked: bool = False
+    media_files_removed: int = 0
+    alignment_results_invalidated: int = 0
+    derived_insights_invalidated: int = 0
+    snapshots_invalidated: int = 0
+    reports_invalidated: int = 0
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileRepairGuidanceStepResponse(BaseModel):
+    sequence: int
+    title: str
+    action: str
+    why: str | None = None
+    duration_hint: str | None = None
+
+
+class MobileRepairGuidanceRequest(MobileScopeRequest):
+    known_guidance_version: str | None = None
+
+
+class MobileRepairGuidanceResponse(BaseModel):
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+    status: Literal["ready", "safety_handoff"] = "ready"
+    guidance_version: str
+    not_modified: bool = False
+    protocol_type: str | None = None
+    title: str | None = None
+    summary: str | None = None
+    timing_hint: str | None = None
+    steps: list[MobileRepairGuidanceStepResponse] = Field(default_factory=list)
+    do_not: list[str] = Field(default_factory=list)
+    success_signal: str | None = None
+    escalation_rule: str | None = None
+    clinical_disclaimer: str | None = None
+    limitation_note: str | None = None
+    safety_mode: bool = False
+    safety_handoff: str | None = None
+    ai_generated: bool = False
+    data_minimized: bool = True
+
+
+class MobileOfflineDraftPayload(BaseModel):
+    relationship_space_id: uuid.UUID | None = None
+    content: str
+    mood_score: int | None = None
+    mood_tags: list[str] | None = None
+    visibility_scope: Literal["private"] = "private"
+
+
+class MobileOfflineDraftSyncRequest(RequestModel):
+    client_draft_id: str = Field(min_length=8, max_length=96)
+    base_revision: int = Field(ge=0)
+    local_updated_at: datetime
+    upload_confirmed: Literal[True]
+    draft: MobileOfflineDraftPayload
+
+
+class MobileOfflineDraftPullRequest(RequestModel):
+    client_draft_id: str = Field(min_length=8, max_length=96)
+
+
+class MobileOfflineDraftDiscardRequest(RequestModel):
+    client_draft_id: str = Field(min_length=8, max_length=96)
+    base_revision: int = Field(ge=0)
+    discard_confirmed: Literal[True]
+
+
+class MobileOfflineDraftListRequest(RequestModel):
+    relationship_space_id: uuid.UUID | None = None
+
+
+class MobileOfflineDraftRecoverRequest(RequestModel):
+    client_draft_id: str = Field(min_length=8, max_length=96)
+
+
+class MobileOfflineDraftAdoptRequest(RequestModel):
+    client_draft_id: str = Field(min_length=8, max_length=96)
+    base_revision: int = Field(ge=0)
+    adopt_confirmed: Literal[True]
+
+
+class MobileOfflineDraftMetadataResponse(BaseModel):
+    relationship_space_id: uuid.UUID | None = None
+    revision: int
+    status: Literal["active", "discarded"]
+    visibility_scope: Literal["private"] = "private"
+    payload_hash: str | None = None
+    local_updated_at: datetime
+    server_updated_at: datetime
+    deduplicated: bool = False
+
+
+class MobileOfflineDraftDetailResponse(MobileOfflineDraftMetadataResponse):
+    draft: MobileOfflineDraftPayload | None = None
+
+
+class MobileOfflineDraftListResponse(BaseModel):
+    drafts: list[MobileOfflineDraftMetadataResponse] = Field(default_factory=list)
+    data_minimized: bool = True
+
+
+class PushRegistrationStatusRequest(RequestModel):
+    installation_id: str = Field(min_length=8, max_length=96)
+
+
+class PushRegistrationStatusResponse(BaseModel):
+    registration_state: Literal["unregistered", "active", "revoked"] = "unregistered"
+    permission_state: Literal["unknown", "authorized", "denied", "provisional", "not_determined"] = "unknown"
+    revocation_reason: str | None = None
+    next_action: Literal["none", "register", "request_permission"] = "register"
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class PushPermissionSyncRequest(RequestModel):
+    installation_id: str = Field(min_length=8, max_length=96)
+    platform: Literal["android", "ios"]
+    provider: Literal["unipush"] = "unipush"
+    permission_state: Literal["authorized", "denied", "provisional", "not_determined"]
+    permission_status_confirmed: Literal[True]
+
+
+class PushRegistrationRequest(RequestModel):
+    installation_id: str = Field(min_length=8, max_length=96)
+    platform: Literal["android", "ios"]
+    provider: Literal["unipush"] = "unipush"
+    push_token: str = Field(min_length=1, max_length=255)
+
+
+class PushRegistrationResponse(BaseModel):
+    id: uuid.UUID
+    installation_id: str
+    platform: Literal["android", "ios"]
+    provider: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PushReceiptRequest(RequestModel):
+    installation_id: str = Field(min_length=8, max_length=96)
+    receipt_type: Literal["delivered", "opened", "dismissed"] = "delivered"
+    occurred_at: datetime | None = None
+
+
+class PushReceiptResponse(BaseModel):
+    accepted: bool = True
+    deduplicated: bool = False
+    data_minimized: bool = True
+
+
+class MobileNarrativeAlignmentRequest(RequestModel):
+    relationship_space_id: uuid.UUID
+    known_alignment_version: str | None = None
+
+
+class MobileNarrativeAlignmentResponse(BaseModel):
+    relationship_space_id: uuid.UUID
+    alignment_id: str | None = None
+    status: Literal["not_available", "ready", "safety_handoff"] = "not_available"
+    alignment_version: str
+    not_modified: bool = False
+    checkin_date: date | None = None
+    shared_story: str | None = None
+    my_view_summary: str | None = None
+    partner_view_summary: str | None = None
+    misread_risk: str | None = None
+    divergence_points: list[str] = Field(default_factory=list)
+    bridge_actions: list[str] = Field(default_factory=list)
+    suggested_opening: str | None = None
+    confidence: float | None = None
+    history_sufficiency: str | None = None
+    limitation_note: str | None = None
+    generated_at: datetime | None = None
+    source: Literal["ai", "fallback"] | None = None
+    ai_generated: bool = False
+    ai_disclosure: str | None = None
+    safety_mode: bool = False
+    safety_handoff: str | None = None
+    data_minimized: bool = True
+
+
+class MobileNarrativeAlignmentFeedbackRequest(RequestModel):
+    relationship_space_id: uuid.UUID
+    alignment_id: str
+    known_feedback_version: str | None = None
+    feedback_type: Literal["accurate", "missed_my_view", "missed_partner_view", "not_helpful"]
+    note: str | None = Field(default=None, max_length=200)
+
+
+class MobileNarrativeAlignmentFeedbackResponse(BaseModel):
+    alignment_id: str
+    accepted: bool = True
+    feedback_type: str
+    feedback_label: str
+    feedback_version: str
+    deduplicated: bool = False
+    submitted_at: datetime
+    data_minimized: bool = True

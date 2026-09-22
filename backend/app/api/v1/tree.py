@@ -21,6 +21,7 @@ from app.models import (
     TREE_LEVEL_THRESHOLDS,
     calc_tree_level,
 )
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 
 router = APIRouter(prefix="/tree", tags=["关系树"])
 
@@ -120,6 +121,8 @@ async def _load_today_activity(
         select(Checkin).where(
             Checkin.pair_id == pair.id,
             Checkin.checkin_date == today,
+            # 关系树是双方共享产物，private 记录不参与成长
+            Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
         )
     )
     checkins = result.scalars().all()

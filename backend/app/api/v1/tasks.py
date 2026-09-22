@@ -31,6 +31,7 @@ from app.schemas import (
     TaskUpdateRequest,
 )
 from app.services.display_labels import status_label, task_category_label
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 from app.services.privacy_sandbox import sanitize_event_payload
 from app.services.relationship_intelligence import (
     record_relationship_event,
@@ -124,7 +125,11 @@ async def _analyze_attachment_from_checkins(
             interaction_sum += checkin.interaction_freq
 
     total = len(checkins) or 1
-    content_summary = " | ".join(checkin.content[:30] for checkin in checkins[:5])
+    from app.services.checkin_visibility import pair_report_content
+
+    content_summary = " | ".join(
+        pair_report_content(checkin)[:30] for checkin in checkins[:5]
+    )
     if not content_summary:
         content_summary = "测试账号样本不足，先生成一版可用于功能验证的参考分析。"
     return await analyze_attachment_style(
@@ -1125,7 +1130,12 @@ async def trigger_attachment_analysis(
     for uid, side in [(pair.user_a_id, "a"), (pair.user_b_id, "b")]:
         result = await db.execute(
             select(Checkin)
-            .where(Checkin.pair_id == pair.id, Checkin.user_id == uid)
+            .where(
+                Checkin.pair_id == pair.id,
+                Checkin.user_id == uid,
+                # 双方可见的依恋分析只能使用对伴侣可见的记录
+                Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
+            )
             .order_by(Checkin.checkin_date.desc())
             .limit(30)
         )

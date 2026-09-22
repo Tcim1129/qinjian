@@ -19,6 +19,11 @@ from app.services.relationship_intelligence import (
     refresh_profile_and_plan,
 )
 from app.services.behavior_judgement import apply_judgement_to_payload
+from app.services.checkin_visibility import (
+    pair_report_content,
+    report_source_snapshot,
+    report_sources_authorized,
+)
 from app.services.interaction_events import (
     build_interaction_payload,
     record_user_interaction_event,
@@ -369,24 +374,17 @@ async def create_checkin(
         partner_checkin = partner_result.scalar_one_or_none()
 
         if partner_checkin and pair:
-            checkin_a_content = (
-                checkin.content
-                if user.id == pair.user_a_id
-                else partner_checkin.content
-            )
-            checkin_b_content = (
-                partner_checkin.content
-                if user.id == pair.user_a_id
-                else checkin.content
-            )
+            a_checkin = checkin if user.id == pair.user_a_id else partner_checkin
+            b_checkin = partner_checkin if user.id == pair.user_a_id else checkin
             background_tasks.add_task(
                 _auto_generate_daily,
                 req.pair_id,
                 pair.type.value,
-                checkin_a_content,
-                checkin_b_content,
+                pair_report_content(a_checkin),
+                pair_report_content(b_checkin),
                 user.id,
                 effective_privacy_mode,
+                report_source_snapshot([a_checkin, b_checkin]),
             )
         else:
             pending_report = await _ensure_pending_solo_report(
@@ -788,6 +786,7 @@ async def _auto_generate_daily(
     checkin_b_content: str,
     user_id: uuid.UUID | str | None = None,
     privacy_mode: str = "cloud",
+    source_versions: list | None = None,
 ):
     """后台自动生成每日报告"""
     try:
@@ -841,6 +840,13 @@ async def _auto_generate_daily(
         async with async_session() as db:
             report = await db.get(Report, report_id)
             if not report:
+                return
+            # 落库前校验：来源记录可能已被撤回共享，撤回前的内容绝不能写回
+            if not await report_sources_authorized(db, source_versions):
+                report.content = None
+                report.health_score = None
+                report.status = ReportStatus.PENDING
+                await db.commit()
                 return
             report.content = report_content
             report.health_score = report_content.get("health_score")

@@ -22,6 +22,7 @@ from app.services.interaction_events import (
     record_user_interaction_event,
 )
 from app.services.privacy_audit import privacy_audit_scope
+from app.services.checkin_visibility import pair_report_content
 from app.services.product_prefs import resolve_privacy_mode
 from app.services.relationship_intelligence import (
     record_relationship_event,
@@ -432,13 +433,13 @@ async def generate_latest_narrative_alignment(
         )
 
     judgement_a = judge_behavior_against_baseline(
-        checkin_a.content,
+        pair_report_content(checkin_a),
         baseline_summary=getattr(user_a_baseline, "behavior_summary", None),
         risk_level=context["current_risk_level"],
         sentiment_hint=checkin_a.sentiment_score,
     )
     judgement_b = judge_behavior_against_baseline(
-        checkin_b.content,
+        pair_report_content(checkin_b),
         baseline_summary=getattr(user_b_baseline, "behavior_summary", None),
         risk_level=context["current_risk_level"],
         sentiment_hint=checkin_b.sentiment_score,

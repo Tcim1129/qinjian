@@ -90,3 +90,52 @@ def decode_realtime_ws_ticket(ticket: str) -> str | None:
         return subject
     except InvalidTokenError:
         return None
+
+
+MEDIA_UPLOAD_TICKET_TTL_SECONDS = 600
+
+
+def create_media_upload_ticket(
+    *,
+    user_id: str,
+    media_kind: str,
+    content_type: str,
+    size_bytes: int,
+    client_request_id: str,
+) -> str:
+    """生成一次性媒体上传票据，绑定上传者、类型与声明大小。"""
+    issued_at = datetime.now(timezone.utc)
+    expire = issued_at + timedelta(seconds=MEDIA_UPLOAD_TICKET_TTL_SECONDS)
+    payload = {
+        "sub": user_id,
+        "type": "media_upload",
+        "iat": issued_at,
+        "nbf": issued_at,
+        "exp": expire,
+        "jti": uuid.uuid4().hex,
+        "media_kind": media_kind,
+        "content_type": content_type,
+        "size_bytes": int(size_bytes),
+        "req": client_request_id,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_media_upload_ticket(ticket: str) -> dict | None:
+    """校验媒体上传票据，返回其声明；无效或过期返回 None。"""
+    if not ticket:
+        return None
+    try:
+        payload = jwt.decode(
+            ticket,
+            settings.SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp", "nbf", "iat", "jti"]},
+        )
+    except InvalidTokenError:
+        return None
+    if payload.get("type") != "media_upload":
+        return None
+    if not str(payload.get("sub") or "").strip():
+        return None
+    return payload

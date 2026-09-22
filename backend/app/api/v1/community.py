@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.ai import chat_completion
 from app.services.relationship_intelligence import refresh_profile_snapshot
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 from app.services.request_cooldown_store import consume_request_cooldown
 from app.services.test_accounts import is_relaxed_test_account
 
@@ -318,7 +319,11 @@ async def _recent_status_lines(
     report_stmt = select(Report).where(Report.status == ReportStatus.COMPLETED)
 
     if pair_id:
-        checkin_stmt = checkin_stmt.where(Checkin.pair_id == pair_id)
+        checkin_stmt = checkin_stmt.where(
+            Checkin.pair_id == pair_id,
+            # 提示语面向双方，只能使用对伴侣可见的记录
+            Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
+        )
         report_stmt = report_stmt.where(Report.pair_id == pair_id)
     elif user_id:
         checkin_stmt = checkin_stmt.where(

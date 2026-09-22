@@ -30,6 +30,7 @@ from app.models import (
     User,
 )
 from app.services.privacy_sandbox import sanitize_event_payload
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 from app.services.behavior_judgement import (
     make_behavior_observation,
     observation_from_payload,
@@ -102,6 +103,12 @@ def _date_window(snapshot_date: date, window_days: int) -> tuple[date, date]:
 
 
 def _checkin_observation(checkin: Checkin) -> dict[str, object]:
+    """提取打卡行为观察值。
+
+    【隐私合规说明】：
+    - 此函数在单人画像 (_build_user_profile) 中处理用户纯个人打卡 (pair_id is None)。
+    - 在双人画像 (_build_pair_profile) 中处理的打卡已在上游经过 Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES) 过滤。
+    """
     context = checkin.client_context or {}
     return make_behavior_observation(
         source="checkin",
@@ -478,6 +485,8 @@ async def _build_pair_profile(
             Checkin.pair_id == pair_id,
             Checkin.checkin_date >= start_date,
             Checkin.checkin_date <= end_date,
+            # 只有对伴侣可见的记录才参与双方画像；private 记录的分析属于个人视角，另行保留。
+            Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
         )
         .order_by(Checkin.checkin_date.asc(), Checkin.created_at.asc())
     )
@@ -742,6 +751,15 @@ async def _build_user_profile(
     end_date: date,
     window_days: int,
 ) -> tuple[dict, dict, dict, list[str], dict]:
+    """构建个人画像（单人视角）。
+
+    【隐私合规依据·个人视角保留说明】：
+    1. 本函数仅查询 Checkin.pair_id.is_(None) 的纯单人打卡，绝不包含任何配对记录。
+    2. 生成的快照 (RelationshipProfileSnapshot) 的 pair_id 严格为 None，属于单人专属数据。
+    3. 伴侣端接口与双人对齐产物（如叙事对齐、关系树、双方画像）均只检索 pair_id == pair.id 且
+       user_id is None 的双人快照，伴侣完全无权也无法访问到此单人画像。
+    4. 因此，本画像保留个人视角下的行为基线分析，无任何伴侣暴露面。
+    """
     checkin_result = await db.execute(
         select(Checkin)
         .where(

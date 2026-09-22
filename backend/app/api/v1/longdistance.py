@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.time import current_local_date
 from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, PairStatus, LongDistanceActivity, Checkin, Report
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 from sqlalchemy import func
 
 router = APIRouter(prefix="/longdistance", tags=["异地关系"])
@@ -116,7 +117,12 @@ async def get_health_index(
     cutoff = current_local_date() - timedelta(days=14)
     result = await db.execute(
         select(Checkin)
-        .where(Checkin.pair_id == pair_id, Checkin.checkin_date >= cutoff)
+        .where(
+            Checkin.pair_id == pair_id,
+            Checkin.checkin_date >= cutoff,
+            # 健康指数双方可见，只能统计对伴侣可见的记录
+            Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
+        )
     )
     checkins = result.scalars().all()
 

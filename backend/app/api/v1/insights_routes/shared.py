@@ -18,6 +18,7 @@ from app.models import (
     User,
 )
 from app.services.relationship_intelligence import refresh_profile_snapshot
+from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 
 
 async def resolve_scope(
@@ -599,7 +600,11 @@ async def get_latest_dual_checkins(
 
     result = await db.execute(
         select(Checkin)
-        .where(Checkin.pair_id == pair.id)
+        .where(
+            Checkin.pair_id == pair.id,
+            # 只有对伴侣可见的记录才能进入双方可见的派生产物（如叙事对齐）
+            Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
+        )
         .order_by(Checkin.checkin_date.desc(), Checkin.created_at.desc())
         .limit(40)
     )
@@ -624,10 +629,13 @@ async def get_latest_dual_checkins(
 
 
 def serialize_checkin(checkin: Checkin, label: str) -> dict:
+    from app.services.checkin_visibility import pair_report_content
+
     return {
         "label": label,
         "checkin_date": checkin.checkin_date.isoformat(),
-        "content": checkin.content,
+        # shared_summary 只送过滤摘要，private 已被上游查询过滤
+        "content": pair_report_content(checkin),
         "mood_score": checkin.mood_score,
         "interaction_freq": checkin.interaction_freq,
         "interaction_initiative": checkin.interaction_initiative,

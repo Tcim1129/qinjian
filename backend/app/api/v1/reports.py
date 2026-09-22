@@ -37,6 +37,11 @@ from app.services.display_labels import pair_type_label
 from app.services.safety_summary import build_safety_status
 from app.services.privacy_audit import privacy_audit_scope
 from app.services.product_prefs import resolve_privacy_mode
+from app.services.checkin_visibility import (
+    pair_report_content,
+    report_source_snapshot,
+    report_sources_authorized,
+)
 from app.services.test_accounts import is_relaxed_test_account
 
 router = APIRouter(prefix="/reports", tags=["报告"])
@@ -369,6 +374,7 @@ async def _process_daily_report(
     content_b: str,
     actor_user_id: str | None = None,
     privacy_mode: str = "cloud",
+    source_versions: list | None = None,
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -376,6 +382,27 @@ async def _process_daily_report(
         result = await db.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
+            return
+
+        async def _discard(reason: str) -> None:
+            """来源记录已撤回共享：作废本次结果，绝不写回。"""
+            report.content = None
+            report.health_score = None
+            report.status = ReportStatus.PENDING
+            await record_relationship_event(
+                db,
+                event_type="report.discarded",
+                pair_id=report.pair_id,
+                entity_type="report",
+                entity_id=report.id,
+                payload={"report_type": _report_enum_value(report.type), "reason": reason},
+                idempotency_key=f"report:{report.id}:discarded:{reason}",
+            )
+            await db.commit()
+
+        # 执行前校验：排队期间来源记录可能已撤回共享
+        if not await report_sources_authorized(db, source_versions):
+            await _discard("source_revoked_before_run")
             return
 
         try:
@@ -423,6 +450,11 @@ async def _process_daily_report(
                     content_a=content_a,
                     content_b=content_b,
                 )
+            # 落库前再次校验：运行期间来源记录可能被撤回
+            if not await report_sources_authorized(db, source_versions):
+                await _discard("source_revoked_during_run")
+                return
+
             report.content = report_content
             report.health_score = report_content.get("health_score")
             report.status = ReportStatus.COMPLETED
@@ -667,8 +699,8 @@ async def trigger_daily_report(
     if not checkin_a or not checkin_b:
         if not relaxed_test_account:
             raise HTTPException(status_code=400, detail="需要双方都完成打卡后才能生成报告")
-    content_a = checkin_a.content if checkin_a else RELAXED_REPORT_PLACEHOLDER
-    content_b = checkin_b.content if checkin_b else RELAXED_REPORT_PLACEHOLDER
+    content_a = pair_report_content(checkin_a, RELAXED_REPORT_PLACEHOLDER)
+    content_b = pair_report_content(checkin_b, RELAXED_REPORT_PLACEHOLDER)
 
     report = Report(
         pair_id=pair_id,
@@ -692,6 +724,7 @@ async def trigger_daily_report(
             content_b,
             str(user.id),
             privacy_mode,
+            source_versions=report_source_snapshot([checkin_a, checkin_b]),
         )
 
     return report
