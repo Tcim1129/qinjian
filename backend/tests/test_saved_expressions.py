@@ -142,7 +142,7 @@ def test_expression_migration_roundtrip_on_temporary_database():
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
 
-    migration_path = Path(__file__).resolve().parents[1] / 'alembic/versions/2026_09_21_7c5e9210abcd_add_saved_expressions.py'
+    migration_path = Path(__file__).resolve().parents[1] / 'alembic/versions/2026_09_22_0044_add_saved_expressions.py'
     spec = importlib.util.spec_from_file_location('expression_migration', migration_path)
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
