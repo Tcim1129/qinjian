@@ -30,6 +30,7 @@ from app.models import (
 @pytest.fixture
 def workspace():
     from app.api.v1.mobile import router
+    from app.api.v1.checkins import router as checkins_router
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -78,6 +79,7 @@ def workspace():
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
+    app.include_router(checkins_router, prefix="/api/v1")
     app.dependency_overrides[get_db] = db_override
     app.dependency_overrides[get_current_user] = user_override
     with TestClient(app) as client:
@@ -1878,3 +1880,43 @@ def test_alignment_serializes_filtered_summary_not_original(workspace):
     assert "想一个人静静" not in payload_a["content"]
     assert "爱丽丝今天很累" not in payload_a["content"]
     assert "疲惫" in payload_a["content"]
+
+
+def test_web_checkin_visibility_patch_endpoint(workspace):
+    client, ids, actor, factory = workspace
+    created = _create(client, ids, content="Web打卡测试私密内容", confirmed=True).json()
+    record_id = created["record_id"]
+
+    # 1. 尝试修改为 shared_original -> 必须被 422 拒绝（D1 决策收口）
+    bad_res = client.patch(
+        f"/api/v1/checkins/{record_id}/visibility",
+        json={"visibility_scope": "shared_original", "client_source": "web"},
+    )
+    assert bad_res.status_code == 422, bad_res.text
+
+    # 2. 修改为 shared_summary -> 成功
+    ok_res = client.patch(
+        f"/api/v1/checkins/{record_id}/visibility",
+        json={"visibility_scope": "shared_summary", "client_source": "web"},
+    )
+    assert ok_res.status_code == 200, ok_res.text
+    data = ok_res.json()
+    assert data["visibility_scope"] == "shared_summary"
+    assert data["visibility_version"] >= 2
+
+    # 3. 他人无权修改 -> 404
+    actor["id"] = ids["bob"]
+    forbidden_res = client.patch(
+        f"/api/v1/checkins/{record_id}/visibility",
+        json={"visibility_scope": "private", "client_source": "web"},
+    )
+    assert forbidden_res.status_code == 404, forbidden_res.text
+
+    # 4. 不存在的打卡 -> 404
+    random_id = str(uuid.uuid4())
+    not_found_res = client.patch(
+        f"/api/v1/checkins/{random_id}/visibility",
+        json={"visibility_scope": "private", "client_source": "web"},
+    )
+    assert not_found_res.status_code == 404
+

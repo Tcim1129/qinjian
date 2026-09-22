@@ -453,6 +453,8 @@ class CheckinResponse(BaseModel):
     server_analysis: dict | None = None
     final_guidance: str | None = None
     safety_gate: bool = False
+    visibility_scope: Literal["private", "shared_summary"] | None = "private"
+    visibility_version: int | str | None = 1
     checkin_date: date
     created_at: datetime
 
@@ -462,6 +464,13 @@ class CheckinResponse(BaseModel):
     @classmethod
     def _resolve_checkin_upload_url(cls, value: str | None):
         return to_client_upload_url(value)
+
+
+class CheckinVisibilityUpdateRequest(RequestModel):
+    visibility_scope: Literal["private", "shared_summary"]
+    client_source: Literal["web", "mini_program", "app", "console", "unknown"] | None = "web"
+    expected_version: str | None = None
+    sharing_confirmed: bool = True
 
 
 # 报告

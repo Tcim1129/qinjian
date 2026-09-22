@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.time import current_local_date
 from app.api.deps import get_current_user, validate_pair_access
 from app.models import User, Pair, Checkin, Report, PairStatus, ReportType, ReportStatus, UserNotification
-from app.schemas import CheckinRequest, CheckinResponse
+from app.schemas import CheckinRequest, CheckinResponse, CheckinVisibilityUpdateRequest
 from app.ai import analyze_sentiment
 from app.ai.reporter import generate_daily_report, generate_solo_report
 from app.services.relationship_intelligence import (
@@ -159,11 +159,22 @@ async def _queue_notification(
     await db.flush()
 
 
+def _safe_client_context(context: dict | None) -> ClientContextPayload | None:
+    if not isinstance(context, dict):
+        return None
+    try:
+        from app.schemas import ClientContextPayload
+        return ClientContextPayload.model_validate(context)
+    except Exception:
+        return None
+
+
 def _serialize_checkin_response(
     checkin: Checkin,
     context: dict | None,
 ) -> CheckinResponse:
-    analysis_source = "client_precheck" if context else "server_ai"
+    safe_context = _safe_client_context(context)
+    analysis_source = "client_precheck" if safe_context else "server_ai"
     safety_gate = str((context or {}).get("risk_level") or "none") == "high"
     return CheckinResponse(
         id=checkin.id,
@@ -179,15 +190,17 @@ def _serialize_checkin_response(
         interaction_initiative=checkin.interaction_initiative,
         deep_conversation=checkin.deep_conversation,
         task_completed=checkin.task_completed,
-        client_context=context,
+        client_context=safe_context,
         analysis_source=analysis_source,
-        client_precheck=context,
+        client_precheck=safe_context,
         server_analysis={
             "status": "pending",
             "note": "服务端深分析会在后台继续完成。",
         },
         final_guidance=_build_local_guidance_from_context(context),
         safety_gate=safety_gate,
+        visibility_scope=getattr(checkin, "visibility_scope", None) or "private",
+        visibility_version=getattr(checkin, "visibility_version", 1),
         checkin_date=checkin.checkin_date,
         created_at=checkin.created_at,
     )
@@ -736,6 +749,34 @@ async def get_checkin_streak(
             break
 
     return {"streak": streak, "total_checkins": len(dates)}
+
+
+@router.patch("/{checkin_id}/visibility", response_model=CheckinResponse)
+async def update_checkin_visibility(
+    checkin_id: uuid.UUID,
+    req: CheckinVisibilityUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新打卡记录的可见性范围（契约对齐：PATCH /api/v1/checkins/{checkin_id}/visibility）。"""
+    from app.services.checkin_visibility import change_visibility
+
+    checkin = await db.get(Checkin, checkin_id)
+    if checkin is None or str(checkin.user_id) != str(user.id):
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    expected_ver = req.expected_version or str(checkin.visibility_version or 1)
+    await change_visibility(
+        db,
+        record_id=checkin.id,
+        actor_user_id=user.id,
+        expected_version=expected_ver,
+        target_scope=req.visibility_scope,
+        sharing_confirmed=req.sharing_confirmed,
+    )
+    await db.commit()
+    await db.refresh(checkin)
+    return _serialize_checkin_response(checkin, checkin.client_context)
 
 
 # 后台任务
