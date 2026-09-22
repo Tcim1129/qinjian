@@ -1376,7 +1376,7 @@ def test_migration_roundtrip_on_temporary_database():
 
     migration_path = (
         Path(__file__).resolve().parents[1]
-        / "alembic/versions/2026_09_22_b3d5f7a9c1e2_add_checkin_visibility.py"
+        / "alembic/versions/2026_09_22_0045_add_checkin_visibility.py"
     )
     spec = importlib.util.spec_from_file_location("checkin_visibility_migration", migration_path)
     migration = importlib.util.module_from_spec(spec)

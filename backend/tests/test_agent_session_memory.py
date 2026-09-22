@@ -274,3 +274,43 @@ def test_build_context_pack_exposes_current_session_summary_metadata():
     finally:
         asyncio.run(engine.dispose())
         db_path.unlink(missing_ok=True)
+
+
+def test_agent_chat_never_persists_canned_fallback_on_model_failure(monkeypatch):
+    db_path = _test_db_path("agent-session-fail-clean")
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def fail_agent_loop(**_kwargs):
+        raise RuntimeError("model network timeout")
+
+    try:
+        asyncio.run(_create_schema(engine))
+        state = asyncio.run(
+            _seed_user_and_session(
+                sessionmaker,
+                email_prefix="agent-fail-clean",
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=20),
+            )
+        )
+        monkeypatch.setattr(agent_api, "run_agent_loop", fail_agent_loop)
+
+        with _make_agent_client(monkeypatch, sessionmaker, state["user_id"]) as client:
+            response = client.post(
+                f"/agent/sessions/{state['session_id']}/chat",
+                json={"content": "测试消息", "surface": "chat"},
+            )
+            history = client.get(f"/agent/sessions/{state['session_id']}/messages")
+
+        # 1. 显式报错 502（网关/模型错误），绝不伪造 200 成功
+        assert response.status_code == 502, response.text
+        assert "这次没能连上助手" in response.json()["detail"]
+
+        # 2. 数据库中绝不包含任何伪造的 assistant 消息
+        messages = history.json()
+        assert not any(msg.get("role") == "assistant" for msg in messages)
+        assert not any("没能连上助手" in msg.get("content", "") for msg in messages)
+    finally:
+        asyncio.run(engine.dispose())
+        db_path.unlink(missing_ok=True)
+

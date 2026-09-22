@@ -1,10 +1,16 @@
-"""Add owner-only saved expressions, without importing an old worktree's migrations."""
+"""Add owner-only saved expressions, without importing an old worktree's migrations.
+
+Revision ID: 0044
+Revises: 0043
+Create Date: 2026-09-21 00:00:00.000000
+
+"""
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "7c5e9210abcd"
-down_revision = "a1b2c3d4e5f6"
+revision: str = '0044'
+down_revision: Union[str, None] = '0043'
 branch_labels = None
 depends_on = None
 

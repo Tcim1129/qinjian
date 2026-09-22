@@ -165,9 +165,6 @@ SYSTEM_PROMPT = build_agent_system_prompt(surface='checkin_assist')
 AGENT_COMPLETION_TIMEOUT_SECONDS = 55
 # 多智能体协作涉及 4 个角色接力调用，网关延迟下允许更长的深度思考窗口。
 MULTI_AGENT_COMPLETION_TIMEOUT_SECONDS = 150
-AGENT_FALLBACK_REPLY = (
-    "这次没能连上助手，暂时没有生成回复。你的话还在，可以稍后重试。"
-)
 MESSAGE_SIMULATION_WINDOW_SECONDS = 60
 MESSAGE_SIMULATION_MAX_ATTEMPTS = 2
 REALTIME_ASR_MIN_SESSION_SECONDS = 15

@@ -1,7 +1,8 @@
 """Add checkin visibility scope, optimistic version and append-only audit events.
 
-Revision ID: b3d5f7a9c1e2
-Revises: 7c5e9210abcd
+Revision ID: 0045
+Revises: 0044
+Create Date: 2026-09-22 00:00:00.000000
 
 Default scope follows the settled product decision: ``shared_summary``
 (partner sees a de-identified summary, never the original text). ``private``
@@ -13,8 +14,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = "b3d5f7a9c1e2"
-down_revision = "7c5e9210abcd"
+revision: str = '0045'
+down_revision: Union[str, None] = '0044'
 branch_labels = None
 depends_on = None
 
