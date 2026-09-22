@@ -9,7 +9,8 @@
     {
       "path": "pages/auth/login",
       "style": {
-        "navigationBarTitleText": "登录"
+        "navigationBarTitleText": "登录 / 注册",
+        "navigationStyle": "custom"
       }
     },
     {
@@ -52,14 +53,14 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "亲健",
-    "navigationBarBackgroundColor": "#F8F8F8",
-    "backgroundColor": "#F8F8F8"
+    "navigationBarBackgroundColor": "#f7f1eb",
+    "backgroundColor": "#f7f1eb"
   },
   "tabBar": {
-    "color": "#7A7E83",
-    "selectedColor": "#667eea",
-    "borderStyle": "black",
-    "backgroundColor": "#ffffff",
+    "color": "#5b666c",
+    "selectedColor": "#d76848",
+    "borderStyle": "white",
+    "backgroundColor": "#fffaf6",
     "list": [
       {
         "pagePath": "pages/home/home",

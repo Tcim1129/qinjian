@@ -1,0 +1,89 @@
+/**
+ * 亲健 (QinJian) 东方人文“纸墨印红”设计系统 Token
+ * 100% 对齐 Web 版设计语言与资产规范
+ */
+
+:root, page {
+  /* 宣纸暖白体系 */
+  --paper: #f7f1eb;
+  --paper-strong: #fffaf6;
+  --paper-soft: #fdf8f2;
+  --paper-line: rgba(68, 52, 40, 0.1);
+  --paper-line-strong: rgba(68, 52, 40, 0.18);
+
+  /* 水墨文字体系 */
+  --ink: #1f2a2f;
+  --ink-soft: #5b666c;
+  --ink-faint: #7c837f;
+  --ink-reverse: #fffdfa;
+
+  /* 朱砂印泥主色体系 (核心行动/印章红) */
+  --seal: #d76848;
+  --seal-soft: #f4ddd4;
+  --seal-deep: #aa4d33;
+
+  /* 东方自然辅色 */
+  --moss: #5f876f;
+  --moss-soft: #dce7da;
+  --moss-deep: #416250;
+  --ochre: #c78a3f;
+  --ochre-soft: #f1e2c8;
+  --sand: #f0d5b8;
+  --sand-light: #f6e9d8;
+
+  /* 卡片与背景 */
+  --bg-page: var(--paper);
+  --bg-card: rgba(255, 250, 244, 0.88);
+  --bg-card-strong: rgba(255, 253, 250, 0.96);
+  --border: var(--paper-line);
+  --border-strong: var(--paper-line-strong);
+
+  /* 投影与层次 */
+  --shadow-sm: 0 8px 22px rgba(56, 40, 30, 0.08);
+  --shadow-md: 0 14px 32px rgba(56, 40, 30, 0.11);
+  --shadow-lg: 0 24px 52px rgba(56, 40, 30, 0.14);
+  --shadow-seal: 0 14px 24px rgba(181, 83, 56, 0.18);
+
+  /* 圆角与字阶 */
+  --radius-sm: 12rpx;
+  --radius-md: 16rpx;
+  --radius-lg: 24rpx;
+  --radius-pill: 9999rpx;
+
+  --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+}
+
+/* SCSS 变量导出供静态编译使用 */
+$color-paper: #f7f1eb;
+$color-paper-strong: #fffaf6;
+$color-paper-soft: #fdf8f2;
+$color-paper-line: rgba(68, 52, 40, 0.1);
+$color-paper-line-strong: rgba(68, 52, 40, 0.18);
+
+$color-ink: #1f2a2f;
+$color-ink-soft: #5b666c;
+$color-ink-faint: #7c837f;
+
+$color-seal: #d76848;
+$color-seal-deep: #aa4d33;
+$color-seal-soft: #f4ddd4;
+
+$color-moss: #5f876f;
+$color-moss-soft: #dce7da;
+$color-moss-deep: #416250;
+$color-ochre: #c78a3f;
+$color-sand: #f0d5b8;
+
+$shadow-sm: 0 8px 22px rgba(56, 40, 30, 0.08);
+$shadow-md: 0 14px 32px rgba(56, 40, 30, 0.11);
+$shadow-lg: 0 24px 52px rgba(56, 40, 30, 0.14);
+$shadow-seal: 0 14px 24px rgba(181, 83, 56, 0.18);
+
+$radius-sm: 12rpx;
+$radius-md: 16rpx;
+$radius-lg: 24rpx;
+$radius-pill: 9999rpx;
+
+$font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+$font-sans: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;

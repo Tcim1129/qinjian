@@ -16,10 +16,19 @@ export function request(options) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data)
         } else {
-          reject(res)
+          const detail = res.data && (res.data.detail || res.data.message)
+          const message = typeof detail === 'string' ? detail : (detail ? JSON.stringify(detail) : `请求失败 (${res.statusCode})`)
+          const err = new Error(message)
+          err.statusCode = res.statusCode
+          err.data = res.data
+          reject(err)
         }
       },
-      fail: reject
+      fail: (err) => {
+        const error = new Error(err.errMsg || '网络连接异常，请检查服务地址')
+        error.raw = err
+        reject(error)
+      }
     })
   })
 }
