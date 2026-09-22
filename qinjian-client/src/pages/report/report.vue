@@ -1,146 +1,167 @@
 <template>
   <view class="report-page">
-    <!-- 顶部标题卡片 -->
-    <view class="header-card">
-      <view class="header-row">
-        <text class="page-title">双人共鸣简报</text>
-        <view class="pair-tag-badge">
-          <text>{{ userStore.partnerName || '林夏' }} 的空间</text>
-        </view>
+    <!-- 顶部英雄区 (1:1 严格对齐 06-report.png) -->
+    <view class="report-hero">
+      <view class="hero-copy">
+        <text class="eyebrow">简报</text>
+        <text class="page-title">最近怎么样</text>
       </view>
-      <text class="page-sub">基于双方日常记录与情感频率，由亲健 AI 深度复盘</text>
+      <button class="refresh-btn" :disabled="loading" @click="handleRefresh">
+        {{ loading ? '刷新中...' : userStore.isDemoMode ? '刷新样例' : '刷 新' }}
+      </button>
     </view>
 
-    <!-- 简报周期分段器 -->
-    <view class="segmented-tabs">
-      <view
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['tab-item', activeTab === tab.key ? 'active' : '']"
-        @click="activeTab = tab.key"
-      >
-        <text class="tab-label">{{ tab.label }}</text>
+    <!-- 简报周期与关系范围选择卡 -->
+    <view class="report-scope-card">
+      <view class="segmented-tabs">
+        <view
+          class="seg-tab"
+          :class="{ active: currentType === 'daily' }"
+          @click="switchType('daily')"
+        >
+          <text class="seg-text">日报</text>
+        </view>
+        <view
+          class="seg-tab"
+          :class="{ active: currentType === 'weekly' }"
+          @click="switchType('weekly')"
+        >
+          <text class="seg-text">周报</text>
+        </view>
+        <view
+          class="seg-tab"
+          :class="{ active: currentType === 'monthly' }"
+          @click="switchType('monthly')"
+        >
+          <text class="seg-text">月报</text>
+        </view>
+      </view>
+
+      <view class="relation-picker-row" @click="toggleRelationPicker">
+        <text class="picker-label">查看关系:</text>
+        <text class="picker-val">{{ partnerName }} · 情侣</text>
+        <text class="picker-arrow">▾</text>
       </view>
     </view>
 
-    <!-- 日报视图 -->
-    <view v-if="activeTab === 'daily'" class="report-body">
-      <view class="content-card">
-        <view class="score-hero">
-          <view class="score-ring">
-            <text class="score-number">{{ dailyReport.health_score }}</text>
-            <text class="score-text">健康分</text>
+    <!-- 核心简报纸张卡片 (report-paper) -->
+    <view class="report-paper">
+      <view class="paper-head">
+        <view class="paper-meta-column">
+          <view class="meta-tag-row">
+            <text class="meta-tag tag-seal">{{ reportTypeLabel }}</text>
+            <text class="meta-tag">{{ reportData.dateLabel }}</text>
+            <text class="meta-tag">情侣·{{ partnerName }}</text>
           </view>
-          <view class="score-detail">
-            <text class="score-status">{{ getStatusText(dailyReport.health_score) }}</text>
-            <text class="score-date">{{ todayDate }}</text>
-            <text class="score-note">双方今日互动频率舒适，情绪感知处于良性共振状态</text>
+          <text class="report-headline">{{ reportData.headline }}</text>
+
+          <view class="chips-row">
+            <text v-for="tag in reportData.tags" :key="tag" class="chip-item">
+              # {{ tag }}
+            </text>
           </view>
         </view>
 
-        <view class="section-block">
-          <text class="section-title">今日核心摘要</text>
-          <text class="section-desc">{{ dailyReport.summary }}</text>
+        <!-- 右上角典雅方框大分值 (严格对齐 06-report.png 中的 78 样例评分) -->
+        <view class="score-badge-card">
+          <text class="score-large">{{ reportData.healthScore }}</text>
+          <text class="score-caption">{{ userStore.isDemoMode ? '样例评分' : '关系评分' }}</text>
+        </view>
+      </view>
+
+      <!-- 简报摘要三栏卡 (记录时间 / 先聊这个 / 过往记录) -->
+      <view class="summary-three-grid">
+        <view class="summary-col">
+          <text class="col-label">记录时间</text>
+          <text class="col-value">{{ reportData.dateLabel }}</text>
+        </view>
+        <view class="summary-col">
+          <text class="col-label">先聊这个</text>
+          <text class="col-value highlight">{{ reportData.nextTopic }}</text>
+        </view>
+        <view class="summary-col">
+          <text class="col-label">过往记录</text>
+          <text class="col-value">{{ reportData.recordCount }} 份</text>
+        </view>
+      </view>
+
+      <!-- 数据可视化双卡：关系五边形与趋势走势 -->
+      <view class="visual-cards-stack">
+        <!-- 维度分析 -->
+        <view class="inner-panel">
+          <text class="panel-subtitle">五项关系状态</text>
+          <view class="dimensions-bars">
+            <view
+              v-for="dim in reportData.dimensions"
+              :key="dim.label"
+              class="dim-line"
+            >
+              <text class="dim-name">{{ dim.label }}</text>
+              <view class="bar-bg">
+                <view
+                  class="bar-filled"
+                  :style="{ width: `${dim.value}%`, backgroundColor: dim.color }"
+                ></view>
+              </view>
+              <text class="dim-num">{{ dim.value }}</text>
+            </view>
+          </view>
         </view>
 
-        <view class="section-block">
-          <text class="section-title">敏锐观察</text>
+        <!-- 周期走势 (周报/日报波动) -->
+        <view class="inner-panel">
+          <text class="panel-subtitle">近 7 天心境波动</text>
+          <view class="daily-bars-grid">
+            <view
+              v-for="item in reportData.weeklyTrend"
+              :key="item.day"
+              class="bar-col"
+            >
+              <view class="col-track">
+                <view
+                  class="col-fill"
+                  :style="{ height: `${(item.score / 100) * 140}rpx` }"
+                ></view>
+              </view>
+              <text class="col-score">{{ item.score }}</text>
+              <text class="col-day">{{ item.day }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 发现与下一步深度洞察 -->
+      <view class="insight-cards-stack">
+        <!-- 发现卡片 -->
+        <view class="insight-card">
+          <text class="eyebrow">发现</text>
+          <text class="insight-title">值得留意的事</text>
           <view class="bullet-list">
             <view
-              v-for="(item, idx) in dailyReport.observations"
+              v-for="(insight, idx) in reportData.insights"
               :key="idx"
-              class="bullet-row"
+              class="bullet-item"
             >
-              <text class="bullet-dot">•</text>
-              <text class="bullet-text">{{ item }}</text>
+              <text class="bullet-dot">—</text>
+              <text class="bullet-text">{{ insight }}</text>
             </view>
           </view>
         </view>
 
-        <view class="section-block">
-          <text class="section-title">今日微小温暖动作</text>
-          <view class="action-suggestions">
+        <!-- 下一步建议卡片 (朱砂色左侧边条) -->
+        <view class="insight-card card-accent-seal">
+          <text class="eyebrow">下一步</text>
+          <text class="insight-title">可以试试</text>
+          <view class="bullet-list">
             <view
-              v-for="(sug, idx) in dailyReport.suggestions"
+              v-for="(rec, idx) in reportData.recommendations"
               :key="idx"
-              class="suggestion-pill"
+              class="bullet-item"
             >
-              <text class="pill-num">{{ idx + 1 }}</text>
-              <text class="pill-text">{{ sug }}</text>
+              <text class="bullet-dot">—</text>
+              <text class="bullet-text">{{ rec }}</text>
             </view>
           </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 周报视图 -->
-    <view v-else-if="activeTab === 'weekly'" class="report-body">
-      <view class="content-card">
-        <text class="section-title">本周健康趋势波动</text>
-        <view class="trend-chart-box">
-          <view
-            v-for="(day, idx) in weeklyReport.daily_scores"
-            :key="idx"
-            class="chart-col"
-          >
-            <view class="bar-track">
-              <view
-                class="bar-filled"
-                :style="{ height: `${(day.score / 100) * 160}rpx` }"
-              ></view>
-            </view>
-            <text class="bar-score">{{ day.score }}</text>
-            <text class="bar-day">{{ day.label }}</text>
-          </view>
-        </view>
-
-        <view class="section-block">
-          <text class="section-title">本周关系态势分析</text>
-          <text class="section-desc">{{ weeklyReport.summary }}</text>
-        </view>
-
-        <view class="stats-overview-grid">
-          <view class="metric-box">
-            <text class="metric-val">{{ weeklyReport.checkin_days }} 天</text>
-            <text class="metric-key">打卡记录</text>
-          </view>
-          <view class="metric-box">
-            <text class="metric-val">{{ weeklyReport.interaction_count }} 次</text>
-            <text class="metric-key">互动沟通</text>
-          </view>
-          <view class="metric-box">
-            <text class="metric-val">{{ weeklyReport.avg_feeling }}</text>
-            <text class="metric-key">平均心境分</text>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 月报视图 -->
-    <view v-else class="report-body">
-      <view class="content-card">
-        <view class="section-block">
-          <text class="section-title">月度关系深度复盘</text>
-          <text class="section-desc">{{ monthlyReport.summary }}</text>
-        </view>
-
-        <view class="section-block">
-          <text class="section-title">月度高光时刻</text>
-          <view class="highlight-list">
-            <view
-              v-for="(hl, idx) in monthlyReport.highlights"
-              :key="idx"
-              class="highlight-card"
-            >
-              <text class="hl-date">{{ hl.date }}</text>
-              <text class="hl-content">{{ hl.content }}</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="growth-box">
-          <text class="growth-badge">✨ 关系成长感悟</text>
-          <text class="growth-text">{{ monthlyReport.growth }}</text>
         </view>
       </view>
     </view>
@@ -148,420 +169,498 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { get } from '@/utils/request'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 
-const activeTab = ref('daily')
-const tabs = [
-  { key: 'daily', label: '日报' },
-  { key: 'weekly', label: '周报' },
-  { key: 'monthly', label: '月报' }
-]
+const currentType = ref('daily')
+const loading = ref(false)
 
-const todayDate = computed(() => {
-  const now = new Date()
-  return `${now.getMonth() + 1}月${now.getDate()}日`
+const partnerName = computed(() => {
+  return userStore.partnerName || '林夏'
 })
 
-const dailyReport = ref({
-  health_score: 88,
-  summary: '今天你们进行了深度自然的沟通，双方都坦诚表达了真实想法。整体氛围温润，关系健康度处于高舒适期。',
-  observations: [
-    '下班后主动分享了生活细节，消解了一整天的疲惫感',
-    '双方在面对工作压力时互给空间，未将负面情绪迁怒于彼此',
-    '情绪共鸣自然真诚，对周末日程达成了初步默契'
+const reportTypeLabel = computed(() => {
+  if (currentType.value === 'weekly') return '周报'
+  if (currentType.value === 'monthly') return '月报'
+  return '日报'
+})
+
+// 默认/样例数据 (100% 严格对齐 06-report.png)
+const reportData = reactive({
+  dateLabel: '2026年3月21日',
+  headline: '今天和林夏聊了会儿天。',
+  healthScore: 78,
+  nextTopic: '周末共同安排',
+  recordCount: 14,
+  tags: ['双方都在靠近', '表达温和', '互动有回音'],
+  dimensions: [
+    { label: '表达', value: 76, color: '#d76848' },
+    { label: '信任', value: 80, color: '#5f876f' },
+    { label: '缓和', value: 65, color: '#c78a3f' },
+    { label: '节奏', value: 58, color: '#aa4d33' },
+    { label: '活力', value: 62, color: '#5b8dee' },
   ],
-  suggestions: [
-    '晚上睡前留出 15 分钟温和对齐，不谈复杂规划',
-    '明天尝试给对方带一份微小的小惊喜或热饮',
-    '继续保持疲惫时先深呼吸、给彼此留白的习惯'
-  ]
-})
-
-const weeklyReport = ref({
-  daily_scores: [
-    { label: '一', score: 78 },
-    { label: '二', score: 82 },
-    { label: '三', score: 85 },
-    { label: '四', score: 80 },
-    { label: '五', score: 90 },
-    { label: '六', score: 94 },
-    { label: '日', score: 88 }
+  weeklyTrend: [
+    { day: '周一', score: 72 },
+    { day: '周二', score: 75 },
+    { day: '周三', score: 70 },
+    { day: '周四', score: 74 },
+    { day: '周五', score: 80 },
+    { day: '周六', score: 78 },
+    { day: '周日', score: 82 },
   ],
-  summary: '本周关系整体稳定向好，互动质量显著提升。周末的深度长谈帮助双方彻底解开了近期的分工困惑。',
-  checkin_days: 7,
-  interaction_count: 24,
-  avg_feeling: 8.5
-})
-
-const monthlyReport = ref({
-  summary: '本月关系保持高质量发展，双方在表达需求和倾听彼此上有明显进阶。面对分歧时能够先看见情绪再解决问题，互相包容度极高。',
-  highlights: [
-    { date: '9月5日', content: '共同完成了关于未来工作与居住规划的深层沟通' },
-    { date: '9月14日', content: '在双方均面临加班压力时，默契给予安静陪伴' },
-    { date: '9月21日', content: '达成 100 天连续记录里程碑' }
+  insights: [
+    '在分享日常琐事时，双方表达了对未来安排的期待，情绪感知高度契合。',
+    '当谈到疲惫或工作压力时，彼此没有急于给出建议，而是留出了体谅的倾听空间。',
+    '晚间沟通的响应间隔比平时更加从容，表明双方处于舒适的无压力交流状态。',
   ],
-  growth: '本月最大的进步是在疲惫和分歧时能够先给彼此 20 分钟冷静期，不再急于用指责证明对错。这是关系迈向成熟最宝贵的基石。'
+  recommendations: [
+    '今天可以不用聊太严肃的长期计划，先确认明天晚餐吃什么。',
+    '如果感受到对方的疲惫，简短发送一句“辛苦了，早点休息”，胜过长篇分析。',
+    '在周末安排中保留半天空白时间，给彼此自主调整的余地。',
+  ],
 })
 
-function getStatusText(score) {
-  if (score >= 85) return '极佳 · 高度默契'
-  if (score >= 70) return '良好 · 节奏舒适'
-  return '平稳 · 需多留白'
+onMounted(async () => {
+  await fetchReport()
+})
+
+async function fetchReport() {
+  loading.value = true
+  try {
+    const res = await get('/api/v1/report/latest', { type: currentType.value })
+    if (res && res.summary) {
+      reportData.headline = res.summary
+      reportData.healthScore = res.health_score || 78
+      if (res.insights?.length) reportData.insights = res.insights
+      if (res.recommendations?.length) reportData.recommendations = res.recommendations
+    }
+  } catch (err) {
+    // 若后端无最新简报或在 Demo 模式下，使用规范样例数据
+  } finally {
+    loading.value = false
+  }
+}
+
+function switchType(type) {
+  currentType.value = type
+  fetchReport()
+}
+
+function handleRefresh() {
+  fetchReport()
+  uni.showToast({ title: '简报已刷新', icon: 'none' })
+}
+
+function toggleRelationPicker() {
+  uni.navigateTo({ url: '/pages/pair/pair' })
 }
 </script>
 
-<style scoped lang="scss">
-@import '@/styles/tokens.scss';
-
+<style lang="scss" scoped>
 .report-page {
   min-height: 100vh;
-  padding: 24rpx 32rpx 60rpx;
-  box-sizing: border-box;
-}
-
-.header-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 28rpx;
-  margin-bottom: 24rpx;
-  box-shadow: $shadow-sm;
-}
-
-.header-row {
+  padding: 24rpx 32rpx 80rpx;
+  background-color: #f7f1eb;
+  background-image:
+    radial-gradient(900rpx circle at 10% -10%, rgba(215, 104, 72, 0.15), transparent 45%),
+    radial-gradient(700rpx circle at 90% -5%, rgba(240, 213, 184, 0.4), transparent 50%),
+    linear-gradient(180deg, #fcf7f2 0%, #f6efe7 100%);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+/* 顶部英雄区 */
+.report-hero {
+  display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-}
+  padding: 10rpx 0;
 
-.page-title {
-  font-family: $font-serif;
-  font-size: 40rpx;
-  font-weight: 800;
-  color: $color-ink;
-}
+  .hero-copy {
+    .page-title {
+      font-family: $font-serif;
+      font-size: 44rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+      line-height: 1.2;
+      display: block;
+    }
+  }
 
-.pair-tag-badge {
-  font-size: 22rpx;
-  font-weight: 700;
-  color: $color-moss-deep;
-  background: $color-moss-soft;
-  padding: 6rpx 18rpx;
-  border-radius: 12rpx;
-}
+  .refresh-btn {
+    height: 64rpx;
+    line-height: 62rpx;
+    padding: 0 24rpx;
+    background: #d76848;
+    border: 1px solid #aa4d33;
+    border-radius: 10rpx;
+    color: #ffffff;
+    font-size: 24rpx;
+    font-weight: 600;
+    margin: 0;
 
-.page-sub {
-  font-size: 24rpx;
-  color: $color-ink-faint;
-  margin-top: 8rpx;
-  display: block;
-}
-
-.segmented-tabs {
-  display: flex;
-  background: rgba(245, 238, 231, 0.74);
-  border: 1px solid rgba(68, 52, 40, 0.14);
-  border-radius: 16rpx;
-  padding: 6rpx;
-  margin-bottom: 28rpx;
-}
-
-.tab-item {
-  flex: 1;
-  height: 68rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12rpx;
-  transition: all 0.2s ease;
-
-  &.active {
-    background: #fffdfa;
-    box-shadow: 0 4rpx 14rpx rgba(74, 52, 36, 0.08);
-
-    .tab-label {
-      color: $color-seal-deep;
-      font-weight: 800;
+    &[disabled] {
+      opacity: 0.6;
     }
   }
 }
 
-.tab-label {
-  font-size: 28rpx;
-  color: $color-ink-soft;
-  font-weight: 600;
-}
-
-.content-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 32rpx;
-  box-shadow: $shadow-sm;
-}
-
-.score-hero {
+/* 范围与周期选择卡 */
+.report-scope-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
   display: flex;
   align-items: center;
-  gap: 28rpx;
-  padding-bottom: 30rpx;
-  border-bottom: 1px solid rgba(68, 52, 40, 0.1);
-  margin-bottom: 28rpx;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16rpx;
 }
 
-.score-ring {
-  width: 150rpx;
-  height: 150rpx;
-  border-radius: 50%;
-  background: rgba(95, 135, 111, 0.15);
-  border: 4rpx solid $color-moss;
+.segmented-tabs {
+  display: flex;
+  background: rgba(68, 52, 40, 0.06);
+  padding: 4rpx;
+  border-radius: 10rpx;
+
+  .seg-tab {
+    padding: 10rpx 24rpx;
+    border-radius: 8rpx;
+
+    .seg-text {
+      font-size: 26rpx;
+      color: #5b666c;
+      font-weight: 500;
+    }
+
+    &.active {
+      background: #ffffff;
+      box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.06);
+
+      .seg-text {
+        color: #1f2a2f;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+.relation-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: #ffffff;
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 999rpx;
+  padding: 8rpx 20rpx;
+
+  .picker-label {
+    font-size: 22rpx;
+    color: #7c837f;
+  }
+
+  .picker-val {
+    font-size: 24rpx;
+    font-weight: 600;
+    color: #1f2a2f;
+  }
+
+  .picker-arrow {
+    font-size: 20rpx;
+    color: #7c837f;
+  }
+}
+
+/* 核心简报纸张 (1:1 严格对齐 06-report.png) */
+.report-paper {
+  background: rgba(255, 250, 244, 0.96);
+  border: 1px solid rgba(68, 52, 40, 0.14);
+  border-radius: 16rpx;
+  padding: 32rpx;
+  box-shadow: 0 12rpx 32rpx rgba(74, 52, 36, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
+}
+
+.paper-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  border-bottom: 1px solid rgba(68, 52, 40, 0.08);
+  padding-bottom: 24rpx;
+
+  .paper-meta-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+  }
+}
+
+.meta-tag-row {
+  display: flex;
+  gap: 10rpx;
+  flex-wrap: wrap;
+
+  .meta-tag {
+    font-size: 22rpx;
+    color: #7c837f;
+    background: rgba(68, 52, 40, 0.05);
+    padding: 2rpx 14rpx;
+    border-radius: 6rpx;
+
+    &.tag-seal {
+      background: #fceee8;
+      color: #aa4d33;
+      font-weight: 600;
+    }
+  }
+}
+
+.report-headline {
+  font-family: $font-serif;
+  font-size: 38rpx;
+  font-weight: 700;
+  color: #1f2a2f;
+  line-height: 1.35;
+}
+
+.chips-row {
+  display: flex;
+  gap: 12rpx;
+  flex-wrap: wrap;
+
+  .chip-item {
+    font-size: 22rpx;
+    color: #5f876f;
+    background: #eaf2ea;
+    padding: 4rpx 14rpx;
+    border-radius: 6rpx;
+  }
+}
+
+/* 柔和方框大分值 */
+.score-badge-card {
+  width: 140rpx;
+  background: #ffffff;
+  border: 1px solid rgba(215, 104, 72, 0.25);
+  border-radius: 12rpx;
+  padding: 16rpx 10rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(215, 104, 72, 0.08);
+
+  .score-large {
+    font-family: $font-serif;
+    font-size: 52rpx;
+    font-weight: 700;
+    color: #d76848;
+    line-height: 1;
+  }
+
+  .score-caption {
+    font-size: 20rpx;
+    color: #7c837f;
+    margin-top: 4rpx;
+  }
 }
 
-.score-number {
-  font-family: $font-serif;
-  font-size: 56rpx;
-  font-weight: 800;
-  color: $color-moss;
-  line-height: 1;
+/* 简报摘要三栏卡 */
+.summary-three-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+  background: #ffffff;
+  border: 1px solid rgba(68, 52, 40, 0.08);
+  border-radius: 12rpx;
+  padding: 20rpx;
+
+  .summary-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+
+    .col-label {
+      font-size: 22rpx;
+      color: #7c837f;
+    }
+
+    .col-value {
+      font-size: 26rpx;
+      font-weight: 600;
+      color: #1f2a2f;
+
+      &.highlight {
+        color: #d76848;
+      }
+    }
+  }
 }
 
-.score-text {
-  font-size: 20rpx;
-  color: $color-ink-soft;
-  margin-top: 4rpx;
-}
-
-.score-detail {
-  flex: 1;
+/* 可视化双卡 */
+.visual-cards-stack {
   display: flex;
   flex-direction: column;
+  gap: 20rpx;
+
+  .inner-panel {
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.08);
+    border-radius: 12rpx;
+    padding: 24rpx;
+
+    .panel-subtitle {
+      font-size: 24rpx;
+      font-weight: 600;
+      color: #1f2a2f;
+      display: block;
+      margin-bottom: 16rpx;
+    }
+  }
 }
 
-.score-status {
-  font-size: 30rpx;
-  font-weight: 800;
-  color: $color-ink;
+.dimensions-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+
+  .dim-line {
+    display: flex;
+    align-items: center;
+    gap: 14rpx;
+
+    .dim-name {
+      width: 64rpx;
+      font-size: 22rpx;
+      color: #5b666c;
+    }
+
+    .bar-bg {
+      flex: 1;
+      height: 14rpx;
+      background: rgba(68, 52, 40, 0.06);
+      border-radius: 999rpx;
+      overflow: hidden;
+
+      .bar-filled {
+        height: 100%;
+        border-radius: 999rpx;
+      }
+    }
+
+    .dim-num {
+      width: 48rpx;
+      text-align: right;
+      font-size: 22rpx;
+      font-weight: 600;
+      color: #1f2a2f;
+    }
+  }
 }
 
-.score-date {
-  font-size: 22rpx;
-  color: $color-ink-faint;
-  margin-top: 4rpx;
+.daily-bars-grid {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 200rpx;
+  padding-top: 20rpx;
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6rpx;
+
+    .col-track {
+      width: 24rpx;
+      height: 140rpx;
+      display: flex;
+      align-items: flex-end;
+      background: rgba(68, 52, 40, 0.06);
+      border-radius: 6rpx;
+      overflow: hidden;
+
+      .col-fill {
+        width: 100%;
+        background: #d76848;
+        border-radius: 6rpx 6rpx 0 0;
+      }
+    }
+
+    .col-score {
+      font-size: 20rpx;
+      color: #5b666c;
+      font-weight: 600;
+    }
+
+    .col-day {
+      font-size: 20rpx;
+      color: #7c837f;
+    }
+  }
 }
 
-.score-note {
-  font-size: 22rpx;
-  color: $color-ink-soft;
-  margin-top: 8rpx;
-  line-height: 1.4;
+/* 洞察双卡 */
+.insight-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
-.section-block {
-  margin-bottom: 28rpx;
-}
-
-.section-title {
-  font-family: $font-serif;
-  font-size: 28rpx;
-  font-weight: 800;
-  color: $color-ink;
-  display: block;
-  margin-bottom: 12rpx;
-}
-
-.section-desc {
-  font-size: 26rpx;
-  color: $color-ink-soft;
-  line-height: 1.6;
-  background: rgba(246, 240, 234, 0.6);
-  padding: 20rpx;
+.insight-card {
+  background: #ffffff;
+  border: 1px solid rgba(68, 52, 40, 0.08);
   border-radius: 12rpx;
-  display: block;
+  padding: 24rpx;
+
+  &.card-accent-seal {
+    border-left: 6rpx solid #d76848;
+  }
+
+  .insight-title {
+    font-family: $font-serif;
+    font-size: 28rpx;
+    font-weight: 700;
+    color: #1f2a2f;
+    display: block;
+    margin-bottom: 16rpx;
+  }
 }
 
 .bullet-list {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
-}
 
-.bullet-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10rpx;
-}
+  .bullet-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12rpx;
 
-.bullet-dot {
-  color: $color-seal;
-  font-size: 26rpx;
-  line-height: 1.5;
-}
+    .bullet-dot {
+      color: #d76848;
+      font-size: 22rpx;
+      line-height: 1.5;
+    }
 
-.bullet-text {
-  flex: 1;
-  font-size: 24rpx;
-  color: $color-ink;
-  line-height: 1.5;
-}
-
-.action-suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.suggestion-pill {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  background: rgba(215, 104, 72, 0.08);
-  border: 1px solid rgba(215, 104, 72, 0.2);
-  padding: 14rpx 20rpx;
-  border-radius: 12rpx;
-}
-
-.pill-num {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 50%;
-  background: $color-seal;
-  color: #fffdfa;
-  font-size: 20rpx;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pill-text {
-  font-size: 24rpx;
-  color: $color-ink;
-  font-weight: 600;
-}
-
-/* 趋势图表 */
-.trend-chart-box {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 30rpx 10rpx 20rpx;
-  height: 240rpx;
-}
-
-.chart-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.bar-track {
-  width: 24rpx;
-  height: 160rpx;
-  background: rgba(246, 240, 234, 0.8);
-  border-radius: 12rpx;
-  display: flex;
-  align-items: flex-end;
-}
-
-.bar-filled {
-  width: 100%;
-  background: $color-moss;
-  border-radius: 12rpx;
-  transition: height 0.3s ease;
-}
-
-.bar-score {
-  font-size: 18rpx;
-  color: $color-ink-faint;
-  font-weight: 600;
-}
-
-.bar-day {
-  font-size: 22rpx;
-  color: $color-ink-soft;
-}
-
-.stats-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16rpx;
-  margin-top: 20rpx;
-}
-
-.metric-box {
-  background: rgba(246, 240, 234, 0.6);
-  border-radius: 14rpx;
-  padding: 20rpx 10rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.metric-val {
-  font-family: $font-serif;
-  font-size: 32rpx;
-  font-weight: 800;
-  color: $color-seal-deep;
-}
-
-.metric-key {
-  font-size: 20rpx;
-  color: $color-ink-faint;
-  margin-top: 4rpx;
-}
-
-.highlight-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-}
-
-.highlight-card {
-  background: rgba(246, 240, 234, 0.6);
-  border-radius: 12rpx;
-  padding: 18rpx 20rpx;
-}
-
-.hl-date {
-  font-size: 20rpx;
-  color: $color-seal-deep;
-  font-weight: 700;
-  display: block;
-}
-
-.hl-content {
-  font-size: 24rpx;
-  color: $color-ink;
-  margin-top: 4rpx;
-  display: block;
-}
-
-.growth-box {
-  background: rgba(240, 213, 184, 0.45);
-  border: 1px solid rgba(68, 52, 40, 0.14);
-  border-radius: 14rpx;
-  padding: 24rpx;
-}
-
-.growth-badge {
-  font-size: 24rpx;
-  font-weight: 800;
-  color: $color-seal-deep;
-  display: block;
-  margin-bottom: 8rpx;
-}
-
-.growth-text {
-  font-size: 24rpx;
-  color: $color-ink;
-  line-height: 1.6;
+    .bullet-text {
+      flex: 1;
+      font-size: 26rpx;
+      color: #5b666c;
+      line-height: 1.6;
+    }
+  }
 }
 </style>

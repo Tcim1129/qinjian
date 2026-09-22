@@ -5,6 +5,7 @@
     <!-- 顶部概览 -->
     <view class="timeline-hero">
       <view class="hero-text-wrap">
+        <text class="eyebrow">关系日历</text>
         <text class="hero-title">回忆与成长轨迹</text>
         <text class="hero-subtitle">
           当前空间：{{ userStore.partnerName || '林夏' }}
@@ -57,7 +58,9 @@
 
     <!-- 暂无记录空态 -->
     <view v-else class="empty-timeline-card">
-      <text class="empty-icon">⏳</text>
+      <view class="empty-seal-box">
+        <text class="empty-seal-text">印</text>
+      </view>
       <text class="empty-title">时光轴静待开启</text>
       <text class="empty-desc">完成每一次日常记录，AI 助手都会在此沉淀两人的专属印记</text>
       <button class="go-checkin-btn" @click="goCheckin">开启第一次记录</button>
@@ -342,9 +345,23 @@ function goCheckin() {
   text-align: center;
 }
 
-.empty-icon {
-  font-size: 64rpx;
+.empty-seal-box {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  border: 2rpx solid $color-seal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-seal-soft;
   margin-bottom: 20rpx;
+
+  .empty-seal-text {
+    font-family: $font-serif;
+    font-size: 32rpx;
+    font-weight: 700;
+    color: $color-seal;
+  }
 }
 
 .empty-title {

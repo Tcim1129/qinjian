@@ -1,9 +1,14 @@
 <template>
   <view class="profile-page">
-    <!-- 用户个人信息卡片 -->
+    <view class="profile-head">
+      <text class="eyebrow">我的</text>
+      <text class="page-title">个人中心</text>
+    </view>
+
+    <!-- 用户身份卡片 -->
     <view class="user-hero-card">
       <view class="avatar-ring">
-        <text class="avatar-text">{{ avatarInitial }}</text>
+        <text class="avatar-char">{{ avatarInitial }}</text>
       </view>
 
       <view class="user-meta">
@@ -16,58 +21,76 @@
       </view>
     </view>
 
-    <!-- 伴侣与空间信息简卡 -->
-    <view class="partner-card" @click="goPair">
-      <view class="partner-left">
-        <text class="partner-icon">🌿</text>
-        <view class="partner-texts">
-          <text class="partner-title">当前主空间：{{ userStore.partnerName || '待绑定' }}</text>
-          <text class="partner-desc">点击切换伴侣或查看邀请码</text>
-        </view>
+    <!-- 伴侣主空间微卡 -->
+    <view class="partner-space-card" @click="goPair">
+      <view class="partner-meta">
+        <text class="eyebrow">当前空间</text>
+        <text class="partner-title">{{ userStore.partnerName || '林夏' }} 的专属空间</text>
+        <text class="partner-desc">管理关系连线、邀请码与状态设置</text>
       </view>
-      <text class="card-arrow">→</text>
+      <text class="card-arrow">&gt;</text>
     </view>
 
-    <!-- 功能菜单列表 -->
-    <view class="menu-card">
-      <view class="menu-item" @click="goCheckin">
-        <view class="item-left">
-          <text class="item-emoji">✍️</text>
-          <text class="item-label">今日情感记录</text>
+    <!-- 常用功能分组列表 (纯文字排版，无任何卡通 Emoji) -->
+    <view class="menu-group-card">
+      <view class="menu-item" @click="goPair">
+        <view class="item-text-group">
+          <text class="item-title">关系管理</text>
+          <text class="item-sub">切换伴侣、添加关系与邀请码</text>
         </view>
-        <text class="item-arrow">→</text>
+        <text class="item-arrow">&gt;</text>
+      </view>
+
+      <view class="menu-item" @click="goCheckin">
+        <view class="item-text-group">
+          <text class="item-title">今日记录</text>
+          <text class="item-sub">沉淀真实的交流与微小心境</text>
+        </view>
+        <text class="item-arrow">&gt;</text>
       </view>
 
       <view class="menu-item" @click="goReport">
-        <view class="item-left">
-          <text class="item-emoji">📊</text>
-          <text class="item-label">双人共鸣简报</text>
+        <view class="item-text-group">
+          <text class="item-title">双人简报</text>
+          <text class="item-sub">查看日报、周报与五项关系状态</text>
         </view>
-        <text class="item-arrow">→</text>
+        <text class="item-arrow">&gt;</text>
       </view>
 
       <view class="menu-item" @click="goTimeline">
-        <view class="item-left">
-          <text class="item-emoji">⏳</text>
-          <text class="item-label">时光回忆轨迹</text>
+        <view class="item-text-group">
+          <text class="item-title">关系日历</text>
+          <text class="item-sub">回忆轨迹与时间轴沉淀</text>
         </view>
-        <text class="item-arrow">→</text>
-      </view>
-
-      <view class="menu-item" @click="goPair">
-        <view class="item-left">
-          <text class="item-emoji">💌</text>
-          <text class="item-label">关系配对与邀请码</text>
-        </view>
-        <text class="item-arrow">→</text>
+        <text class="item-arrow">&gt;</text>
       </view>
     </view>
 
-    <!-- 操作按钮：退出或去登录 -->
+    <!-- 偏好与回复方式卡片 -->
+    <view class="pref-card">
+      <view class="pref-head">
+        <text class="eyebrow">偏好</text>
+        <text class="pref-title">AI 交流风格</text>
+      </view>
+
+      <view class="pref-options">
+        <view
+          v-for="tone in toneOptions"
+          :key="tone.key"
+          class="tone-chip"
+          :class="{ active: selectedTone === tone.key }"
+          @click="selectedTone = tone.key"
+        >
+          <text class="tone-label">{{ tone.label }}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部退出与登录按钮 -->
     <view class="action-footer">
       <button
         v-if="userStore.isDemoMode"
-        class="exit-demo-btn"
+        class="ghost-action-btn"
         @click="handleExitDemo"
       >
         退出体验样例，登录真实账号
@@ -75,15 +98,15 @@
 
       <button
         v-else-if="userStore.isLoggedIn"
-        class="logout-btn"
+        class="ghost-action-btn"
         @click="handleLogout"
       >
-        退出登录
+        退出当前登录
       </button>
 
       <button
         v-else
-        class="login-btn"
+        class="primary-action-btn"
         @click="goLogin"
       >
         立即登录 / 体验样例
@@ -93,23 +116,30 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
+
+const selectedTone = ref('gentle')
+const toneOptions = [
+  { key: 'gentle', label: '温柔体谅，先共情' },
+  { key: 'direct', label: '直接简洁，给行动' },
+  { key: 'rational', label: '理性分析，拆重点' },
+]
 
 onMounted(async () => {
   await userStore.bootstrap()
 })
 
 const displayName = computed(() => {
-  if (userStore.isDemoMode) return '陈一 (体验)'
-  return userStore.me?.nickname || (userStore.isLoggedIn ? '亲健朋友' : '未登录访客')
+  if (userStore.isDemoMode) return '陈一 (样例)'
+  return userStore.me?.nickname || (userStore.isLoggedIn ? '亲健朋友' : '访客')
 })
 
 const displayAccount = computed(() => {
   if (userStore.isDemoMode) return '伴侣连线：林夏 · 体验账号'
-  return userStore.me?.phone || userStore.me?.email || (userStore.isLoggedIn ? '已登录' : '点击去登录解锁完整功能')
+  return userStore.me?.phone || userStore.me?.email || (userStore.isLoggedIn ? '已登录' : '点击去登录')
 })
 
 const avatarInitial = computed(() => {
@@ -140,237 +170,283 @@ function goLogin() {
 
 function handleExitDemo() {
   userStore.logout()
-  uni.showToast({ title: '已退出体验模式', icon: 'none' })
+  uni.showToast({ title: '已退出样例模式', icon: 'none' })
   setTimeout(() => {
-    uni.reLaunch({ url: '/pages/auth/login' })
+    uni.navigateTo({ url: '/pages/auth/login' })
   }, 400)
 }
 
 function handleLogout() {
-  userStore.logout()
-  uni.showToast({ title: '已安全退出', icon: 'none' })
-  setTimeout(() => {
-    uni.reLaunch({ url: '/pages/auth/login' })
-  }, 400)
+  uni.showModal({
+    title: '提示',
+    content: '确认退出当前登录吗？',
+    success: (res) => {
+      if (res.confirm) {
+        userStore.logout()
+        uni.showToast({ title: '已退出登录', icon: 'none' })
+        setTimeout(() => {
+          uni.navigateTo({ url: '/pages/auth/login' })
+        }, 400)
+      }
+    }
+  })
 }
 </script>
 
-<style scoped lang="scss">
-@import '@/styles/tokens.scss';
-
+<style lang="scss" scoped>
 .profile-page {
   min-height: 100vh;
-  padding: 30rpx 32rpx 60rpx;
-  box-sizing: border-box;
+  padding: 24rpx 32rpx 80rpx;
+  background-color: #f7f1eb;
+  background-image:
+    radial-gradient(900rpx circle at 10% -10%, rgba(215, 104, 72, 0.15), transparent 45%),
+    radial-gradient(700rpx circle at 90% -5%, rgba(240, 213, 184, 0.4), transparent 50%),
+    linear-gradient(180deg, #fcf7f2 0%, #f6efe7 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
 }
 
+.profile-head {
+  padding: 10rpx 0;
+
+  .page-title {
+    font-family: $font-serif;
+    font-size: 42rpx;
+    font-weight: 700;
+    color: #1f2a2f;
+    line-height: 1.3;
+    display: block;
+  }
+}
+
+/* 用户卡片 */
 .user-hero-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 40rpx 32rpx;
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
   display: flex;
   align-items: center;
-  gap: 28rpx;
-  margin-bottom: 24rpx;
-  box-shadow: $shadow-sm;
+  gap: 24rpx;
+
+  .avatar-ring {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 50%;
+    background: #fceee8;
+    border: 2rpx solid rgba(215, 104, 72, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .avatar-char {
+      font-family: $font-serif;
+      font-size: 42rpx;
+      font-weight: 700;
+      color: #d76848;
+    }
+  }
+
+  .user-meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+
+    .name-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 12rpx;
+
+      .user-nickname {
+        font-family: $font-serif;
+        font-size: 32rpx;
+        font-weight: 700;
+        color: #1f2a2f;
+      }
+
+      .demo-badge {
+        font-size: 20rpx;
+        background: #fceee8;
+        color: #aa4d33;
+        padding: 2rpx 12rpx;
+        border-radius: 6rpx;
+        border: 1px solid rgba(215, 104, 72, 0.25);
+      }
+
+      .status-badge {
+        font-size: 20rpx;
+        background: #eaf2ea;
+        color: #5f876f;
+        padding: 2rpx 12rpx;
+        border-radius: 6rpx;
+      }
+    }
+
+    .user-sub {
+      font-size: 24rpx;
+      color: #7c837f;
+    }
+  }
 }
 
-.avatar-ring {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
-  background: $color-seal-soft;
-  border: 2rpx solid rgba(215, 104, 72, 0.36);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar-text {
-  font-family: $font-serif;
-  font-size: 52rpx;
-  font-weight: 800;
-  color: $color-seal-deep;
-}
-
-.user-meta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.name-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.user-nickname {
-  font-family: $font-serif;
-  font-size: 38rpx;
-  font-weight: 800;
-  color: $color-ink;
-}
-
-.demo-badge {
-  font-size: 18rpx;
-  font-weight: 700;
-  color: #fffdfa;
-  background: $color-seal;
-  padding: 4rpx 12rpx;
-  border-radius: 8rpx;
-}
-
-.status-badge {
-  font-size: 18rpx;
-  font-weight: 700;
-  color: $color-moss-deep;
-  background: $color-moss-soft;
-  padding: 4rpx 12rpx;
-  border-radius: 8rpx;
-}
-
-.user-sub {
-  font-size: 24rpx;
-  color: $color-ink-faint;
-  margin-top: 8rpx;
-}
-
-.partner-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line;
-  border-radius: $radius-md;
-  padding: 24rpx 28rpx;
+/* 伴侣空间卡 */
+.partner-space-card {
+  background:
+    linear-gradient(140deg, rgba(215, 104, 72, 0.08) 0%, rgba(240, 213, 184, 0.14) 100%),
+    rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 28rpx 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 28rpx;
-  box-shadow: $shadow-sm;
 
-  &:active {
-    background: rgba(244, 221, 212, 0.4);
+  .partner-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+
+    .partner-title {
+      font-size: 28rpx;
+      font-weight: 600;
+      color: #1f2a2f;
+    }
+
+    .partner-desc {
+      font-size: 22rpx;
+      color: #7c837f;
+    }
+  }
+
+  .card-arrow {
+    font-size: 28rpx;
+    color: #7c837f;
   }
 }
 
-.partner-left {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
+/* 分组菜单列表 */
+.menu-group-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+
+  .menu-item {
+    padding: 26rpx 30rpx;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(68, 52, 40, 0.06);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .item-text-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4rpx;
+
+      .item-title {
+        font-size: 28rpx;
+        font-weight: 600;
+        color: #1f2a2f;
+      }
+
+      .item-sub {
+        font-size: 22rpx;
+        color: #7c837f;
+      }
+    }
+
+    .item-arrow {
+      font-size: 28rpx;
+      color: #b4bab8;
+    }
+  }
 }
 
-.partner-icon {
-  font-size: 36rpx;
-}
-
-.partner-texts {
+/* 偏好卡片 */
+.pref-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
   display: flex;
   flex-direction: column;
-}
-
-.partner-title {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: $color-ink;
-}
-
-.partner-desc {
-  font-size: 20rpx;
-  color: $color-ink-faint;
-  margin-top: 4rpx;
-}
-
-.card-arrow {
-  font-size: 28rpx;
-  color: $color-seal-deep;
-  font-weight: 700;
-}
-
-.menu-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 10rpx 28rpx;
-  margin-bottom: 40rpx;
-  box-shadow: $shadow-sm;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 30rpx 0;
-  border-bottom: 1px solid rgba(68, 52, 40, 0.08);
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  &:active {
-    opacity: 0.7;
-  }
-}
-
-.item-left {
-  display: flex;
-  align-items: center;
   gap: 18rpx;
+
+  .pref-title {
+    font-family: $font-serif;
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #1f2a2f;
+    display: block;
+  }
+
+  .pref-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+
+    .tone-chip {
+      padding: 16rpx 20rpx;
+      border-radius: 10rpx;
+      background: #ffffff;
+      border: 1px solid rgba(68, 52, 40, 0.1);
+
+      .tone-label {
+        font-size: 26rpx;
+        color: #5b666c;
+      }
+
+      &.active {
+        background: #fceee8;
+        border-color: #d76848;
+
+        .tone-label {
+          color: #aa4d33;
+          font-weight: 600;
+        }
+      }
+    }
+  }
 }
 
-.item-emoji {
-  font-size: 32rpx;
-}
-
-.item-label {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: $color-ink;
-}
-
-.item-arrow {
-  font-size: 26rpx;
-  color: $color-ink-faint;
-}
-
+/* 底部操作 */
 .action-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
+  padding-top: 10rpx;
 
-.exit-demo-btn {
-  width: 100%;
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 14rpx;
-  background: rgba(215, 104, 72, 0.12);
-  border: 1px solid rgba(215, 104, 72, 0.4);
-  color: $color-seal-deep;
-  font-size: 26rpx;
-  font-weight: 700;
-}
+  .primary-action-btn {
+    width: 100%;
+    height: 80rpx;
+    line-height: 78rpx;
+    background: #d76848;
+    border: 1px solid #aa4d33;
+    border-radius: 12rpx;
+    color: #ffffff;
+    font-size: 28rpx;
+    font-weight: 600;
+    text-align: center;
+  }
 
-.logout-btn {
-  width: 100%;
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 14rpx;
-  background: rgba(68, 52, 40, 0.08);
-  color: $color-ink-soft;
-  font-size: 26rpx;
-  font-weight: 700;
-  border: none;
-}
-
-.login-btn {
-  width: 100%;
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 14rpx;
-  background: $color-seal;
-  color: #fffdfa;
-  font-size: 28rpx;
-  font-weight: 800;
-  border: none;
+  .ghost-action-btn {
+    width: 100%;
+    height: 80rpx;
+    line-height: 78rpx;
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.15);
+    border-radius: 12rpx;
+    color: #5b666c;
+    font-size: 26rpx;
+    font-weight: 500;
+    text-align: center;
+  }
 }
 </style>

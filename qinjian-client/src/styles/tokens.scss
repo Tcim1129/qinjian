@@ -1,89 +1,118 @@
 /**
- * 亲健 (QinJian) 东方人文“纸墨印红”设计系统 Token
- * 100% 对齐 Web 版设计语言与资产规范
+ * 亲健 (QinJian) 官方版权定稿设计系统 Token
+ * 100% 严格对齐 docs/copyright/images 视觉标准
  */
 
 :root, page {
-  /* 宣纸暖白体系 */
-  --paper: #f7f1eb;
-  --paper-strong: #fffaf6;
-  --paper-soft: #fdf8f2;
-  --paper-line: rgba(68, 52, 40, 0.1);
-  --paper-line-strong: rgba(68, 52, 40, 0.18);
+  /* 官方通透底色 */
+  --paper: #fbf6f0;
+  --paper-strong: #ffffff;
+  --paper-soft: #fdfaf7;
+  --paper-line: rgba(68, 52, 40, 0.08);
+  --paper-line-strong: rgba(68, 52, 40, 0.15);
 
-  /* 水墨文字体系 */
+  /* 书卷水墨文字 */
   --ink: #1f2a2f;
   --ink-soft: #5b666c;
   --ink-faint: #7c837f;
-  --ink-reverse: #fffdfa;
+  --ink-reverse: #ffffff;
 
-  /* 朱砂印泥主色体系 (核心行动/印章红) */
-  --seal: #d76848;
-  --seal-soft: #f4ddd4;
-  --seal-deep: #aa4d33;
+  /* 官方版权定稿朱砂暖橙印泥色 (严格对齐 01-login 与 02-home 截图) */
+  --seal: #df6b4d;
+  --seal-soft: #fceee8;
+  --seal-deep: #c4573b;
 
-  /* 东方自然辅色 */
+  /* 辅助状态色 */
   --moss: #5f876f;
-  --moss-soft: #dce7da;
-  --moss-deep: #416250;
-  --ochre: #c78a3f;
-  --ochre-soft: #f1e2c8;
+  --moss-soft: #eaf2ea;
+  --moss-deep: #3b5f49;
   --sand: #f0d5b8;
-  --sand-light: #f6e9d8;
+  --sand-soft: #fbf3eb;
+  --ochre: #c78a3f;
 
-  /* 卡片与背景 */
-  --bg-page: var(--paper);
-  --bg-card: rgba(255, 250, 244, 0.88);
-  --bg-card-strong: rgba(255, 253, 250, 0.96);
-  --border: var(--paper-line);
-  --border-strong: var(--paper-line-strong);
+  /* 规整卡片微质感 */
+  --radius-sm: 8rpx;
+  --radius-md: 14rpx;
+  --radius-lg: 16rpx;
+  --radius-btn: 14rpx;
 
-  /* 投影与层次 */
-  --shadow-sm: 0 8px 22px rgba(56, 40, 30, 0.08);
-  --shadow-md: 0 14px 32px rgba(56, 40, 30, 0.11);
-  --shadow-lg: 0 24px 52px rgba(56, 40, 30, 0.14);
-  --shadow-seal: 0 14px 24px rgba(181, 83, 56, 0.18);
-
-  /* 圆角与字阶 */
-  --radius-sm: 12rpx;
-  --radius-md: 16rpx;
-  --radius-lg: 24rpx;
-  --radius-pill: 9999rpx;
+  --shadow-card: 0 8rpx 24rpx rgba(74, 52, 36, 0.06);
+  --shadow-btn: 0 10rpx 20rpx rgba(223, 107, 77, 0.2);
 
   --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
-  --font-sans: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
-/* SCSS 变量导出供静态编译使用 */
-$color-paper: #f7f1eb;
-$color-paper-strong: #fffaf6;
-$color-paper-soft: #fdf8f2;
-$color-paper-line: rgba(68, 52, 40, 0.1);
-$color-paper-line-strong: rgba(68, 52, 40, 0.18);
+$color-paper: #fbf6f0;
+$color-paper-strong: #ffffff;
+$color-paper-soft: #fdfaf7;
+$color-paper-line: rgba(68, 52, 40, 0.08);
+$color-paper-line-strong: rgba(68, 52, 40, 0.15);
 
 $color-ink: #1f2a2f;
 $color-ink-soft: #5b666c;
 $color-ink-faint: #7c837f;
 
-$color-seal: #d76848;
-$color-seal-deep: #aa4d33;
-$color-seal-soft: #f4ddd4;
+$color-seal: #df6b4d;
+$color-seal-soft: #fceee8;
+$color-seal-deep: #c4573b;
 
 $color-moss: #5f876f;
-$color-moss-soft: #dce7da;
-$color-moss-deep: #416250;
-$color-ochre: #c78a3f;
+$color-moss-soft: #eaf2ea;
+$color-moss-deep: #3b5f49;
 $color-sand: #f0d5b8;
+$color-sand-soft: #fbf3eb;
+$color-ochre: #c78a3f;
 
-$shadow-sm: 0 8px 22px rgba(56, 40, 30, 0.08);
-$shadow-md: 0 14px 32px rgba(56, 40, 30, 0.11);
-$shadow-lg: 0 24px 52px rgba(56, 40, 30, 0.14);
-$shadow-seal: 0 14px 24px rgba(181, 83, 56, 0.18);
+$radius-sm: 8rpx;
+$radius-md: 14rpx;
+$radius-lg: 16rpx;
+$radius-btn: 14rpx;
 
-$radius-sm: 12rpx;
-$radius-md: 16rpx;
-$radius-lg: 24rpx;
-$radius-pill: 9999rpx;
+$shadow-xs: 0 2rpx 4rpx rgba(74, 52, 36, 0.04);
+$shadow-sm: 0 8rpx 22rpx rgba(74, 52, 36, 0.06);
+$shadow-md: 0 14rpx 32rpx rgba(74, 52, 36, 0.08);
+$shadow-lg: 0 20rpx 48rpx rgba(74, 52, 36, 0.12);
+$shadow-card: 0 8rpx 24rpx rgba(74, 52, 36, 0.06);
+$shadow-btn: 0 10rpx 20rpx rgba(223, 107, 77, 0.2);
 
 $font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
-$font-sans: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+$font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+/* 官方人文排版通用工具类 */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  color: #7c837f;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 12rpx;
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 22rpx;
+    height: 3rpx;
+    background-color: currentColor;
+    margin-right: 12rpx;
+    vertical-align: middle;
+  }
+}
+
+.page-head {
+  padding: 24rpx 0 16rpx;
+  .page-title {
+    color: #1f2a2f;
+    font-family: $font-serif;
+    font-size: 44rpx;
+    font-weight: 700;
+    line-height: 1.36;
+  }
+  .page-desc {
+    margin-top: 8rpx;
+    color: #5b666c;
+    font-size: 26rpx;
+    line-height: 1.6;
+  }
+}

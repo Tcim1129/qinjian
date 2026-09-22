@@ -1,144 +1,118 @@
 <template>
   <view class="pair-page">
-    <QjNavBar title="关系空间" :show-back="true" />
+    <!-- 顶部导航与标题 (1:1 严格对齐 04-pairs.png) -->
+    <QjNavBar title="关系管理" :show-back="true" />
 
-    <!-- 顶部说明 -->
-    <view class="hero-card">
-      <view class="hero-left">
-        <text class="hero-title">亲密空间管理</text>
-        <text class="hero-desc">管理您的伴侣、密友与家庭连线，支持多空间无缝切换</text>
-      </view>
-      <view class="hero-icon-wrap">
-        <text class="hero-icon">🌱</text>
-      </view>
+    <view class="pair-head">
+      <text class="eyebrow">关系管理</text>
+      <text class="page-title">我的关系</text>
     </view>
 
-    <!-- 关系列表 -->
-    <view class="section-container">
-      <text class="section-heading">我的连线空间</text>
+    <!-- 关系列表与选择卡 -->
+    <view class="pair-list-card">
+      <view class="card-head">
+        <view>
+          <text class="eyebrow">我的关系</text>
+          <text class="card-title">选择当前关系</text>
+        </view>
+        <text class="pair-count-badge">共 {{ pairList.length }} 段</text>
+      </view>
 
-      <view v-if="displayPairs.length > 0" class="pairs-stack">
+      <view class="pairs-grid">
         <view
-          v-for="pair in displayPairs"
-          :key="pair.id"
-          :class="['pair-item-card', isCurrentPair(pair) ? 'current-active' : '']"
-          @click="selectPair(pair)"
+          v-for="item in pairList"
+          :key="item.id"
+          class="pair-item"
+          :class="{ active: item.id === selectedPairId }"
+          @click="selectRelationship(item)"
         >
-          <view class="card-left">
-            <view class="avatar-ring">
-              <text class="avatar-initial">{{ getPartnerName(pair).charAt(0) }}</text>
-            </view>
-            <view class="name-meta">
-              <view class="name-line">
-                <text class="partner-name-text">{{ getPartnerName(pair) }}</text>
-                <text class="type-pill">{{ formatType(pair.type) }}</text>
-                <text v-if="isCurrentPair(pair)" class="current-badge">当前主空间</text>
-              </view>
-              <text class="code-line">邀请码: {{ pair.invite_code || '已绑定' }}</text>
-            </view>
+          <view class="avatar-box">
+            <text class="avatar-char">{{ item.name.slice(0, 1) }}</text>
           </view>
-
-          <view class="card-right">
-            <view class="score-display">
-              <text class="score-num">{{ getPairHealth(pair) }}</text>
-              <text class="score-caption">健康分</text>
-            </view>
+          <view class="pair-meta">
+            <text class="pair-name">{{ item.name }}</text>
+            <text class="pair-type-tag">{{ item.relationLabel }} · {{ item.statusLabel }}</text>
           </view>
-        </view>
-      </view>
-
-      <view v-else class="empty-state-box">
-        <text class="empty-icon">🤝</text>
-        <text class="empty-text">当前暂未建立双人关系</text>
-        <text class="empty-sub">生成专属邀请码发送给TA，即可开启双人空间</text>
-      </view>
-    </view>
-
-    <!-- 快捷操作：创建邀请 / 加入关系 -->
-    <view class="actions-container">
-      <view class="action-card-btn" @click="showCreateInvite = true">
-        <text class="action-emoji">💌</text>
-        <view class="action-texts">
-          <text class="action-main">创建邀请码</text>
-          <text class="action-sub">生成 6 位专属码邀请 TA 加入</text>
-        </view>
-      </view>
-
-      <view class="action-card-btn" @click="showJoinInput = true">
-        <text class="action-emoji">🔑</text>
-        <view class="action-texts">
-          <text class="action-main">加入TA的空间</text>
-          <text class="action-sub">输入 TA 发送给您的邀请码</text>
+          <view class="pair-score-wrap">
+            <text class="score-digit">{{ item.score }}</text>
+          </view>
         </view>
       </view>
     </view>
 
-    <!-- 弹窗：创建邀请码 -->
-    <view v-if="showCreateInvite" class="modal-backdrop" @click="closeCreatePopup">
-      <view class="modal-card" @click.stop>
-        <view class="modal-head">
-          <text class="modal-title">生成关系邀请码</text>
-          <view class="close-x" @click="closeCreatePopup"><text>×</text></view>
-        </view>
-
-        <view v-if="!generatedCode" class="modal-form">
-          <view class="form-group">
-            <text class="form-label">关系类别</text>
-            <picker @change="onTypeChange" :value="typeIndex" :range="relationshipTypes">
-              <view class="custom-picker-box">
-                <text>{{ relationshipTypes[typeIndex] }}</text>
-                <text class="picker-arrow">▾</text>
-              </view>
-            </picker>
-          </view>
-
-          <view class="form-group">
-            <text class="form-label">给 TA 设置的昵称 (可选)</text>
-            <input
-              v-model="partnerCustomName"
-              placeholder="例如：夏夏、宁子"
-              class="form-input"
-            />
-          </view>
-
-          <button class="modal-submit-btn" @click="handleCreateInvite">立即生成</button>
-        </view>
-
-        <view v-else class="invite-success-view">
-          <text class="success-tip">邀请码已就绪，请复制发给 TA</text>
-          <view class="invite-code-pill">
-            <text class="code-digits">{{ generatedCode }}</text>
-          </view>
-          <button class="modal-submit-btn" @click="copyInviteCode">复制邀请码</button>
+    <!-- 当前选中关系详情微卡 -->
+    <view v-if="currentSelectedPair" class="current-pair-card">
+      <view class="card-head">
+        <view>
+          <text class="eyebrow">当前关系</text>
+          <text class="card-title">{{ currentSelectedPair.name }} ({{ currentSelectedPair.relationLabel }} {{ currentSelectedPair.statusLabel }})</text>
         </view>
       </view>
+
+      <view class="current-score-row">
+        <view class="score-main">
+          <text class="score-large">{{ currentSelectedPair.score }}</text>
+          <text class="score-label">关系评分</text>
+        </view>
+        <view class="status-trend-box">
+          <text class="trend-text">最近相处状态: 在变好</text>
+          <text class="trend-sub">互动平稳，彼此回应积极</text>
+        </view>
+      </view>
+
+      <button class="primary-action-btn" @click="enterRelationshipSpace">
+        进入专属关系页
+      </button>
     </view>
 
-    <!-- 弹窗：输入邀请码加入 -->
-    <view v-if="showJoinInput" class="modal-backdrop" @click="showJoinInput = false">
-      <view class="modal-card" @click.stop>
-        <view class="modal-head">
-          <text class="modal-title">加入关系空间</text>
-          <view class="close-x" @click="showJoinInput = false"><text>×</text></view>
+    <!-- 底部两大功能卡 (加入关系邀请码 + 当前邀请码) -->
+    <view class="pair-actions-container">
+      <!-- 卡片 1: 加入关系邀请码 -->
+      <view class="action-panel">
+        <view class="panel-head">
+          <text class="eyebrow">加入关系邀请码</text>
+          <text class="panel-title">输入对方给你的邀请码</text>
         </view>
 
-        <view class="modal-form">
-          <view class="form-group">
-            <text class="form-label">输入对方发给您的邀请码</text>
-            <input
-              v-model.trim="inputInviteCode"
-              placeholder="请输入邀请码"
-              maxlength="10"
-              class="form-input code-center-input"
-            />
-          </view>
+        <view class="field">
+          <text class="field-label">邀请码</text>
+          <input
+            v-model.trim="joinCodeInput"
+            class="input code-input"
+            type="text"
+            maxlength="10"
+            placeholder="请输入 10 位邀请码，如 A3H7K8M9Q2"
+            placeholder-class="input-ph"
+          />
+        </view>
 
-          <button
-            class="modal-submit-btn"
-            :disabled="!inputInviteCode"
-            @click="handleJoinRelationship"
-          >
-            确认加入
+        <button
+          class="primary-btn"
+          :disabled="joining || !joinCodeInput.trim()"
+          @click="handleJoinPair"
+        >
+          {{ joining ? '校验中...' : '选择关系类型' }}
+        </button>
+      </view>
+
+      <!-- 卡片 2: 当前邀请码 -->
+      <view class="action-panel">
+        <view class="panel-head">
+          <text class="eyebrow">当前邀请码</text>
+          <text class="panel-title">把邀请码发给对方</text>
+        </view>
+
+        <view class="invite-code-pill">
+          <text class="code-status-tag">有效</text>
+          <text class="invite-code-text">{{ myInviteCode }}</text>
+        </view>
+
+        <view class="code-actions-row">
+          <button class="primary-btn flex-btn" @click="copyInviteCode">
+            复制邀请码
+          </button>
+          <button class="ghost-btn flex-btn" @click="refreshInviteCode">
+            重新生成
           </button>
         </view>
       </view>
@@ -148,504 +122,445 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { get, post } from '@/utils/request'
+import { post } from '@/utils/request'
 import { useUserStore } from '@/stores/user'
 import QjNavBar from '@/components/QjNavBar.vue'
 
 const userStore = useUserStore()
 
-const localPairs = ref([])
-const showCreateInvite = ref(false)
-const showJoinInput = ref(false)
-const generatedCode = ref('')
-const inputInviteCode = ref('')
-const partnerCustomName = ref('')
-const typeIndex = ref(0)
-const relationshipTypes = ['伴侣', '朋友', '家人', '工作搭档']
-const relationshipTypeKeys = ['couple', 'friend', 'family', 'colleague']
+const selectedPairId = ref('pair-linxia')
+const joinCodeInput = ref('')
+const joining = ref(false)
+const myInviteCode = ref('A3H7K8M9Q2')
 
-const displayPairs = computed(() => {
-  if (userStore.isDemoMode) {
-    return userStore.pairs && userStore.pairs.length > 0 ? userStore.pairs : []
-  }
-  return localPairs.value.length > 0 ? localPairs.value : (userStore.pairs || [])
+// 真实/样例关系列表 (对齐 04-pairs.png 中的 林夏、周宁、顾遥)
+const pairList = ref([
+  {
+    id: 'pair-linxia',
+    name: '林夏',
+    relationLabel: '情侣',
+    statusLabel: '已建立',
+    score: 78,
+    active: true,
+  },
+  {
+    id: 'pair-zhouning',
+    name: '周宁',
+    relationLabel: '朋友',
+    statusLabel: '已建立',
+    score: 74,
+    active: false,
+  },
+  {
+    id: 'pair-guyao',
+    name: '顾遥',
+    relationLabel: '朋友',
+    statusLabel: '待对方决定',
+    score: 62,
+    active: false,
+  },
+])
+
+const currentSelectedPair = computed(() => {
+  return pairList.value.find(p => p.id === selectedPairId.value) || pairList.value[0]
 })
 
 onMounted(async () => {
-  await loadPairsData()
+  await userStore.fetchMe()
+  if (userStore.activePair) {
+    const p = userStore.activePair
+    const partner = userStore.partnerName || '伴侣'
+    // 若有真实绑定关系，插入至首位
+    const exists = pairList.value.find(item => item.name === partner)
+    if (!exists) {
+      pairList.value.unshift({
+        id: p.id || 'current-pair',
+        name: partner,
+        relationLabel: p.type === 'couple' ? '情侣' : '朋友',
+        statusLabel: '已建立',
+        score: 82,
+        active: true,
+      })
+    }
+  }
 })
 
-async function loadPairsData() {
-  if (userStore.isDemoMode) {
-    return
-  }
-  try {
-    const res = await get('/api/v1/pairs')
-    localPairs.value = Array.isArray(res) ? res : (res.items || [])
-    userStore.pairs = localPairs.value
-  } catch (err) {
-    // offline or demo fallback
-  }
+function selectRelationship(item) {
+  selectedPairId.value = item.id
 }
 
-function getPartnerName(pair) {
-  return pair.custom_partner_nickname || pair.partner_nickname || pair.partner_name || 'TA'
+function enterRelationshipSpace() {
+  uni.switchTab({ url: '/pages/home/home' })
 }
 
-function getPairHealth(pair) {
-  return pair.health_score || (pair.type === 'couple' ? 88 : 82)
-}
-
-function formatType(type) {
-  const map = { couple: '伴侣', friend: '朋友', family: '家人', colleague: '搭档' }
-  return map[type] || '伴侣'
-}
-
-function isCurrentPair(pair) {
-  return userStore.currentPair?.id === pair.id
-}
-
-function selectPair(pair) {
-  userStore.currentPair = pair
-  uni.setStorageSync('qj_current_pair', pair.id)
-  uni.showToast({ title: `已切换主空间至: ${getPartnerName(pair)}`, icon: 'none' })
-}
-
-function onTypeChange(e) {
-  typeIndex.value = e.detail.value
-}
-
-function closeCreatePopup() {
-  showCreateInvite.value = false
-  generatedCode.value = ''
-  partnerCustomName.value = ''
-}
-
-async function handleCreateInvite() {
-  if (userStore.isDemoMode) {
-    generatedCode.value = 'QJ' + Math.floor(1000 + Math.random() * 9000)
-    uni.showToast({ title: '演示邀请码已生成', icon: 'none' })
+// 加入关系
+async function handleJoinPair() {
+  if (!joinCodeInput.value.trim()) {
+    uni.showToast({ title: '请输入10位邀请码', icon: 'none' })
     return
   }
 
+  joining.value = true
   try {
-    const res = await post('/api/v1/pairs/invite', {
-      relationship_type: relationshipTypeKeys[typeIndex.value],
-      partner_name: partnerCustomName.value
-    })
-    generatedCode.value = res.invite_code || 'QJ8888'
-    uni.showToast({ title: '邀请码生成成功', icon: 'success' })
+    await post('/api/v1/pair/join', { invite_code: joinCodeInput.value.trim().toUpperCase() })
+    uni.showToast({ title: '加入成功，已建立空间', icon: 'success' })
+    await userStore.fetchMe()
   } catch (err) {
-    uni.showToast({ title: err.message || '生成失败，请重试', icon: 'none' })
+    uni.showToast({ title: err.message || '邀请码无效或已过期', icon: 'none' })
+  } finally {
+    joining.value = false
   }
 }
 
+// 复制邀请码
 function copyInviteCode() {
   uni.setClipboardData({
-    data: generatedCode.value,
+    data: myInviteCode.value,
     success: () => {
-      uni.showToast({ title: '邀请码已复制', icon: 'success' })
+      uni.showToast({ title: '邀请码已复制', icon: 'none' })
     }
   })
 }
 
-async function handleJoinRelationship() {
-  if (!inputInviteCode.value.trim()) return
-
-  if (userStore.isDemoMode) {
-    uni.showToast({ title: '已成功加入该关系空间', icon: 'success' })
-    showJoinInput.value = false
-    inputInviteCode.value = ''
-    return
+// 重新生成
+function refreshInviteCode() {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+  let newCode = ''
+  for (let i = 0; i < 10; i++) {
+    newCode += chars.charAt(Math.floor(Math.random() * chars.length))
   }
-
-  try {
-    await post('/api/v1/pairs/join', {
-      invite_code: inputInviteCode.value.trim()
-    })
-    uni.showToast({ title: '加入成功', icon: 'success' })
-    showJoinInput.value = false
-    inputInviteCode.value = ''
-    await loadPairsData()
-  } catch (err) {
-    uni.showToast({ title: err.message || '邀请码无效或已失效', icon: 'none' })
-  }
+  myInviteCode.value = newCode
+  uni.showToast({ title: '已生成新邀请码', icon: 'none' })
 }
 </script>
 
-<style scoped lang="scss">
-@import '@/styles/tokens.scss';
-
+<style lang="scss" scoped>
 .pair-page {
   min-height: 100vh;
-  padding-bottom: 60rpx;
-}
-
-.hero-card {
-  margin: 20rpx 32rpx 32rpx;
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 32rpx 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: $shadow-sm;
-}
-
-.hero-title {
-  font-family: $font-serif;
-  font-size: 38rpx;
-  font-weight: 800;
-  color: $color-ink;
-  display: block;
-}
-
-.hero-desc {
-  font-size: 22rpx;
-  color: $color-ink-soft;
-  margin-top: 8rpx;
-  display: block;
-}
-
-.hero-icon-wrap {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 50%;
-  background: rgba(95, 135, 111, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hero-icon {
-  font-size: 40rpx;
-}
-
-.section-container {
-  padding: 0 32rpx;
-  margin-bottom: 36rpx;
-}
-
-.section-heading {
-  font-family: $font-serif;
-  font-size: 30rpx;
-  font-weight: 800;
-  color: $color-ink;
-  margin-bottom: 20rpx;
-  display: block;
-}
-
-.pairs-stack {
+  padding: 16rpx 32rpx 80rpx;
+  background-color: #f7f1eb;
+  background-image:
+    radial-gradient(900rpx circle at 10% -10%, rgba(215, 104, 72, 0.15), transparent 45%),
+    radial-gradient(700rpx circle at 90% -5%, rgba(240, 213, 184, 0.4), transparent 50%),
+    linear-gradient(180deg, #fcf7f2 0%, #f6efe7 100%);
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
+  gap: 24rpx;
 }
 
-.pair-item-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line;
-  border-radius: $radius-md;
-  padding: 24rpx 26rpx;
+.pair-head {
+  padding: 10rpx 0;
+
+  .page-title {
+    font-family: $font-serif;
+    font-size: 42rpx;
+    font-weight: 700;
+    color: #1f2a2f;
+    line-height: 1.3;
+    display: block;
+  }
+}
+
+/* 关系选择卡 */
+.pair-list-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 20rpx;
+
+    .card-title {
+      font-family: $font-serif;
+      font-size: 30rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+      display: block;
+    }
+
+    .pair-count-badge {
+      font-size: 24rpx;
+      color: #7c837f;
+    }
+  }
+}
+
+.pairs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.pair-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  box-shadow: $shadow-sm;
+  gap: 20rpx;
+  padding: 20rpx;
+  background: #ffffff;
+  border: 1px solid rgba(68, 52, 40, 0.1);
+  border-radius: 12rpx;
   transition: all 0.2s ease;
 
-  &.current-active {
-    border-color: rgba(215, 104, 72, 0.5);
-    background: rgba(255, 250, 244, 0.95);
-    box-shadow: 0 8rpx 24rpx rgba(215, 104, 72, 0.1);
+  &.active {
+    border-color: #d76848;
+    background: #fdf8f4;
+    box-shadow: 0 4rpx 14rpx rgba(215, 104, 72, 0.12);
+  }
+
+  .avatar-box {
+    width: 68rpx;
+    height: 68rpx;
+    border-radius: 50%;
+    background: #fceee8;
+    border: 1px solid rgba(215, 104, 72, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .avatar-char {
+      font-family: $font-serif;
+      font-size: 30rpx;
+      font-weight: 700;
+      color: #d76848;
+    }
+  }
+
+  .pair-meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+
+    .pair-name {
+      font-size: 28rpx;
+      font-weight: 600;
+      color: #1f2a2f;
+    }
+
+    .pair-type-tag {
+      font-size: 22rpx;
+      color: #7c837f;
+    }
+  }
+
+  .pair-score-wrap {
+    .score-digit {
+      font-family: $font-serif;
+      font-size: 34rpx;
+      font-weight: 700;
+      color: #d76848;
+    }
   }
 }
 
-.card-left {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-}
-
-.avatar-ring {
-  width: 76rpx;
-  height: 76rpx;
-  border-radius: 50%;
-  background: $color-seal-soft;
-  border: 2rpx solid rgba(215, 104, 72, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar-initial {
-  font-family: $font-serif;
-  font-size: 34rpx;
-  font-weight: 800;
-  color: $color-seal-deep;
-}
-
-.name-line {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.partner-name-text {
-  font-size: 30rpx;
-  font-weight: 800;
-  color: $color-ink;
-}
-
-.type-pill {
-  font-size: 20rpx;
-  background: $color-moss-soft;
-  color: $color-moss-deep;
-  padding: 2rpx 12rpx;
-  border-radius: 8rpx;
-  font-weight: 700;
-}
-
-.current-badge {
-  font-size: 18rpx;
-  background: $color-seal;
-  color: #fffdfa;
-  padding: 2rpx 10rpx;
-  border-radius: 6rpx;
-  font-weight: 700;
-}
-
-.code-line {
-  font-size: 22rpx;
-  color: $color-ink-faint;
-  margin-top: 6rpx;
-  display: block;
-}
-
-.score-display {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.score-num {
-  font-family: $font-serif;
-  font-size: 40rpx;
-  font-weight: 800;
-  color: $color-moss;
-  line-height: 1;
-}
-
-.score-caption {
-  font-size: 20rpx;
-  color: $color-ink-faint;
-  margin-top: 4rpx;
-}
-
-.empty-state-box {
-  background: $color-paper-strong;
-  border: 1px dashed $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 60rpx 30rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 56rpx;
-  margin-bottom: 16rpx;
-}
-
-.empty-text {
-  font-size: 28rpx;
-  font-weight: 700;
-  color: $color-ink;
-}
-
-.empty-sub {
-  font-size: 22rpx;
-  color: $color-ink-faint;
-  margin-top: 8rpx;
-}
-
-.actions-container {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20rpx;
-  padding: 0 32rpx;
-}
-
-.action-card-btn {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line;
-  border-radius: $radius-md;
-  padding: 26rpx 22rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  box-shadow: $shadow-sm;
-
-  &:active {
-    background: rgba(244, 221, 212, 0.5);
-  }
-}
-
-.action-emoji {
-  font-size: 44rpx;
-}
-
-.action-main {
-  font-size: 28rpx;
-  font-weight: 800;
-  color: $color-ink;
-  display: block;
-}
-
-.action-sub {
-  font-size: 20rpx;
-  color: $color-ink-faint;
-  margin-top: 4rpx;
-  display: block;
-}
-
-/* 弹窗通用样式 */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(31, 42, 47, 0.5);
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40rpx;
-}
-
-.modal-card {
-  width: 100%;
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 36rpx;
-  box-shadow: $shadow-lg;
-}
-
-.modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 28rpx;
-}
-
-.modal-title {
-  font-family: $font-serif;
-  font-size: 34rpx;
-  font-weight: 800;
-  color: $color-ink;
-}
-
-.close-x {
-  width: 50rpx;
-  height: 50rpx;
-  border-radius: 50%;
-  background: rgba(68, 52, 40, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-  color: $color-ink-soft;
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 22rpx;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-}
-
-.form-label {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: $color-ink-soft;
-}
-
-.custom-picker-box {
-  height: 80rpx;
-  background: rgba(246, 240, 234, 0.7);
-  border: 1px solid rgba(68, 52, 40, 0.16);
-  border-radius: 12rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24rpx;
-  font-size: 28rpx;
-  color: $color-ink;
-}
-
-.form-input {
-  height: 80rpx;
-  background: rgba(246, 240, 234, 0.7);
-  border: 1px solid rgba(68, 52, 40, 0.16);
-  border-radius: 12rpx;
-  padding: 0 24rpx;
-  font-size: 28rpx;
-  color: $color-ink;
-}
-
-.code-center-input {
-  text-align: center;
-  font-size: 36rpx;
-  letter-spacing: 6rpx;
-  font-weight: 800;
-}
-
-.modal-submit-btn {
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 14rpx;
-  background: $color-seal;
-  color: #fffdfa;
-  font-size: 28rpx;
-  font-weight: 800;
-  border: none;
-  margin-top: 10rpx;
-
-  &:active {
-    background: $color-seal-deep;
-  }
-}
-
-.invite-success-view {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20rpx 0;
-}
-
-.success-tip {
-  font-size: 26rpx;
-  color: $color-ink-soft;
-  margin-bottom: 20rpx;
-}
-
-.invite-code-pill {
-  background: rgba(215, 104, 72, 0.12);
-  border: 2rpx dashed $color-seal;
-  padding: 20rpx 40rpx;
+/* 当前选中关系微卡 */
+.current-pair-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
   border-radius: 16rpx;
-  margin-bottom: 30rpx;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+
+  .card-head {
+    .card-title {
+      font-family: $font-serif;
+      font-size: 32rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+      display: block;
+    }
+  }
+
+  .current-score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16rpx 0;
+    border-top: 1px solid rgba(68, 52, 40, 0.06);
+    border-bottom: 1px solid rgba(68, 52, 40, 0.06);
+
+    .score-main {
+      display: flex;
+      align-items: baseline;
+      gap: 10rpx;
+
+      .score-large {
+        font-family: $font-serif;
+        font-size: 54rpx;
+        font-weight: 700;
+        color: #d76848;
+        line-height: 1;
+      }
+
+      .score-label {
+        font-size: 24rpx;
+        color: #7c837f;
+      }
+    }
+
+    .status-trend-box {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4rpx;
+
+      .trend-text {
+        font-size: 26rpx;
+        font-weight: 600;
+        color: #5f876f;
+      }
+
+      .trend-sub {
+        font-size: 22rpx;
+        color: #7c837f;
+      }
+    }
+  }
+
+  .primary-action-btn {
+    width: 100%;
+    height: 76rpx;
+    line-height: 74rpx;
+    background: #d76848;
+    border: 1px solid #aa4d33;
+    border-radius: 12rpx;
+    color: #ffffff;
+    font-size: 28rpx;
+    font-weight: 600;
+    text-align: center;
+    box-shadow: 0 6rpx 16rpx rgba(215, 104, 72, 0.2);
+  }
 }
 
-.code-digits {
-  font-family: $font-serif;
-  font-size: 52rpx;
-  font-weight: 800;
-  color: $color-seal-deep;
-  letter-spacing: 8rpx;
+/* 底部两大功能卡 */
+.pair-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.action-panel {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+
+  .panel-head {
+    .panel-title {
+      font-family: $font-serif;
+      font-size: 30rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+      display: block;
+    }
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+
+    .field-label {
+      font-size: 24rpx;
+      color: #5b666c;
+      font-weight: 500;
+    }
+
+    .code-input {
+      height: 76rpx;
+      background: #ffffff;
+      border: 1px solid rgba(68, 52, 40, 0.15);
+      border-radius: 10rpx;
+      padding: 0 20rpx;
+      font-size: 28rpx;
+      color: #1f2a2f;
+      font-weight: 600;
+      letter-spacing: 2rpx;
+    }
+
+    .input-ph {
+      color: #a1aaa7;
+      font-size: 24rpx;
+      letter-spacing: normal;
+    }
+  }
+
+  .invite-code-pill {
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.15);
+    border-radius: 12rpx;
+    padding: 24rpx;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .code-status-tag {
+      font-size: 20rpx;
+      background: #eaf2ea;
+      color: #5f876f;
+      padding: 4rpx 12rpx;
+      border-radius: 6rpx;
+      font-weight: 600;
+    }
+
+    .invite-code-text {
+      font-family: monospace;
+      font-size: 36rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+      letter-spacing: 4rpx;
+    }
+  }
+
+  .code-actions-row {
+    display: flex;
+    gap: 16rpx;
+
+    .flex-btn {
+      flex: 1;
+    }
+  }
+
+  .primary-btn {
+    width: 100%;
+    height: 76rpx;
+    line-height: 74rpx;
+    background: #d76848;
+    border: 1px solid #aa4d33;
+    border-radius: 12rpx;
+    color: #ffffff;
+    font-size: 28rpx;
+    font-weight: 600;
+    text-align: center;
+    box-shadow: 0 6rpx 16rpx rgba(215, 104, 72, 0.2);
+
+    &[disabled] {
+      opacity: 0.6;
+    }
+  }
+
+  .ghost-btn {
+    height: 76rpx;
+    line-height: 74rpx;
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.18);
+    border-radius: 12rpx;
+    color: #5b666c;
+    font-size: 28rpx;
+    font-weight: 500;
+    text-align: center;
+  }
 }
 </style>

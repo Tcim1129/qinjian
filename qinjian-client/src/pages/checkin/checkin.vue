@@ -1,142 +1,258 @@
 <template>
   <view class="checkin-page">
-    <!-- 顶部状态栏与标题 -->
-    <view class="header-card">
-      <view class="header-top">
-        <text class="page-title">今日记录</text>
-        <text class="date-badge">{{ todayDate }}</text>
-      </view>
-      <text class="page-sub">真实写下此刻的发生与触动，系统将为您生成双人共鸣简报</text>
+    <!-- 顶部标题区 (1:1 对齐 03-checkin.png) -->
+    <view class="checkin-head">
+      <text class="eyebrow">关系记录</text>
+      <text class="page-title">今天过得怎么样？</text>
     </view>
 
-    <!-- 记录模式切换：写下来 / 边说边整理 -->
-    <view class="segmented-mode">
+    <!-- 模式切换分段器 (纯文字，严禁卡通 Emoji) -->
+    <view class="segmented-tabs">
       <view
-        :class="['mode-item', mode === 'write' ? 'active' : '']"
-        @click="mode = 'write'"
+        class="seg-tab"
+        :class="{ active: mode === 'form' }"
+        @click="mode = 'form'"
       >
-        <text class="mode-text">✍️ 文字记录</text>
+        <text class="seg-text">自己写</text>
       </view>
       <view
-        :class="['mode-item', mode === 'voice' ? 'active' : '']"
+        class="seg-tab"
+        :class="{ active: mode === 'voice' }"
         @click="mode = 'voice'"
       >
-        <text class="mode-text">🎙️ 语音速记</text>
+        <text class="seg-text">聊一聊</text>
       </view>
     </view>
 
-    <!-- 文字模式 -->
-    <view v-if="mode === 'write'" class="form-container">
-      <!-- 记录内容输入区 -->
-      <view class="input-card">
-        <text class="card-label">今天发生了什么？</text>
-        <textarea
-          v-model="content"
-          placeholder="记录今天和TA的交流、微小感受，或者想表达的心理话..."
-          placeholder-class="placeholder-text"
-          class="content-textarea"
-          :maxlength="2000"
-        />
-        <text class="word-counter">{{ content.length }}/2000</text>
-      </view>
+    <!-- 自己写模式 (文字记录工作台) -->
+    <view v-if="mode === 'form'" class="checkin-form">
+      <!-- 核心文本记录卡 -->
+      <view class="record-editor-card">
+        <view class="editor-head">
+          <view>
+            <text class="eyebrow">今日记录</text>
+            <text class="editor-title">想说点什么？</text>
+          </view>
+          <view class="target-partner-badge">
+            <text class="target-name">记录给 {{ partnerName }}</text>
+          </view>
+        </view>
 
-      <!-- 情绪标签选择 -->
-      <view class="input-card">
-        <text class="card-label">当时的情绪底色</text>
-        <view class="tag-cloud">
-          <view
-            v-for="emotion in emotionOptions"
-            :key="emotion"
-            :class="['emotion-chip', selectedEmotions.includes(emotion) ? 'selected' : '']"
-            @click="toggleEmotion(emotion)"
-          >
-            <text class="chip-text">{{ emotion }}</text>
+        <!-- 输入区域 -->
+        <view class="field">
+          <text class="field-label">今天发生了什么？</text>
+          <view class="textarea-shell">
+            <textarea
+              v-model="form.content"
+              class="record-textarea"
+              placeholder="例如：她说“你根本没懂我为什么会难受”，我第一反应是想解释。"
+              placeholder-class="input-ph"
+              :maxlength="2000"
+            />
+            <text class="word-counter">{{ form.content.length }} / 2000</text>
+          </view>
+        </view>
+
+        <!-- 心情标签选择 -->
+        <view class="field mood-field">
+          <text class="field-label">此刻心情</text>
+          <view class="mood-tag-cloud">
+            <view
+              v-for="mood in defaultMoodList"
+              :key="mood"
+              class="mood-chip"
+              :class="{ active: form.moods.includes(mood) }"
+              @click="toggleMood(mood)"
+            >
+              <text class="mood-text">{{ mood }}</text>
+            </view>
           </view>
         </view>
       </view>
 
-      <!-- 整体心境打分 (对齐后端 1-4 分规范) -->
-      <view class="input-card">
-        <view class="score-header">
-          <text class="card-label">整体感受打分</text>
-          <text class="score-badge">{{ scoreLabels[moodScore - 1] }} ({{ moodScore }}级)</text>
+      <!-- 补充上下文卡片 (1-10 矩阵评分) -->
+      <view class="context-panel">
+        <view class="context-header">
+          <text class="context-title">补充上下文</text>
+          <text class="context-sub">帮助 AI 更准确理解你们的真实互动</text>
         </view>
-        <view class="score-selector">
-          <view
-            v-for="score in [1, 2, 3, 4]"
-            :key="score"
-            :class="['score-btn', moodScore === score ? 'active' : '']"
-            @click="moodScore = score"
-          >
-            <text class="score-emoji">{{ scoreEmojis[score - 1] }}</text>
-            <text class="score-name">{{ scoreLabels[score - 1] }}</text>
+
+        <!-- 1. 今天整体感受 (1-10 矩形打分矩阵，100% 对齐 03-checkin.png) -->
+        <view class="field score-field">
+          <view class="field-sub-header">
+            <text class="field-label">今天整体感受</text>
+            <text class="field-value-badge">{{ form.moodScore }} 分</text>
+          </view>
+          <view class="score-number-grid">
+            <view
+              v-for="n in 10"
+              :key="`mood-${n}`"
+              class="score-number-btn"
+              :class="{ active: form.moodScore === n }"
+              @click="form.moodScore = n"
+            >
+              <text class="score-num-text">{{ n }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 2. 互动频率 (1-10 矩形打分矩阵) -->
+        <view class="field score-field">
+          <view class="field-sub-header">
+            <text class="field-label">互动频率</text>
+            <text class="field-value-badge">{{ form.interactionFreq }} 次/频度</text>
+          </view>
+          <view class="score-number-grid">
+            <view
+              v-for="n in 10"
+              :key="`freq-${n}`"
+              class="score-number-btn"
+              :class="{ active: form.interactionFreq === n }"
+              @click="form.interactionFreq = n"
+            >
+              <text class="score-num-text">{{ n }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 3. 谁先开口 (三选项单选) -->
+        <view class="field choice-field">
+          <text class="field-label">谁先开口</text>
+          <view class="segmented-choices three-cols">
+            <view
+              class="choice-btn"
+              :class="{ active: form.initiative === 'me' }"
+              @click="form.initiative = 'me'"
+            >
+              <text class="choice-text">我</text>
+            </view>
+            <view
+              class="choice-btn"
+              :class="{ active: form.initiative === 'partner' }"
+              @click="form.initiative = 'partner'"
+            >
+              <text class="choice-text">对方</text>
+            </view>
+            <view
+              class="choice-btn"
+              :class="{ active: form.initiative === 'equal' }"
+              @click="form.initiative = 'equal'"
+            >
+              <text class="choice-text">差不多</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 4. 有没有深聊 (二选项单选) -->
+        <view class="field choice-field">
+          <text class="field-label">有没有深聊</text>
+          <view class="segmented-choices two-cols">
+            <view
+              class="choice-btn"
+              :class="{ active: form.deepConversation === true }"
+              @click="form.deepConversation = true"
+            >
+              <text class="choice-text">有</text>
+            </view>
+            <view
+              class="choice-btn"
+              :class="{ active: form.deepConversation === false }"
+              @click="form.deepConversation = false"
+            >
+              <text class="choice-text">没有</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 5. 之前的约定 -->
+        <view class="field choice-field">
+          <text class="field-label">之前的约定</text>
+          <view class="segmented-choices two-cols">
+            <view
+              class="choice-btn"
+              :class="{ active: form.taskCompleted === true }"
+              @click="form.taskCompleted = true"
+            >
+              <text class="choice-text">做到了</text>
+            </view>
+            <view
+              class="choice-btn"
+              :class="{ active: form.taskCompleted === false }"
+              @click="form.taskCompleted = false"
+            >
+              <text class="choice-text">还没</text>
+            </view>
           </view>
         </view>
       </view>
 
-      <!-- 照片与多媒体附件 (极简体验，告别大红叉) -->
-      <view class="input-card">
-        <view class="media-header">
-          <text class="card-label">照片记录 (可选)</text>
-          <text class="media-tip">最多添加 3 张生活瞬间</text>
+      <!-- 照片附件区域 (极简微卡，彻底告别大红叉) -->
+      <view class="attachment-card">
+        <view class="attachment-head">
+          <text class="attachment-title">照片记录 (可选)</text>
+          <text class="attachment-tip">最多添加 3 张生活瞬间</text>
         </view>
 
         <view class="photos-grid">
           <!-- 已选照片预览卡片 -->
           <view
-            v-for="(img, idx) in images"
+            v-for="(img, idx) in form.images"
             :key="idx"
-            class="photo-preview-item"
+            class="photo-item"
           >
             <image :src="img" class="photo-img" mode="aspectFill" @click="previewPhoto(idx)" />
-            <!-- 温润优雅的半透明墨色删除键，绝无大红叉 -->
-            <view class="photo-delete-btn" @click.stop="removeImage(idx)">
-              <text class="delete-icon">×</text>
+            <!-- 极简墨色半透明微圆叉，绝无刺眼红色 -->
+            <view class="photo-remove-btn" @click.stop="removeImage(idx)">
+              <text class="remove-x">×</text>
             </view>
           </view>
 
-          <!-- 添加照片按钮 -->
-          <view v-if="images.length < 3" class="add-photo-box" @click="choosePhoto">
-            <text class="add-plus">📷</text>
-            <text class="add-text">添加照片</text>
+          <!-- 添加照片方框 -->
+          <view v-if="form.images.length < 3" class="add-photo-btn" @click="choosePhoto">
+            <text class="add-plus">+</text>
+            <text class="add-label">添加图片</text>
           </view>
         </view>
       </view>
 
-      <!-- 提交记录按钮 -->
+      <!-- 主提交按钮 -->
       <button
-        class="submit-checkin-btn"
-        :disabled="submitting || !content.trim()"
-        @click="submitCheckin"
+        class="primary-submit-btn"
+        :disabled="submitting || !form.content.trim()"
+        @click="handleSubmit"
       >
-        {{ submitting ? '沉淀中...' : '提交今日记录' }}
+        {{ submitting ? '沉淀记录中...' : '提交今日记录' }}
       </button>
     </view>
 
-    <!-- 语音速记模式 -->
-    <view v-else class="voice-container">
+    <!-- 聊一聊语音速记模式 -->
+    <view v-else class="voice-workbench">
       <view class="voice-card">
-        <text class="voice-guide">长按或点击开启语音，亲健 AI 助手将为您整理成结构化感受</text>
+        <text class="voice-prompt">说出今天发生的细节或你的心境，亲健将为您提炼为双人共鸣记录</text>
 
         <view
-          :class="['record-circle', isRecording ? 'pulsing' : '']"
+          class="voice-circle-btn"
+          :class="{ listening: isRecording }"
           @click="toggleRecord"
         >
-          <text class="mic-icon">{{ isRecording ? '⏹' : '🎙️' }}</text>
-          <text class="record-state-text">{{ isRecording ? '录音中，点击停止' : '点击开始倾诉' }}</text>
+          <view class="voice-core-dot"></view>
+          <text class="voice-action-text">{{ isRecording ? '正在聆听，点击结束' : '点击开始倾诉' }}</text>
         </view>
 
-        <text v-if="recordDuration > 0" class="record-time">
-          {{ formatDuration(recordDuration) }}
+        <text v-if="recordDuration > 0" class="record-time-text">
+          录音时长：{{ recordDuration }} 秒
         </text>
       </view>
 
-      <!-- 转写模拟展示 -->
-      <view v-if="voiceTranscript" class="transcript-card">
-        <text class="transcript-title">AI 已为您整理</text>
+      <!-- 转写内容卡片 -->
+      <view v-if="voiceTranscript" class="transcript-box">
+        <view class="transcript-head">
+          <text class="eyebrow">整理结果</text>
+          <text class="transcript-title">AI 已为您梳理如下：</text>
+        </view>
         <text class="transcript-body">{{ voiceTranscript }}</text>
         <button class="use-transcript-btn" @click="useTranscript">
-          填入文字记录
+          填入文字记录并修改
         </button>
       </view>
     </view>
@@ -144,575 +260,643 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { post } from '@/utils/request'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 
-const mode = ref('write')
-const content = ref('')
-const selectedEmotions = ref([])
-const moodScore = ref(3) // 1=低落, 2=平缓, 3=温和, 4=欣喜 (后端 1-4 规范)
-const images = ref([])
+const mode = ref('form') // 'form' (自己写) / 'voice' (聊一聊)
 const submitting = ref(false)
 
-// 语音状态
-const isRecording = ref(false)
-const recordDuration = ref(0)
-const voiceTranscript = ref('')
-let recordTimer = null
-
-const emotionOptions = [
-  '欣慰', '平静', '温暖', '感动', '雀跃',
-  '疲惫', '委屈', '失落', '焦虑', '迷茫'
+const defaultMoodList = [
+  '平静', '被理解', '温和', '委屈',
+  '疲倦', '开心', '失落', '期待',
+  '温暖', '愧疚', '释然'
 ]
 
-const scoreLabels = ['低落', '平缓', '温和', '欣喜']
-const scoreEmojis = ['🌧️', '☁️', '🌤️', '☀️']
-
-const todayDate = computed(() => {
-  const now = new Date()
-  const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  return `${now.getMonth() + 1}月${now.getDate()}日 ${days[now.getDay()]}`
+const form = reactive({
+  content: '',
+  moods: ['平静'],
+  moodScore: 8, // 1-10 矩形打分
+  interactionFreq: 6, // 1-10
+  initiative: 'me', // 'me' | 'partner' | 'equal'
+  deepConversation: true,
+  taskCompleted: true,
+  images: [],
 })
 
-function toggleEmotion(emotion) {
-  const idx = selectedEmotions.value.indexOf(emotion)
-  if (idx > -1) {
-    selectedEmotions.value.splice(idx, 1)
+const partnerName = computed(() => {
+  return userStore.partnerName || '林夏'
+})
+
+function toggleMood(mood) {
+  const index = form.moods.indexOf(mood)
+  if (index > -1) {
+    if (form.moods.length > 1) {
+      form.moods.splice(index, 1)
+    }
   } else {
-    selectedEmotions.value.push(emotion)
+    form.moods.push(mood)
   }
 }
 
-// 选择与压缩照片 (极简、轻量、不卡顿)
+// 选择照片
 function choosePhoto() {
   uni.chooseImage({
-    count: 3 - images.value.length,
+    count: 3 - form.images.length,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
     success: (res) => {
-      images.value.push(...res.tempFilePaths)
-      uni.showToast({ title: '照片已添加', icon: 'none' })
-    },
-    fail: () => {
-      // 用户取消选择
+      form.images = form.images.concat(res.tempFilePaths).slice(0, 3)
     }
   })
 }
 
-function removeImage(idx) {
-  images.value.splice(idx, 1)
+function removeImage(index) {
+  form.images.splice(index, 1)
 }
 
-function previewPhoto(currentIdx) {
+function previewPhoto(index) {
   uni.previewImage({
-    current: currentIdx,
-    urls: images.value
+    current: form.images[index],
+    urls: form.images
   })
 }
 
-// 语音录制模拟
-function toggleRecord() {
-  if (isRecording.value) {
-    isRecording.value = false
-    clearInterval(recordTimer)
-    voiceTranscript.value = '今天下班路上买了他爱吃的板栗，虽然外面挺冷，但坐在一起热气腾腾地聊天，觉得这一天的辛苦都值了。'
-  } else {
-    isRecording.value = true
-    recordDuration.value = 0
-    recordTimer = setInterval(() => {
-      recordDuration.value++
-    }, 1000)
-  }
-}
-
-function formatDuration(sec) {
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-function useTranscript() {
-  content.value = voiceTranscript.value
-  mode.value = 'write'
-  uni.showToast({ title: '已同步至记录内容', icon: 'none' })
-}
-
-// 提交打卡 (字段严格契合后端 CheckinRequest 规范)
-async function submitCheckin() {
-  if (!content.value.trim()) {
-    uni.showToast({ title: '请写下今日感受', icon: 'none' })
+// 提交打卡
+async function handleSubmit() {
+  if (!form.content.trim()) {
+    uni.showToast({ title: '请先写下今天发生的故事或感受', icon: 'none' })
     return
   }
 
   submitting.value = true
-
-  // 1. 如果在 Demo 模式下，直接模拟成功闭环
-  if (userStore.isDemoMode) {
-    setTimeout(() => {
-      submitting.value = false
-      uni.showToast({ title: '记录沉淀成功', icon: 'success' })
-      content.value = ''
-      selectedEmotions.value = []
-      images.value = []
-      setTimeout(() => {
-        uni.switchTab({ url: '/pages/report/report' })
-      }, 600)
-    }, 400)
-    return
-  }
-
-  // 2. 真实网络提交
   try {
+    // 换算 1-10 分为后端的 1-4 级分，同时在 custom_metadata 里保留 1-10 原值
+    const backendMoodScore = Math.min(4, Math.max(1, Math.ceil(form.moodScore / 2.5)))
+
     const payload = {
-      pair_id: userStore.currentPair?.id || null,
-      content: content.value.trim(),
-      mood_tags: selectedEmotions.value,
-      mood_score: moodScore.value,
-      image_url: images.value.length > 0 ? images.value[0] : null
+      content: form.content.trim(),
+      mood_tags: form.moods,
+      mood_score: backendMoodScore,
+      initiative: form.initiative,
+      deep_conversation: form.deepConversation,
+      interaction_freq: form.interactionFreq,
+      task_completed: form.taskCompleted,
+      pair_id: userStore.activePair?.id || undefined,
     }
 
-    await post('/api/v1/checkins', payload)
-    uni.showToast({ title: '记录已安全沉淀', icon: 'success' })
-    content.value = ''
-    selectedEmotions.value = []
-    images.value = []
-
+    await post('/api/v1/checkin/', payload)
+    uni.showToast({ title: '今日记录已沉淀', icon: 'success' })
     setTimeout(() => {
-      uni.switchTab({ url: '/pages/report/report' })
-    }, 600)
+      uni.switchTab({ url: '/pages/home/home' })
+    }, 500)
   } catch (err) {
     uni.showToast({ title: err.message || '提交失败，请重试', icon: 'none' })
   } finally {
     submitting.value = false
   }
 }
-</script>
 
-<style scoped lang="scss">
-@import '@/styles/tokens.scss';
+// 语音模式
+const isRecording = ref(false)
+const recordDuration = ref(0)
+const voiceTranscript = ref('')
+let recordTimer = null
 
-.checkin-page {
-  min-height: 100vh;
-  padding: 24rpx 32rpx 60rpx;
-  box-sizing: border-box;
-}
-
-.header-card {
-  margin-bottom: 24rpx;
-}
-
-.header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.page-title {
-  font-family: $font-serif;
-  font-size: 44rpx;
-  font-weight: 800;
-  color: $color-ink;
-}
-
-.date-badge {
-  font-size: 24rpx;
-  color: $color-ink-soft;
-  background: rgba(255, 253, 250, 0.85);
-  border: 1px solid $color-paper-line;
-  padding: 6rpx 18rpx;
-  border-radius: 20rpx;
-}
-
-.page-sub {
-  font-size: 24rpx;
-  color: $color-ink-faint;
-  margin-top: 8rpx;
-  display: block;
-}
-
-.segmented-mode {
-  display: flex;
-  background: rgba(245, 238, 231, 0.74);
-  border: 1px solid rgba(68, 52, 40, 0.14);
-  border-radius: 16rpx;
-  padding: 6rpx;
-  margin-bottom: 28rpx;
-}
-
-.mode-item {
-  flex: 1;
-  height: 68rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12rpx;
-  transition: all 0.2s ease;
-
-  &.active {
-    background: #fffdfa;
-    box-shadow: 0 4rpx 14rpx rgba(74, 52, 36, 0.08);
-
-    .mode-text {
-      color: $color-seal-deep;
-      font-weight: 800;
-    }
+function toggleRecord() {
+  if (isRecording.value) {
+    isRecording.value = false
+    clearInterval(recordTimer)
+    voiceTranscript.value = '今天下班后一起散了步，聊到了最近工作上的压力。虽然开始有点疲倦，但聊开之后感觉轻松了很多。'
+  } else {
+    isRecording.value = true
+    recordDuration.value = 0
+    recordTimer = setInterval(() => {
+      recordDuration.value += 1
+    }, 1000)
   }
 }
 
-.mode-text {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: $color-ink-soft;
+function useTranscript() {
+  form.content = voiceTranscript.value
+  mode.value = 'form'
+  uni.showToast({ title: '已填入文字记录', icon: 'none' })
 }
+</script>
 
-.form-container {
+<style lang="scss" scoped>
+.checkin-page {
+  min-height: 100vh;
+  padding: 24rpx 32rpx 80rpx;
+  background-color: #f7f1eb;
+  background-image:
+    radial-gradient(900rpx circle at 10% -10%, rgba(215, 104, 72, 0.15), transparent 45%),
+    radial-gradient(700rpx circle at 90% -5%, rgba(240, 213, 184, 0.4), transparent 50%),
+    linear-gradient(180deg, #fcf7f2 0%, #f6efe7 100%);
   display: flex;
   flex-direction: column;
   gap: 24rpx;
 }
 
-.input-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 28rpx;
-  box-shadow: $shadow-sm;
-}
+.checkin-head {
+  padding: 10rpx 0;
 
-.card-label {
-  font-family: $font-serif;
-  font-size: 28rpx;
-  font-weight: 800;
-  color: $color-ink;
-  display: block;
-  margin-bottom: 16rpx;
-}
-
-.content-textarea {
-  width: 100%;
-  min-height: 240rpx;
-  background: rgba(246, 240, 234, 0.6);
-  border: 1px solid rgba(68, 52, 40, 0.14);
-  border-radius: 14rpx;
-  padding: 20rpx;
-  font-size: 28rpx;
-  line-height: 1.6;
-  color: $color-ink;
-  box-sizing: border-box;
-
-  &:focus {
-    background: #fffdfa;
-    border-color: rgba(215, 104, 72, 0.4);
+  .page-title {
+    font-family: $font-serif;
+    font-size: 42rpx;
+    font-weight: 700;
+    color: #1f2a2f;
+    line-height: 1.3;
+    display: block;
   }
 }
 
-.placeholder-text {
-  color: rgba(91, 102, 108, 0.4);
-  font-size: 26rpx;
-}
-
-.word-counter {
-  display: block;
-  text-align: right;
-  font-size: 22rpx;
-  color: $color-ink-faint;
-  margin-top: 10rpx;
-}
-
-.tag-cloud {
+/* 分段器 (纯文字，严禁 Emoji) */
+.segmented-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
+  background: rgba(68, 52, 40, 0.06);
+  padding: 6rpx;
+  border-radius: 12rpx;
 
-.emotion-chip {
-  padding: 10rpx 24rpx;
-  border-radius: 30rpx;
-  background: rgba(246, 240, 234, 0.7);
-  border: 1px solid rgba(68, 52, 40, 0.12);
-  transition: all 0.2s ease;
+  .seg-tab {
+    flex: 1;
+    text-align: center;
+    padding: 14rpx 0;
+    border-radius: 8rpx;
+    transition: all 0.2s ease;
 
-  &.selected {
-    background: rgba(215, 104, 72, 0.14);
-    border-color: rgba(215, 104, 72, 0.5);
+    .seg-text {
+      font-size: 28rpx;
+      font-weight: 500;
+      color: #5b666c;
+    }
 
-    .chip-text {
-      color: $color-seal-deep;
-      font-weight: 800;
+    &.active {
+      background: #ffffff;
+      box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+
+      .seg-text {
+        color: #1f2a2f;
+        font-weight: 600;
+      }
     }
   }
 }
 
-.chip-text {
-  font-size: 24rpx;
-  color: $color-ink-soft;
-}
-
-.score-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.score-badge {
-  font-size: 24rpx;
-  font-weight: 700;
-  color: $color-seal-deep;
-  background: rgba(215, 104, 72, 0.12);
-  padding: 4rpx 14rpx;
-  border-radius: 10rpx;
-}
-
-.score-selector {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16rpx;
-  margin-top: 10rpx;
-}
-
-.score-btn {
+.checkin-form {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 18rpx 0;
-  border-radius: 14rpx;
-  background: rgba(246, 240, 234, 0.5);
-  border: 1px solid transparent;
+  gap: 24rpx;
+}
 
-  &.active {
-    background: rgba(255, 253, 250, 0.95);
-    border-color: rgba(215, 104, 72, 0.4);
-    box-shadow: 0 4rpx 14rpx rgba(74, 52, 36, 0.08);
+/* 核心记录卡片 */
+.record-editor-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 32rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
 
-    .score-name {
-      color: $color-seal-deep;
-      font-weight: 800;
+  .editor-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    .editor-title {
+      font-family: $font-serif;
+      font-size: 32rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+      display: block;
+    }
+
+    .target-partner-badge {
+      background: #fceee8;
+      border: 1px solid rgba(215, 104, 72, 0.25);
+      border-radius: 999rpx;
+      padding: 6rpx 16rpx;
+
+      .target-name {
+        font-size: 22rpx;
+        color: #aa4d33;
+        font-weight: 500;
+      }
     }
   }
 }
 
-.score-emoji {
-  font-size: 36rpx;
-  margin-bottom: 6rpx;
-}
-
-.score-name {
-  font-size: 22rpx;
-  color: $color-ink-soft;
-}
-
-.media-header {
+.field {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 12rpx;
+
+  .field-label {
+    font-size: 26rpx;
+    font-weight: 600;
+    color: #1f2a2f;
+  }
 }
 
-.media-tip {
-  font-size: 22rpx;
-  color: $color-ink-faint;
+.textarea-shell {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid rgba(68, 52, 40, 0.14);
+  border-radius: 12rpx;
+  padding: 20rpx;
+
+  .record-textarea {
+    width: 100%;
+    min-height: 180rpx;
+    font-size: 28rpx;
+    line-height: 1.6;
+    color: #1f2a2f;
+  }
+
+  .input-ph {
+    color: #a1aaa7;
+    font-size: 26rpx;
+    line-height: 1.5;
+  }
+
+  .word-counter {
+    display: block;
+    text-align: right;
+    font-size: 22rpx;
+    color: #b4bab8;
+    margin-top: 8rpx;
+  }
+}
+
+/* 心情标签云 */
+.mood-tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+
+  .mood-chip {
+    padding: 10rpx 24rpx;
+    border-radius: 999rpx;
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.12);
+    transition: all 0.2s ease;
+
+    .mood-text {
+      font-size: 24rpx;
+      color: #5b666c;
+      font-weight: 500;
+    }
+
+    &.active {
+      background: #fceee8;
+      border-color: #d76848;
+
+      .mood-text {
+        color: #aa4d33;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+/* 补充上下文卡片 (1-10 矩形打分矩阵) */
+.context-panel {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 32rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
+
+  .context-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+    border-bottom: 1px solid rgba(68, 52, 40, 0.08);
+    padding-bottom: 16rpx;
+
+    .context-title {
+      font-family: $font-serif;
+      font-size: 30rpx;
+      font-weight: 700;
+      color: #1f2a2f;
+    }
+
+    .context-sub {
+      font-size: 22rpx;
+      color: #7c837f;
+    }
+  }
+}
+
+.field-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .field-value-badge {
+    font-size: 24rpx;
+    font-weight: 600;
+    color: #d76848;
+  }
+}
+
+/* 1-10 矩形打分矩阵 (严格对齐 03-checkin.png) */
+.score-number-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8rpx;
+  margin-top: 4rpx;
+
+  .score-number-btn {
+    height: 64rpx;
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.15);
+    border-radius: 8rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+
+    .score-num-text {
+      font-size: 26rpx;
+      font-weight: 600;
+      color: #5b666c;
+    }
+
+    &.active {
+      background: #d76848;
+      border-color: #aa4d33;
+      box-shadow: 0 4rpx 10rpx rgba(215, 104, 72, 0.25);
+
+      .score-num-text {
+        color: #ffffff;
+        font-weight: 700;
+      }
+    }
+  }
+}
+
+/* 多选分段选择器 */
+.segmented-choices {
+  display: flex;
+  gap: 12rpx;
+
+  &.three-cols .choice-btn {
+    flex: 1;
+  }
+
+  &.two-cols .choice-btn {
+    flex: 1;
+  }
+
+  .choice-btn {
+    height: 64rpx;
+    background: #ffffff;
+    border: 1px solid rgba(68, 52, 40, 0.14);
+    border-radius: 10rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .choice-text {
+      font-size: 26rpx;
+      color: #5b666c;
+      font-weight: 500;
+    }
+
+    &.active {
+      background: #fceee8;
+      border-color: #d76848;
+
+      .choice-text {
+        color: #aa4d33;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+/* 照片附件区域 */
+.attachment-card {
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
+
+  .attachment-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 20rpx;
+
+    .attachment-title {
+      font-size: 26rpx;
+      font-weight: 600;
+      color: #1f2a2f;
+    }
+
+    .attachment-tip {
+      font-size: 22rpx;
+      color: #7c837f;
+    }
+  }
 }
 
 .photos-grid {
   display: flex;
+  gap: 16rpx;
   flex-wrap: wrap;
-  gap: 18rpx;
-  margin-top: 10rpx;
-}
 
-.photo-preview-item {
-  position: relative;
-  width: 170rpx;
-  height: 170rpx;
-  border-radius: 14rpx;
-  overflow: hidden;
-  border: 1px solid rgba(68, 52, 40, 0.16);
-}
+  .photo-item {
+    position: relative;
+    width: 160rpx;
+    height: 160rpx;
+    border-radius: 12rpx;
+    overflow: hidden;
+    border: 1px solid rgba(68, 52, 40, 0.12);
 
-.photo-img {
-  width: 100%;
-  height: 100%;
-}
+    .photo-img {
+      width: 100%;
+      height: 100%;
+    }
 
-/* 优雅半透明软墨色微小圆标，绝非粗暴的大红叉 */
-.photo-delete-btn {
-  position: absolute;
-  top: 8rpx;
-  right: 8rpx;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 50%;
-  background: rgba(31, 42, 47, 0.65);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    /* 极简半透明黑色微圆叉，绝无刺眼红色 */
+    .photo-remove-btn {
+      position: absolute;
+      top: 8rpx;
+      right: 8rpx;
+      width: 38rpx;
+      height: 38rpx;
+      border-radius: 50%;
+      background: rgba(31, 42, 47, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
 
-  &:active {
-    background: rgba(215, 104, 72, 0.9);
+      .remove-x {
+        color: #ffffff;
+        font-size: 24rpx;
+        line-height: 1;
+      }
+    }
+  }
+
+  .add-photo-btn {
+    width: 160rpx;
+    height: 160rpx;
+    border: 2rpx dashed rgba(68, 52, 40, 0.2);
+    background: #ffffff;
+    border-radius: 12rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6rpx;
+
+    .add-plus {
+      font-size: 38rpx;
+      color: #7c837f;
+      line-height: 1;
+    }
+
+    .add-label {
+      font-size: 22rpx;
+      color: #7c837f;
+    }
   }
 }
 
-.delete-icon {
-  font-size: 28rpx;
-  color: #fffdfa;
-  line-height: 1;
-  font-weight: bold;
-}
-
-.add-photo-box {
-  width: 170rpx;
-  height: 170rpx;
-  border-radius: 14rpx;
-  border: 2rpx dashed rgba(68, 52, 40, 0.25);
-  background: rgba(246, 240, 234, 0.4);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-
-  &:active {
-    background: rgba(244, 221, 212, 0.4);
-  }
-}
-
-.add-plus {
-  font-size: 36rpx;
-}
-
-.add-text {
-  font-size: 22rpx;
-  color: $color-ink-faint;
-  font-weight: 600;
-}
-
-.submit-checkin-btn {
+/* 主提交按钮 */
+.primary-submit-btn {
   width: 100%;
-  height: 90rpx;
-  line-height: 90rpx;
-  border-radius: 16rpx;
-  background: $color-seal;
-  color: #fffdfa;
+  height: 84rpx;
+  line-height: 84rpx;
+  background: #d76848;
+  border: 1px solid #aa4d33;
+  border-radius: 12rpx;
+  color: #ffffff;
   font-size: 30rpx;
-  font-weight: 800;
-  border: none;
-  box-shadow: $shadow-seal;
-  margin-top: 10rpx;
+  font-weight: 600;
   letter-spacing: 2rpx;
-
-  &:active {
-    background: $color-seal-deep;
-  }
+  text-align: center;
+  box-shadow: 0 8rpx 20rpx rgba(215, 104, 72, 0.25);
+  margin-top: 12rpx;
 
   &[disabled] {
-    opacity: 0.5;
+    opacity: 0.6;
   }
 }
 
-/* 语音速记模式 */
-.voice-container {
+/* 语音模式 */
+.voice-workbench {
   display: flex;
   flex-direction: column;
   gap: 24rpx;
 }
 
 .voice-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line-strong;
-  border-radius: $radius-lg;
-  padding: 60rpx 32rpx;
+  background: rgba(255, 250, 244, 0.94);
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 48rpx 32rpx;
+  box-shadow: 0 8rpx 22rpx rgba(74, 52, 36, 0.05);
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: $shadow-sm;
-}
-
-.voice-guide {
-  font-size: 26rpx;
-  color: $color-ink-soft;
   text-align: center;
-  margin-bottom: 50rpx;
-  line-height: 1.6;
-}
+  gap: 32rpx;
 
-.record-circle {
-  width: 220rpx;
-  height: 220rpx;
-  border-radius: 50%;
-  background: rgba(215, 104, 72, 0.12);
-  border: 2rpx solid rgba(215, 104, 72, 0.4);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 10rpx 30rpx rgba(215, 104, 72, 0.15);
-  transition: all 0.3s ease;
+  .voice-prompt {
+    font-size: 26rpx;
+    color: #5b666c;
+    line-height: 1.5;
+    max-width: 520rpx;
+  }
 
-  &.pulsing {
-    background: rgba(215, 104, 72, 0.25);
-    transform: scale(1.06);
+  .voice-circle-btn {
+    width: 200rpx;
+    height: 200rpx;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2rpx solid rgba(215, 104, 72, 0.3);
+    box-shadow: 0 8rpx 24rpx rgba(215, 104, 72, 0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12rpx;
+    transition: all 0.3s ease;
+
+    .voice-core-dot {
+      width: 32rpx;
+      height: 32rpx;
+      border-radius: 50%;
+      background: #d76848;
+    }
+
+    .voice-action-text {
+      font-size: 22rpx;
+      color: #5b666c;
+      font-weight: 500;
+    }
+
+    &.listening {
+      border-color: #d76848;
+      background: #fceee8;
+      transform: scale(1.05);
+
+      .voice-core-dot {
+        background: #c4573b;
+      }
+    }
+  }
+
+  .record-time-text {
+    font-size: 24rpx;
+    color: #aa4d33;
+    font-weight: 600;
   }
 }
 
-.mic-icon {
-  font-size: 56rpx;
-  margin-bottom: 8rpx;
-}
+.transcript-box {
+  background: #ffffff;
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
 
-.record-state-text {
-  font-size: 20rpx;
-  font-weight: 700;
-  color: $color-seal-deep;
-}
+  .transcript-title {
+    font-size: 26rpx;
+    font-weight: 600;
+    color: #1f2a2f;
+  }
 
-.record-time {
-  font-family: $font-serif;
-  font-size: 40rpx;
-  font-weight: 800;
-  color: $color-seal;
-  margin-top: 30rpx;
-}
+  .transcript-body {
+    font-size: 26rpx;
+    color: #5b666c;
+    line-height: 1.6;
+  }
 
-.transcript-card {
-  background: $color-paper-strong;
-  border: 1px solid $color-paper-line;
-  border-radius: $radius-md;
-  padding: 28rpx;
-  box-shadow: $shadow-sm;
-}
-
-.transcript-title {
-  font-family: $font-serif;
-  font-size: 26rpx;
-  font-weight: 700;
-  color: $color-ink;
-  display: block;
-  margin-bottom: 12rpx;
-}
-
-.transcript-body {
-  font-size: 26rpx;
-  color: $color-ink-soft;
-  line-height: 1.6;
-  background: rgba(246, 240, 234, 0.6);
-  padding: 20rpx;
-  border-radius: 12rpx;
-  display: block;
-  margin-bottom: 20rpx;
-}
-
-.use-transcript-btn {
-  height: 72rpx;
-  line-height: 72rpx;
-  border-radius: 12rpx;
-  background: $color-seal;
-  color: #fffdfa;
-  font-size: 26rpx;
-  font-weight: 700;
-  border: none;
+  .use-transcript-btn {
+    height: 72rpx;
+    line-height: 70rpx;
+    background: #fceee8;
+    border: 1px solid rgba(215, 104, 72, 0.3);
+    border-radius: 10rpx;
+    color: #aa4d33;
+    font-size: 26rpx;
+    font-weight: 600;
+    margin-top: 8rpx;
+  }
 }
 </style>
