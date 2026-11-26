@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token_payload
 from app.models import User, Pair, PairStatus, PairType
 from app.services.upload_access import set_request_actor_user_id
 
@@ -20,10 +20,9 @@ DEMO_PAIR_ID = uuid.UUID("22222222-2222-4222-8222-222222222222")
 
 
 DEMO_PERSONA_PAIRS = [
-    (uuid.UUID("22222222-2222-4222-8222-222222222222"), PairType.COUPLE, "DEMO-LX"),
+    (DEMO_PAIR_ID, PairType.COUPLE, "DEMO-LX"),
     (uuid.UUID("77777777-7777-4777-8777-777777777777"), PairType.FRIEND, "DEMO-ZN"),
     (uuid.UUID("99999999-9999-4999-8999-999999999999"), PairType.FRIEND, "DEMO-GY"),
-    (DEMO_PAIR_ID, PairType.COUPLE, "DEMO2026"),
 ]
 
 async def _ensure_demo_fixtures(db: AsyncSession) -> User:
@@ -94,11 +93,11 @@ async def get_current_user(
         user = await _ensure_demo_fixtures(db)
         set_request_actor_user_id(str(user.id))
         return user
-    user_id = decode_access_token(credentials.credentials)
-    if not user_id:
+    token_payload = decode_access_token_payload(credentials.credentials)
+    if not token_payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证令牌")
     normalized_user_id = _parse_uuid_or_raise(
-        user_id,
+        token_payload["user_id"],
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无效的认证令牌",
     )
@@ -106,6 +105,12 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+    if (user.email or "").startswith(("deleted+", "deleted_")) or int(
+        getattr(user, "token_version", 0) or 0
+    ) != int(token_payload.get("token_version", 0) or 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效，请重新登录"
+        )
     set_request_actor_user_id(str(user.id))
     return user
 
@@ -127,6 +132,41 @@ async def validate_pair_access(
     pair = result.scalar_one_or_none()
     if not pair:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="配对不存在")
+    if (
+        require_active
+        and pair.status == PairStatus.ACTIVE
+        and str(user.id) in (str(pair.user_a_id), str(pair.user_b_id))
+    ):
+        from datetime import datetime, timezone
+        from app.models import (
+            PairChangeRequest,
+            PairChangeRequestKind,
+            PairChangeRequestStatus,
+        )
+
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        expired_breaks = (
+            await db.execute(
+                select(PairChangeRequest).where(
+                    PairChangeRequest.pair_id == pair.id,
+                    PairChangeRequest.kind == PairChangeRequestKind.BREAK_REQUEST,
+                    PairChangeRequest.status == PairChangeRequestStatus.PENDING,
+                    PairChangeRequest.expires_at.isnot(None),
+                    PairChangeRequest.expires_at <= now_utc,
+                )
+            )
+        ).scalars().all()
+        if expired_breaks:
+            from app.api.v1.pairs import _sync_expired_break_request
+
+            synced = False
+            for expired_break in expired_breaks:
+                if await _sync_expired_break_request(
+                    db, pair=pair, request=expired_break
+                ):
+                    synced = True
+            if synced:
+                await db.commit()
     if require_active and pair.status != PairStatus.ACTIVE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="配对不存在或未激活")
     if str(user.id) not in (str(pair.user_a_id), str(pair.user_b_id)):

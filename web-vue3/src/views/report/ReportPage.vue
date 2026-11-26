@@ -161,18 +161,26 @@
 </template>
 
 <script setup>
+import { formatBeijingShortDate } from '@/utils/datetime'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { createLatestRequest } from '@/utils/taskSchedule'
 import { createReportPoller } from '@/utils/reportPolling'
 import { RADAR_CENTER, buildRadarAxes, radarPolygon, buildTrendChart, normalizeChartScore } from '@/utils/reportCharts'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { resolveScopedPairId } from '@/utils/reportScopeSelection'
 import { api } from '@/api'
 import { useReportStore } from '@/stores/report'
 import { useUserStore } from '@/stores/user'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
-import { extractReportInsights, extractReportRecommendations } from '@/utils/reportContent'
+import {
+  extractReportInsights,
+  extractReportRecommendations,
+  extractReportSummary,
+  extractStructuredReportDimensions,
+} from '@/utils/reportContent'
 import { buildSampleReports, reportPeriodLabel, selectReportHistory } from '@/utils/reportPeriods'
 
+const route = useRoute()
 const router = useRouter()
 const reportStore = useReportStore()
 const userStore = useUserStore()
@@ -200,20 +208,21 @@ const availableReportPairs = computed(() => {
   ))
 })
 const selectedPair = computed(() => availableReportPairs.value.find((pair) => pair.id === selectedPairId.value) || null)
+const historyReportType = computed(() => !isDemoMode.value && !selectedPair.value ? 'solo' : reportStore.reportType)
 
 const displayReport = computed(() => {
   if (isDemoMode.value) return buildDemoReport()
   if (!report.value || ['pending', 'failed'].includes(report.value.status)) return null
 
   const score = normalizeChartScore(report.value.health_score ?? report.value.content?.health_score)
-  const fallbackSummary = report.value.summary || report.value.content?.insight || report.value.content?.suggestion || '暂无结论'
+  const fallbackSummary = extractReportSummary(report.value)
   const fallbackInsights = extractReportInsights(report.value)
   const fallbackRecommendations = extractReportRecommendations(report.value)
   const scopeName = partnerName(selectedPair.value) || userStore.partnerName || '当前关系'
 
   return {
     id: report.value.id,
-    report_type: report.value.report_type || reportStore.reportType,
+    report_type: report.value.report_type || report.value.type || historyReportType.value,
     date_label: reportPeriodLabel(report.value),
     relation_label: selectedPair.value ? `${pairTypeLabel(selectedPair.value)} · ${scopeName}` : '个人记录',
     scope_name: selectedPair.value ? scopeName : '个人记录',
@@ -221,7 +230,7 @@ const displayReport = computed(() => {
     score_label: score === null ? '暂无评分' : '关系评分',
     summary: fallbackSummary,
     nextAction: fallbackRecommendations[0] || '先保留一个小动作，再继续观察。',
-    record_count: selectReportHistory(history.value, reportStore.reportType).length,
+    record_count: selectReportHistory(history.value, historyReportType.value).length,
     tags: [],
     quick_links: ['关系日历', '发前先过一遍'],
     dimensions: extractReportDimensions(report.value),
@@ -234,7 +243,7 @@ const displayReport = computed(() => {
 
 const displayHistory = computed(() => {
   if (isDemoMode.value) return displayReport.value?.history || []
-  return selectReportHistory(history.value, reportStore.reportType)
+  return selectReportHistory(history.value, historyReportType.value)
 })
 
 const radarAxes = computed(() => buildRadarAxes(displayReport.value?.dimensions || []))
@@ -252,10 +261,23 @@ const trendAriaLabel = computed(() =>
   `关系评分，纵轴 ${trendChart.value.min} 至 ${trendChart.value.max} 分。${trendChartPoints.value.map(point => `${point.label}${point.score}分`).join('，')}`
 )
 
+function resolveInitialPairId() {
+  if (isDemoMode.value) {
+    return resolveScopedPairId({
+      preferredPairId: route.query.pair_id || demoFixture.reportDashboard?.pair_id,
+      fallbackPairId: userStore.activePairId || userStore.currentPair?.id,
+      availablePairs: availableReportPairs.value,
+    })
+  }
+  return resolveScopedPairId({
+    preferredPairId: route.query.pair_id,
+    fallbackPairId: userStore.activePairId,
+    availablePairs: availableReportPairs.value,
+  })
+}
+
 onMounted(async () => {
-  selectedPairId.value = isDemoMode.value
-    ? demoFixture.reportDashboard?.pair_id || userStore.currentPair?.id || ''
-    : userStore.currentPair?.id || userStore.activePairId || ''
+  selectedPairId.value = resolveInitialPairId()
   if (!isDemoMode.value && !selectedPairId.value) reportStore.reportType = 'daily'
   await loadData()
 })
@@ -271,14 +293,31 @@ onBeforeUnmount(() => { disposed = true; cancelPending() })
 watch(() => [userStore.token, userStore.me?.id], () => {
   cancelPending()
   report.value = null; history.value = []; trend.value = []
-  selectedPairId.value = userStore.activePairId || ''
+  selectedPairId.value = resolveInitialPairId()
   reportStore.reset()
+  if (!isDemoMode.value && !selectedPairId.value) reportStore.reportType = 'daily'
   if (userStore.isLoggedIn) loadData()
 })
+watch(
+  () => availableReportPairs.value.map((pair) => pair.id).join(','),
+  () => {
+    if (!selectedPairId.value) return
+    if (availableReportPairs.value.some((pair) => pair.id === selectedPairId.value)) return
+    selectedPairId.value = resolveInitialPairId()
+    if (!isDemoMode.value && !selectedPairId.value) reportStore.reportType = 'daily'
+    if (userStore.isLoggedIn) loadData()
+  }
+)
 
 async function loadData() {
   cancelPending()
   const requestCurrent = loads.begin()
+  if (!isDemoMode.value && selectedPairId.value && !selectedPair.value) {
+    selectedPairId.value = resolveInitialPairId()
+  }
+  if (!isDemoMode.value && !selectedPair.value) {
+    reportStore.reportType = 'daily'
+  }
   const scope = scopeKey()
   const current = () => !disposed && requestCurrent() && scopeKey() === scope
   notice.value = ''
@@ -289,7 +328,7 @@ async function loadData() {
     trend.value = cloneDemo(demoFixture.reportDashboard?.trend_points || [])
     return
   }
-  const pairId = selectedPairId.value || null
+  const pairId = selectedPair.value?.id || null
   const type = reportStore.reportType
   loading.value = true
   const results = await Promise.allSettled([
@@ -349,8 +388,8 @@ async function generateReport() {
     await loadData()
     return
   }
-  const pairId = selectedPairId.value || null
-  const type = reportStore.reportType
+  const pairId = selectedPair.value?.id || null
+  const type = pairId ? reportStore.reportType : 'daily'
   const scope = scopeKey()
   const current = () => !disposed && scopeKey() === scope
   generating.value = true
@@ -429,7 +468,7 @@ function buildFallbackDimensions(score) {
 function extractReportDimensions(value) {
   const raw = value?.dimensions || value?.content?.dimensions || value?.content?.dimension_scores
   if (Array.isArray(raw)) {
-    return raw
+    const list = raw
       .map((item, index) => ({
         id: String(item?.id || item?.key || `dimension-${index}`),
         label: String(item?.label || item?.name || '').trim(),
@@ -437,13 +476,15 @@ function extractReportDimensions(value) {
       }))
       .filter((item) => item.label)
       .slice(0, 8)
+    if (list.length) return list
   }
   if (raw && typeof raw === 'object') {
-    return Object.entries(raw)
+    const entries = Object.entries(raw)
       .map(([key, score]) => ({ id: key, label: key, score: clampScore(score) }))
       .slice(0, 8)
+    if (entries.length) return entries
   }
-  return []
+  return extractStructuredReportDimensions(value)
 }
 
 function normalizeTrendPoints(value) {
@@ -457,6 +498,7 @@ function normalizeTrendPoints(value) {
 }
 
 function reportTypeLabel(type) {
+  if (type === 'solo') return '个人简报'
   return type === 'weekly' ? '周报' : type === 'monthly' ? '月报' : '日报'
 }
 
@@ -470,10 +512,7 @@ function partnerName(pair) {
 }
 
 function formatShortDate(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getMonth() + 1}月${d.getDate()}日`
+  return formatBeijingShortDate(v)
 }
 
 function clampScore(value) {

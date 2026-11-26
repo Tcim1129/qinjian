@@ -17,48 +17,29 @@ test('normalizeManualCheckinContent falls back to image analysis summary', () =>
   )
 })
 
-test('getMissingBackgroundFields reports the specific missing background item', () => {
-  assert.deepEqual(
-    getMissingBackgroundFields({
-      moodScore: 8,
-      interactionFreq: null,
-      initiative: 'me',
-      deepConversation: false,
-      taskCompleted: true,
-    }),
-    ['互动频率'],
-  )
+test('getMissingBackgroundFields no longer requires the removed 5 background items', () => {
+  assert.deepEqual(getMissingBackgroundFields({}), [])
 })
 
-test('getManualCheckinValidation rejects filled content when one background item is missing', () => {
+test('getManualCheckinValidation allows submitting non-empty text without extra scoring fields', () => {
   assert.deepEqual(
     getManualCheckinValidation({
       content: '今天先把这句写下来。',
-      moodScore: 7,
-      interactionFreq: 4,
-      initiative: '',
-      deepConversation: true,
-      taskCompleted: false,
     }),
     {
       normalizedManualContent: '今天先把这句写下来。',
-      missingBackgroundFields: ['谁先开口'],
-      isBackgroundComplete: false,
-      canSubmitManualCheckin: false,
+      missingBackgroundFields: [],
+      isBackgroundComplete: true,
+      canSubmitManualCheckin: true,
     },
   )
 })
 
-test('getManualCheckinValidation allows image summary fallback when background is complete', () => {
+test('getManualCheckinValidation allows image summary fallback without extra scoring fields', () => {
   assert.deepEqual(
     getManualCheckinValidation({
       content: '   ',
       imageAnalysisSummary: '今天聊天时的气氛明显比昨天更松',
-      moodScore: 6,
-      interactionFreq: 5,
-      initiative: 'partner',
-      deepConversation: false,
-      taskCompleted: true,
     }),
     {
       normalizedManualContent: '图片记录：今天聊天时的气氛明显比昨天更松',
@@ -69,18 +50,17 @@ test('getManualCheckinValidation allows image summary fallback when background i
   )
 })
 
-test('getManualCheckinValidation keeps restored incomplete drafts unsubmitable', () => {
-  const restoredDraft = {
-    content: '晚饭那句还卡在心里。',
-    moodScore: 5,
-    interactionFreq: 3,
-    initiative: 'equal',
-    deepConversation: null,
-    taskCompleted: false,
-  }
-
-  const validation = getManualCheckinValidation(restoredDraft)
-
-  assert.equal(validation.canSubmitManualCheckin, false)
-  assert.deepEqual(validation.missingBackgroundFields, ['有没有深聊'])
+test('getManualCheckinValidation blocks submission when both text and image summary are empty', () => {
+  assert.deepEqual(
+    getManualCheckinValidation({
+      content: '   ',
+      imageAnalysisSummary: '',
+    }),
+    {
+      normalizedManualContent: '',
+      missingBackgroundFields: [],
+      isBackgroundComplete: true,
+      canSubmitManualCheckin: false,
+    },
+  )
 })

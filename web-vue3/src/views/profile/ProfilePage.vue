@@ -25,9 +25,9 @@
       </div>
 
       <div>
-        <p class="eyebrow" style="margin-left: 12px; margin-bottom: 8px;">关系</p>
+        <p class="eyebrow" style="margin-left: 12px; margin-bottom: 8px;">关系与常用入口</p>
         <div class="ios-list-group">
-          <div v-if="userStore.currentPair" class="ios-list-item" @click="$router.push('/pair')">
+          <div v-if="userStore.currentPair" class="ios-list-item ios-list-item--editable" @click="$router.push('/pair')">
             <div class="ios-item-icon" style="background: linear-gradient(135deg, var(--warm-300), var(--seal));">
               <HeartHandshake :size="18" stroke-width="2.5" />
             </div>
@@ -47,13 +47,25 @@
               <PlusCircle :size="16" /> 建立关系
             </button>
           </div>
+          <div class="ios-list-item ios-list-item--editable" @click="$router.push('/discover')">
+            <div class="ios-item-icon" style="background: var(--moss-soft); color: var(--moss-deep);">
+              <LayoutGrid :size="18" stroke-width="2.4" />
+            </div>
+            <div class="ios-item-content">
+              <span>全部功能</span>
+              <div class="ios-item-value">
+                <span>日历、体检、异地等</span>
+                <ChevronRight :size="16" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <div>
         <p class="eyebrow" style="margin-left: 12px; margin-bottom: 8px;">账号</p>
         <div class="ios-list-group">
-          <div class="ios-list-item">
+          <div class="ios-list-item ios-list-item--editable" @click="startEditField('nickname')">
             <div class="ios-item-icon" style="background: var(--sand);">
               <User :size="18" stroke-width="2.5" />
             </div>
@@ -65,7 +77,24 @@
               </div>
             </div>
           </div>
-          <div class="ios-list-item">
+          <div v-if="editingField === 'nickname'" class="profile-inline-editor">
+            <input
+              v-model.trim="fieldDraft"
+              class="input"
+              type="text"
+              maxlength="24"
+              placeholder="输入新的昵称"
+              @keyup.enter="saveProfileField('nickname')"
+            />
+            <div class="profile-inline-editor__actions">
+              <button class="btn btn-primary btn-sm" type="button" :disabled="savingField" @click="saveProfileField('nickname')">
+                {{ savingField ? '保存中...' : '保存' }}
+              </button>
+              <button class="btn btn-ghost btn-sm" type="button" :disabled="savingField" @click="cancelEditField">取消</button>
+            </div>
+          </div>
+
+          <div class="ios-list-item ios-list-item--editable" @click="startEditField('living_region')">
             <div class="ios-item-icon" style="background: var(--moss-soft); color: var(--moss-deep);">
               <MapPin :size="18" stroke-width="2.5" />
             </div>
@@ -77,27 +106,42 @@
               </div>
             </div>
           </div>
-          <div class="ios-list-item">
+          <div v-if="editingField === 'living_region'" class="profile-inline-editor">
+            <input
+              v-model.trim="fieldDraft"
+              class="input"
+              type="text"
+              maxlength="40"
+              placeholder="例如：上海、杭州、成都（留空可清除）"
+              @keyup.enter="saveProfileField('living_region')"
+            />
+            <div class="profile-inline-editor__actions">
+              <button class="btn btn-primary btn-sm" type="button" :disabled="savingField" @click="saveProfileField('living_region')">
+                {{ savingField ? '保存中...' : '保存' }}
+              </button>
+              <button class="btn btn-ghost btn-sm" type="button" :disabled="savingField" @click="cancelEditField">取消</button>
+            </div>
+          </div>
+
+          <div class="ios-list-item ios-list-item--static">
             <div class="ios-item-icon" style="background: var(--moss-soft); color: var(--moss-deep);">
               <Mail :size="18" stroke-width="2.5" />
             </div>
             <div class="ios-item-content">
               <span>邮箱</span>
-              <div class="ios-item-value">
+              <div class="ios-item-value ios-item-value--readonly">
                 <span>{{ displayEmail }}</span>
-                <ChevronRight :size="16" />
               </div>
             </div>
           </div>
-          <div class="ios-list-item">
+          <div class="ios-list-item ios-list-item--static">
             <div class="ios-item-icon" style="background: var(--moss-soft); color: var(--moss-deep);">
               <Smartphone :size="18" stroke-width="2.5" />
             </div>
             <div class="ios-item-content">
               <span>手机号</span>
-              <div class="ios-item-value">
+              <div class="ios-item-value ios-item-value--readonly">
                 <span>{{ maskPhone(userStore.me?.phone) }}</span>
-                <ChevronRight :size="16" />
               </div>
             </div>
           </div>
@@ -108,14 +152,16 @@
         <p class="eyebrow" style="margin-left: 12px; margin-bottom: 8px;">偏好</p>
         <div class="glass-card profile-preferences">
           <div class="profile-preferences__head">
-            <h3>回复方式</h3>
-            <button class="btn btn-primary btn-sm" type="button" :disabled="savingPreferences" @click="savePreferences">
-              {{ savingPreferences ? '保存中...' : '保存设置' }}
-            </button>
+            <div>
+              <h3>回复方式与提醒</h3>
+              <p class="field-hint" style="margin: 4px 0 0; font-size: 12px; color: var(--ink-soft);">
+                调整下方回复风格、日程习惯与雷点后，点底部按钮统一保存。
+              </p>
+            </div>
           </div>
           <div class="profile-preferences__grid">
             <label class="field">
-              <span>你希望亲健用什么态度回复你?</span>
+              <span>你希望亲健用什么态度回复你？</span>
               <select v-model="replyTone" class="input">
                 <option value="gentle">温柔耐心一点，多给我一点安慰</option>
                 <option value="direct">直接一点，先告诉我下一步</option>
@@ -123,7 +169,7 @@
               </select>
             </label>
             <label class="field">
-              <span>回答需要多详细?</span>
+              <span>回答需要多详细？</span>
               <select v-model="detailLevel" class="input">
                 <option value="medium">长短适中</option>
                 <option value="short">短一点，只要重点</option>
@@ -131,7 +177,7 @@
               </select>
             </label>
             <label class="field">
-              <span>默认每天安排几件事?</span>
+              <span>默认每天安排几件事？</span>
               <input v-model.number="dailyTaskCount" class="input" type="number" min="3" max="8" />
             </label>
             <label class="field">
@@ -157,9 +203,6 @@
                 写下偏好，回复会更贴近你的习惯。
               </p>
             </div>
-            <button class="btn btn-primary btn-sm" type="button" :disabled="savingPreferences" @click="savePreferences">
-              {{ savingPreferences ? '保存中...' : '保存习惯' }}
-            </button>
           </div>
 
           <div class="habit-section">
@@ -240,6 +283,13 @@
               ></textarea>
             </div>
           </div>
+
+          <div class="profile-preferences__footer">
+            <span class="profile-preferences__hint">以上回复方式、提醒时间和相处习惯会一并保存。</span>
+            <button class="btn btn-primary btn-sm" type="button" :disabled="savingPreferences" @click="savePreferences">
+              {{ savingPreferences ? '保存中...' : '保存偏好设置' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -260,15 +310,20 @@
       </div>
 
       <div class="ios-list-group" style="margin-top: 10px;">
-        <div class="ios-list-item" style="justify-content: center; background: rgba(185, 61, 50, 0.05);" @click="handleLogout">
+        <button
+          type="button"
+          class="ios-list-item ios-list-item--logout"
+          style="width: 100%; border: 0; justify-content: center; background: rgba(185, 61, 50, 0.05);"
+          @click="handleLogout"
+        >
           <div class="ios-item-content" style="justify-content: center; gap: 8px;">
             <LogOut :size="18" style="color: var(--danger)" stroke-width="2.5" />
             <span style="color: var(--danger); font-weight: 600;">退出登录</span>
           </div>
-        </div>
+        </button>
       </div>
 
-      <button class="profile-cancel" type="button" disabled>注销账号</button>
+      <button class="profile-cancel" type="button" @click="$router.push('/privacy-security')">前往隐私与安全管理账号注销</button>
 
     </div>
   </div>
@@ -279,7 +334,7 @@ import { computed, inject, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
-import { HeartHandshake, User, Smartphone, Mail, Shield, LogOut, ChevronRight, Heart, PlusCircle, MapPin } from 'lucide-vue-next'
+import { HeartHandshake, LayoutGrid, User, Smartphone, Mail, Shield, LogOut, ChevronRight, Heart, PlusCircle, MapPin } from 'lucide-vue-next'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -289,10 +344,33 @@ const detailLevel = ref('medium')
 const dailyTaskCount = ref(5)
 const eveningReminder = ref('on')
 const reminderTime = ref('21:00')
+const PRESET_TABOOS = [
+  '冷战不回应',
+  '翻旧账',
+  '当众指责',
+  '敷衍应付',
+  '情绪上头时说狠话',
+  '拿别人做比较',
+]
+const PRESET_COMFORTS = [
+  '先听完再给建议',
+  '情绪上头先暂停 15 分钟',
+  '有事直接说别猜',
+  '睡前不聊沉重话题',
+  '多肯定具体的小事',
+  '需要独处缓冲时间',
+]
+const taboos = ref([])
+const comfortPreferences = ref([])
+const customHabitNotes = ref('')
+const newTabooInput = ref('')
 const avatarInput = ref(null)
 const avatarPreview = ref('')
 const savingPreferences = ref(false)
 const avatarSaving = ref(false)
+const editingField = ref('')
+const fieldDraft = ref('')
+const savingField = ref(false)
 
 const displayName = computed(() => userStore.me?.nickname || '亲健用户')
 const avatarInitial = computed(() => displayName.value.slice(0, 1) || '用')
@@ -325,6 +403,101 @@ watch(
 function maskPhone(phone) {
   if (!phone) return '未绑定'
   return String(phone).replace(/^(\d{3})\d+(\d{4})$/, '$1****$2')
+}
+
+function toggleTaboo(tag) {
+  const index = taboos.value.indexOf(tag)
+  if (index >= 0) {
+    taboos.value.splice(index, 1)
+    return
+  }
+  if (taboos.value.length >= 12) {
+    showToast('最多添加 12 条不喜欢的说法')
+    return
+  }
+  taboos.value.push(tag)
+}
+
+function removeTaboo(tag) {
+  const index = taboos.value.indexOf(tag)
+  if (index >= 0) taboos.value.splice(index, 1)
+}
+
+function addCustomTaboo() {
+  const value = String(newTabooInput.value || '').trim().slice(0, 24)
+  if (!value) {
+    showToast('先输入你想添加的雷点')
+    return
+  }
+  if (taboos.value.includes(value)) {
+    newTabooInput.value = ''
+    showToast('这条已经添加过了')
+    return
+  }
+  if (taboos.value.length >= 12) {
+    showToast('最多添加 12 条不喜欢的说法')
+    return
+  }
+  taboos.value.push(value)
+  newTabooInput.value = ''
+}
+
+function toggleComfort(tag) {
+  const index = comfortPreferences.value.indexOf(tag)
+  if (index >= 0) {
+    comfortPreferences.value.splice(index, 1)
+    return
+  }
+  if (comfortPreferences.value.length >= 8) {
+    showToast('最多选择 8 项舒适偏好')
+    return
+  }
+  comfortPreferences.value.push(tag)
+}
+
+function startEditField(field) {
+  if (editingField.value === field) {
+    cancelEditField()
+    return
+  }
+  editingField.value = field
+  if (field === 'nickname') {
+    fieldDraft.value = String(userStore.me?.nickname || '').trim()
+  } else if (field === 'living_region') {
+    fieldDraft.value = String(userStore.me?.living_region || '').trim()
+  }
+}
+
+function cancelEditField() {
+  editingField.value = ''
+  fieldDraft.value = ''
+}
+
+async function saveProfileField(field) {
+  const value = fieldDraft.value.trim()
+  if (field === 'nickname' && !value) {
+    showToast('昵称不能为空')
+    return
+  }
+  const payload = field === 'nickname' ? { nickname: value } : { living_region: value }
+  savingField.value = true
+  try {
+    if (userStore.isDemoMode) {
+      userStore.me = {
+        ...(userStore.me || {}),
+        ...payload,
+      }
+      showToast('样例资料已更新，本次体验内有效')
+    } else {
+      await userStore.updateMe(payload)
+      showToast(field === 'nickname' ? '昵称已更新' : '生活地区已更新')
+    }
+    cancelEditField()
+  } catch (error) {
+    showToast(error.message || '资料保存失败，请稍后再试')
+  } finally {
+    savingField.value = false
+  }
 }
 
 async function savePreferences() {
@@ -501,6 +674,43 @@ function handleLogout() {
   gap: 6px;
 }
 
+.ios-list-item--editable {
+  cursor: pointer;
+}
+
+.ios-list-item--static {
+  cursor: default;
+}
+
+.ios-list-item--static:hover {
+  background: transparent;
+}
+
+.ios-item-value--readonly {
+  color: var(--ink-soft);
+}
+
+.profile-inline-editor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 14px;
+  border-top: 1px dashed var(--line-subtle, rgba(44, 48, 39, 0.08));
+  background: rgba(255, 252, 247, 0.72);
+}
+
+.profile-inline-editor .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-inline-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .profile-preferences {
   padding: 18px;
 }
@@ -524,11 +734,34 @@ function handleLogout() {
   gap: 14px;
 }
 
+.profile-preferences__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-subtle, rgba(44, 48, 39, 0.08));
+}
+
+.profile-preferences__hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
 .profile-cancel {
   border: 0;
   background: transparent;
-  color: rgba(120, 113, 107, 0.42);
-  font-size: 14px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 6px 0;
+}
+
+.profile-cancel:hover {
+  color: var(--danger);
 }
 
 @media (max-width: 760px) {

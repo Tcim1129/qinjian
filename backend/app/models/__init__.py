@@ -172,6 +172,9 @@ class User(Base):
     wechat_unionid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wechat_avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
     product_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    token_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
@@ -373,6 +376,8 @@ class CheckinVisibilityEvent(Base):
         Index("ix_checkin_visibility_events_checkin_created", "checkin_id", "created_at"),
         Index(
             "uq_checkin_visibility_events_client_request",
+            "actor_user_id",
+            "checkin_id",
             "client_request_id",
             unique=True,
         ),
@@ -1134,6 +1139,23 @@ class RelationshipMemory(Base):
 
     user: Mapped["User"] = relationship()
     pair: Mapped["Pair"] = relationship()
+
+
+class MemoryRemovalArchive(Base):
+    """确认停用后的受限追溯副本，正常记忆检索不读取此表。"""
+    __tablename__ = 'memory_removal_archives'
+    __table_args__ = (Index('uq_memory_removal_request_record', 'request_message_id', 'memory_id', unique=True),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), index=True)
+    pair_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('pairs.id', ondelete='CASCADE'), index=True)
+    memory_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    request_message_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    confirmation_message_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    snapshot_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_digest: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    retain_until: Mapped[datetime] = mapped_column(index=True)
+    audit_until: Mapped[datetime] = mapped_column(index=True)
 
 
 class SavedExpression(Base):

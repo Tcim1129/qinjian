@@ -447,6 +447,9 @@ def summarize_text_emotion(text: str | None) -> dict[str, Any]:
     }
 
 
+_RHETORICAL_REBUKE_RE = re.compile(r"(?:能不能|就不能|可不可以)\s*(?:别|不要|少|滚)")
+
+
 def infer_tone(text: str | None) -> str:
     cleaned = _clean_text(text)
     if not cleaned:
@@ -456,7 +459,11 @@ def infer_tone(text: str | None) -> str:
         return "intense"
     if any(keyword in cleaned for keyword in TONE_HINTS["warm"]):
         return "warm"
-    if any(keyword in cleaned for keyword in TONE_HINTS["gentle"]):
+    if any(
+        keyword in cleaned
+        and not (keyword == "能不能" and _RHETORICAL_REBUKE_RE.search(cleaned))
+        for keyword in TONE_HINTS["gentle"]
+    ):
         return "gentle"
     if len(cleaned) <= 18 or cleaned.count("。") + cleaned.count("!") + cleaned.count("！") <= 1:
         return "concise"

@@ -3,6 +3,7 @@
     <small>{{ proposal.due_date }} · 我的安排</small>
     <strong>{{ proposal.title }}</strong>
     <p v-if="proposal.description">{{ proposal.description }}</p>
+    <small v-if="!pairId">确认后保存在当前浏览器的个人安排中</small>
     <button class="btn btn-secondary btn-sm" type="button" :disabled="Boolean(proposal.confirmed_task_id) || pending.has(proposal.proposal_id)" @click="confirm(proposal)">
       {{ proposal.confirmed_task_id ? '已加入安排' : pending.has(proposal.proposal_id) ? '保存中…' : '加入安排' }}
     </button>
@@ -14,15 +15,22 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
+import { confirmSoloTaskProposal, findSoloTaskProposal } from '@/utils/soloWorkspace'
 
-const props = defineProps({ message: { type: Object, required: true }, sessionId: { type: String, required: true } })
+const props = defineProps({ message: { type: Object, required: true }, sessionId: { type: String, required: true }, pairId: { type: String, default: undefined } })
 const emit = defineEmits(['confirmed'])
 const userStore = useUserStore()
 const pending = ref(new Set())
 const errors = ref({})
 let disposed = false
-const proposals = computed(() => Array.isArray(props.message.payload?.task_proposals) ? props.message.payload.task_proposals : [])
-const scopeKey = () => JSON.stringify([userStore.token, userStore.me?.id, props.sessionId, props.message.id])
+const pairId = computed(() => props.pairId === undefined ? userStore.activePairId : props.pairId)
+const localRevision = ref(0)
+const proposals = computed(() => {
+  localRevision.value
+  const items = Array.isArray(props.message.payload?.task_proposals) ? props.message.payload.task_proposals : []
+  return pairId.value ? items : items.map(item => ({ ...item, confirmed_task_id: findSoloTaskProposal(item.proposal_id)?.id || null }))
+})
+const scopeKey = () => JSON.stringify([userStore.token, userStore.me?.id, props.sessionId, props.message.id, pairId.value])
 onBeforeUnmount(() => { disposed = true })
 
 async function confirm(proposal) {
@@ -32,9 +40,12 @@ async function confirm(proposal) {
   pending.value.add(id)
   errors.value[id] = ''
   try {
-    const result = await api.confirmAgentTask(props.sessionId, props.message.id, id)
+    const result = pairId.value
+      ? await api.confirmAgentTask(props.sessionId, props.message.id, id)
+      : { task: confirmSoloTaskProposal(proposal) }
     if (disposed || scope !== scopeKey()) return
     emit('confirmed', { proposalId: id, taskId: result.task.id })
+    localRevision.value++
   } catch (error) {
     if (!disposed && scope === scopeKey()) errors.value[id] = error.message || '没保存成功，请重试'
   } finally { pending.value.delete(id) }

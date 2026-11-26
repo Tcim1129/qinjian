@@ -63,7 +63,34 @@
               <h3>{{ pack.title || defaultPackTitle }}</h3>
               <p class="health-scope-current health-scope-current--inline">{{ selectedScopeSummary }}</p>
             </div>
-            <button class="btn btn-ghost btn-sm" :disabled="loading" @click="reloadPack">换一组题</button>
+            <div class="health-card-actions">
+              <button
+                v-if="!showResultPanel && result"
+                class="btn btn-ghost btn-sm"
+                type="button"
+                @click="submitted = true"
+              >
+                查看上次结果
+              </button>
+              <button
+                v-if="showResultPanel"
+                class="btn btn-ghost btn-sm"
+                type="button"
+                :disabled="loading"
+                @click="restartAssessment"
+              >
+                开始新一轮体检
+              </button>
+              <button
+                v-else
+                class="btn btn-ghost btn-sm"
+                type="button"
+                :disabled="loading"
+                @click="reloadPack"
+              >
+                换一组题
+              </button>
+            </div>
           </div>
           <div v-if="!showResultPanel && currentItem" class="health-question-wrap">
             <div class="progress-track">
@@ -272,6 +299,7 @@ import { useUserStore } from '@/stores/user'
 import { relationshipTypeLabel } from '@/utils/displayText'
 import { resolveExperienceMode } from '@/utils/experienceMode'
 import { createRefreshAttemptGuard } from '@/utils/refreshGuards'
+import { formatBeijingShortDate } from '@/utils/datetime'
 
 const SOLO_SCOPE_ID = 'solo-self-check'
 
@@ -286,6 +314,7 @@ const trend = ref({ trend_points: [] })
 const answers = ref({})
 const currentIndex = ref(0)
 const submitted = ref(false)
+const packVariant = ref(0)
 const selectedScopeId = ref(SOLO_SCOPE_ID)
 const scopeConfirmed = ref(false)
 const assessmentPackGuard = createRefreshAttemptGuard({ maxAttempts: 2, windowMs: 60 * 1000 })
@@ -312,6 +341,9 @@ const selectedScopeSummary = computed(() => {
 const scopeActionLabel = computed(() => {
   if (experienceMode.value.isDemoMode) {
     return isSoloScope.value ? '查看自我回看样例' : '查看关系体检样例'
+  }
+  if (showResultPanel.value) {
+    return isSoloScope.value ? '重新自我回看' : '开始新一轮体检'
   }
   return isSoloScope.value ? '开始自我回看' : '开始这段关系的体检'
 })
@@ -408,6 +440,10 @@ const healthRadarAxes = computed(() => {
 const healthRadarPolygon = computed(() => healthRadarAxes.value.map((axis) => `${axis.valueX},${axis.valueY}`).join(' '))
 
 const healthRadarAverage = computed(() => {
+  const reported = result.value?.total_score
+  if (reported !== null && reported !== undefined && Number.isFinite(Number(reported))) {
+    return Math.round(Number(reported))
+  }
   const axes = healthRadarAxes.value
   if (!axes.length) return 0
   return Math.round(axes.reduce((sum, axis) => sum + Number(axis.value || 0), 0) / axes.length)
@@ -454,7 +490,7 @@ const healthTrendSummary = computed(() => {
 const healthTrendNote = computed(() => {
   const lowest = healthRadarLowest.value
   if (!lowest?.label || lowest.label === '--') return '这条线会随着每次体检更新。'
-  return `先看最低项「${lowest.label}」，再决定今天补哪一步。`
+  return `先看最低项“${lowest.label}”，再决定今天补哪一步。`
 })
 
 function radarLabelPosition(angle, distance) {
@@ -503,6 +539,7 @@ onMounted(() => {
   if (availablePairs.value.some((pair) => pair.id === userStore.activePairId)) {
     selectedScopeId.value = userStore.activePairId
   }
+  void loadAssessment({ autoRestoreResult: true })
 })
 
 function currentPairId() {
@@ -524,10 +561,14 @@ function pairPartnerName(pair) {
     || '对方'
 }
 
-function selectScope(scopeId) {
-  if (selectedScopeId.value === scopeId && !scopeConfirmed.value) return
+async function selectScope(scopeId) {
+  if (selectedScopeId.value === scopeId && scopeConfirmed.value) return
   selectedScopeId.value = scopeId
-  scopeConfirmed.value = false
+  packVariant.value = 0
+  if (scopeId !== SOLO_SCOPE_ID && selectedPair.value) {
+    await userStore.switchPair(selectedPair.value.id)
+  }
+  await loadAssessment({ autoRestoreResult: true })
 }
 
 async function confirmSelectedScope() {
@@ -540,7 +581,7 @@ async function confirmSelectedScope() {
     await userStore.switchPair(selectedPair.value.id)
   }
   scopeConfirmed.value = true
-  await loadAssessment()
+  await loadAssessment({ autoRestoreResult: false })
 }
 
 function selectedOptionId(itemId) {
@@ -560,10 +601,7 @@ function selectAnswer(item, option) {
 }
 
 function formatDate(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return `${date.getMonth() + 1}月${date.getDate()}日`
+  return formatBeijingShortDate(value)
 }
 
 function suggestionForDimension(dimensionId) {
@@ -585,14 +623,37 @@ function suggestionForDimension(dimensionId) {
   return map[String(dimensionId || '')] || '先从最轻的一步开始，把关系节奏接回来。'
 }
 
-async function loadAssessment() {
+function rotateDemoPack(basePack, variant) {
+  const items = Array.isArray(basePack?.items) ? [...basePack.items] : []
+  const core = items.filter((item) => item.track === 'core')
+  const rotation = items.filter((item) => item.track !== 'core')
+  if (rotation.length > 1 && variant > 0) {
+    const shift = variant % rotation.length
+    const rotated = [...rotation.slice(shift), ...rotation.slice(0, shift)]
+    return { ...basePack, items: [...core, ...rotated] }
+  }
+  return basePack
+}
+
+async function loadAssessment({ rotate = false, autoRestoreResult = false } = {}) {
+  const previousRotationIds = rotate
+    ? questions.value
+      .filter((item) => item.track === 'rotation')
+      .map((item) => item.item_id)
+      .filter(Boolean)
+    : []
+  if (rotate) {
+    packVariant.value += 1
+  }
+  scopeConfirmed.value = true
   loading.value = true
   submitted.value = false
   currentIndex.value = 0
   answers.value = {}
   try {
     if (experienceMode.value.isDemoMode) {
-      pack.value = buildDemoAssessmentPack(isSoloScope.value ? 'solo' : selectedPair.value)
+      const demoPack = buildDemoAssessmentPack(isSoloScope.value ? 'solo' : selectedPair.value)
+      pack.value = rotateDemoPack(demoPack, packVariant.value)
       latest.value = {
         ...cloneDemo(demoFixture.assessmentLatest),
         scope: isSoloScope.value ? 'solo' : 'pair',
@@ -607,12 +668,17 @@ async function loadAssessment() {
           scope: isSoloScope.value ? 'solo' : point.scope,
         })),
       }
+      submitted.value = Boolean(autoRestoreResult && !rotate && latest.value)
+      if (rotate) showToast('已换一组新题')
       return
     }
 
     const pairId = currentPairId()
     const [packRes, latestRes, trendRes] = await Promise.allSettled([
-      api.getWeeklyAssessmentPack(pairId),
+      api.getWeeklyAssessmentPack(pairId, {
+        excludeItemIds: previousRotationIds,
+        variant: packVariant.value,
+      }),
       api.getLatestWeeklyAssessment(pairId),
       api.getWeeklyAssessmentTrend(pairId),
     ])
@@ -620,6 +686,10 @@ async function loadAssessment() {
     pack.value = packRes.status === 'fulfilled' ? packRes.value : { items: [] }
     latest.value = latestRes.status === 'fulfilled' ? latestRes.value : null
     trend.value = trendRes.status === 'fulfilled' ? trendRes.value : { trend_points: [] }
+    submitted.value = Boolean(autoRestoreResult && !rotate && latest.value)
+    if (rotate && packRes.status === 'fulfilled') {
+      showToast('已换一组新题')
+    }
   } catch (e) {
     showToast(e.message || '体检题目没加载出来，请稍后再试')
   } finally {
@@ -637,15 +707,32 @@ async function submitAssessment() {
     }
 
     if (experienceMode.value.isDemoMode) {
+      const dimBuckets = new Map()
+      for (const item of payload.answers) {
+        const key = String(item?.dim || 'vitality')
+        const list = dimBuckets.get(key) || []
+        list.push(Number(item?.score || 0))
+        dimBuckets.set(key, list)
+      }
+      const demoDimensions = cloneDemo(demoFixture.assessmentLatest.dimension_scores).map((dimension) => {
+        const scores = dimBuckets.get(dimension.id) || []
+        const score = scores.length ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length) : dimension.score
+        const status = score >= 75 ? 'strong' : score >= 50 ? 'watch' : 'fragile'
+        return { ...dimension, score, status }
+      })
+      const scoredDims = demoDimensions.filter((item) => Number.isFinite(Number(item.score)))
+      const balancedTotal = scoredDims.length
+        ? Math.round(scoredDims.reduce((sum, item) => sum + Number(item.score), 0) / scoredDims.length)
+        : Math.round(payload.answers.reduce((sum, item) => sum + Number(item.score || 0), 0) / payload.answers.length)
       latest.value = {
         event_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
         submitted_at: new Date().toISOString(),
-        total_score: Math.round(payload.answers.reduce((sum, item) => sum + Number(item.score || 0), 0) / payload.answers.length),
+        total_score: balancedTotal,
         scope: isSoloScope.value ? 'solo' : 'pair',
         change_summary: isSoloScope.value
           ? '这次更像一次自我整理，先盯住最低的一两维，不用急着一次改很多。'
           : '比上一轮顺一点，继续按现在的节奏来。',
-        dimension_scores: cloneDemo(demoFixture.assessmentLatest.dimension_scores),
+        dimension_scores: demoDimensions,
       }
       trend.value = {
         ...cloneDemo(demoFixture.assessmentTrend),
@@ -676,14 +763,14 @@ async function submitAssessment() {
 }
 
 function restartAssessment() {
-  requestAssessmentReload()
+  requestAssessmentReload({ rotate: true })
 }
 
 function reloadPack() {
-  requestAssessmentReload()
+  requestAssessmentReload({ rotate: true })
 }
 
-function requestAssessmentReload() {
+function requestAssessmentReload({ rotate = false } = {}) {
   if (loading.value) return
   const remainingSeconds = assessmentPackGuard.getRemainingSeconds()
   if (remainingSeconds > 0) {
@@ -691,7 +778,7 @@ function requestAssessmentReload() {
     return
   }
   assessmentPackGuard.markRun()
-  loadAssessment()
+  loadAssessment({ rotate })
 }
 </script>
 
@@ -1179,6 +1266,13 @@ function requestAssessmentReload() {
 .health-trend-item strong {
   color: var(--seal-deep);
   font-family: var(--font-serif);
+}
+
+.health-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 900px) {

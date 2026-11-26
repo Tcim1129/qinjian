@@ -148,6 +148,9 @@ export function createBackendRealtimeAsr(options) {
   function cleanupAudio() {
     if (state.processorNode) {
       state.processorNode.onaudioprocess = null
+      if (state.processorNode.port) {
+        state.processorNode.port.onmessage = null
+      }
       state.processorNode.disconnect()
       state.processorNode = null
     }
@@ -230,65 +233,160 @@ export function createBackendRealtimeAsr(options) {
   }
 
   async function start() {
+    if (state.disposed) return false
     assertSecureVoiceContext()
     if (!navigator.mediaDevices?.getUserMedia || !(window.AudioContext || window.webkitAudioContext) || !window.WebSocket) {
       throw new Error('当前浏览器不支持实时语音')
     }
 
-    const socketUrl = await options.getSocketUrl()
+    let socketUrl
+    try {
+      socketUrl = await options.getSocketUrl()
+    } catch (error) {
+      if (state.disposed) return false
+      throw error
+    }
+    if (state.disposed) return false
+
     const maxDurationSeconds = resolveRealtimeMaxDurationSeconds(options.maxDurationSeconds)
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    })
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext
-    const audioContext = new AudioContextCtor()
-    await audioContext.resume?.()
-    const sourceNode = audioContext.createMediaStreamSource(stream)
-    const processorNode = audioContext.createScriptProcessor(4096, 1, 1)
-    const sinkNode = audioContext.createGain()
-    sinkNode.gain.value = 0
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      })
+    } catch (error) {
+      if (state.disposed) return false
+      throw error
+    }
+    if (state.disposed) {
+      stream.getTracks().forEach((track) => track.stop())
+      return false
+    }
 
-    const socket = new WebSocket(socketUrl)
-    Object.assign(state, {
-      socket,
-      stream,
-      audioContext,
-      sourceNode,
-      processorNode,
-      sinkNode,
-      active: false,
-      stopping: false,
-      finalDelivered: false,
-      disposed: false,
-      timerId: null,
-      stopTimerId: null,
-      startedAt: null,
-      rawPcmChunks: [],
-      lastPartialText: '',
-    })
+    let audioContext = null
+    let sourceNode = null
+    let processorNode = null
+    let sinkNode = null
+    let socket = null
+    const abortStart = () => {
+      if (processorNode) {
+        processorNode.onaudioprocess = null
+        if (processorNode.port) processorNode.port.onmessage = null
+        try { processorNode.disconnect() } catch { /* ignore */ }
+      }
+      if (sourceNode) {
+        try { sourceNode.disconnect() } catch { /* ignore */ }
+      }
+      if (sinkNode) {
+        try { sinkNode.disconnect() } catch { /* ignore */ }
+      }
+      stream.getTracks().forEach((track) => track.stop())
+      audioContext?.close?.().catch(() => null)
+    }
+    try {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext
+      audioContext = new AudioContextCtor()
+      await audioContext.resume?.()
+      if (state.disposed) {
+        abortStart()
+        return false
+      }
+      sourceNode = audioContext.createMediaStreamSource(stream)
+      sinkNode = audioContext.createGain()
+      sinkNode.gain.value = 0
 
-    sourceNode.connect(processorNode)
-    processorNode.connect(sinkNode)
-    sinkNode.connect(audioContext.destination)
+      function handleAudioSamples(samples) {
+        if (state.disposed || !state.active || state.stopping || state.socket?.readyState !== WebSocket.OPEN) return
+        const downsampled = downsampleFloat32Buffer(samples, audioContext.sampleRate, 16000)
+        const pcmBytes = float32ToPCM16Bytes(downsampled)
+        if (options.captureRawAudio) state.rawPcmChunks.push(pcmBytes)
+        const audio = uint8ArrayToBase64(pcmBytes)
+        if (audio) state.socket.send(JSON.stringify({ type: 'audio.chunk', audio }))
+      }
 
-    processorNode.onaudioprocess = (event) => {
-      if (!state.active || state.stopping || state.socket?.readyState !== WebSocket.OPEN) return
-      const samples = event.inputBuffer.getChannelData(0)
-      const downsampled = downsampleFloat32Buffer(samples, audioContext.sampleRate, 16000)
-      const pcmBytes = float32ToPCM16Bytes(downsampled)
-      if (options.captureRawAudio) state.rawPcmChunks.push(pcmBytes)
-      const audio = uint8ArrayToBase64(pcmBytes)
-      if (audio) state.socket.send(JSON.stringify({ type: 'audio.chunk', audio }))
+      if (audioContext.audioWorklet && typeof window.AudioWorkletNode === 'function') {
+        try {
+          await audioContext.audioWorklet.addModule('/pcm-capture-worklet.js')
+          if (state.disposed) {
+            abortStart()
+            return false
+          }
+          const workletNode = new window.AudioWorkletNode(audioContext, 'qinjian-pcm-capture')
+          workletNode.port.onmessage = (event) => {
+            if (event?.data) handleAudioSamples(event.data)
+          }
+          processorNode = workletNode
+        } catch {
+          if (state.disposed) {
+            abortStart()
+            return false
+          }
+          processorNode = null
+        }
+      }
+
+      if (!processorNode && typeof audioContext.createScriptProcessor === 'function') {
+        const scriptNode = audioContext.createScriptProcessor(4096, 1, 1)
+        scriptNode.onaudioprocess = (event) => {
+          handleAudioSamples(event.inputBuffer.getChannelData(0))
+        }
+        processorNode = scriptNode
+      }
+
+      if (!processorNode) {
+        throw new Error('当前浏览器不支持录音处理节点')
+      }
+
+      if (state.disposed) {
+        abortStart()
+        return false
+      }
+
+      socket = new WebSocket(socketUrl)
+      Object.assign(state, {
+        socket,
+        stream,
+        audioContext,
+        sourceNode,
+        processorNode,
+        sinkNode,
+        active: false,
+        stopping: false,
+        finalDelivered: false,
+        timerId: null,
+        stopTimerId: null,
+        startedAt: null,
+        rawPcmChunks: [],
+        lastPartialText: '',
+      })
+
+      sourceNode.connect(processorNode)
+      processorNode.connect(sinkNode)
+      sinkNode.connect(audioContext.destination)
+    } catch (error) {
+      abortStart()
+      const wasDisposed = state.disposed
+      cleanup()
+      if (wasDisposed) return false
+      throw error
     }
 
     socket.addEventListener('open', () => {
+      if (state.disposed) {
+        try {
+          socket.close()
+        } catch {
+          // ignore close errors
+        }
+        return
+      }
       state.active = true
       state.startedAt = Date.now()
       options.onActive?.()
       options.onStatus?.('麦克风已开启，正在听你说。')
       options.onTick?.({ remainingSeconds: maxDurationSeconds, elapsedSeconds: 0 })
       state.timerId = window.setInterval(() => {
-        if (!state.active || state.stopping || !state.startedAt) return
+        if (state.disposed || !state.active || state.stopping || !state.startedAt) return
         const elapsedSeconds = Math.floor((Date.now() - state.startedAt) / 1000)
         const remainingSeconds = Math.max(0, maxDurationSeconds - elapsedSeconds)
         options.onTick?.({ remainingSeconds, elapsedSeconds })
@@ -351,9 +449,11 @@ export function createBackendRealtimeAsr(options) {
       cleanup()
       options.onError?.('语音连接失败')
     })
+    return true
   }
 
   function stop({ discard = false } = {}) {
+    if (state.disposed) return false
     state.stopping = true
     cleanupAudio()
     if (discard) {
@@ -387,6 +487,7 @@ export function startBrowserSpeech(options = {}) {
   recognition.interimResults = true
 
   recognition.onstart = () => {
+    if (discarded) return
     options.onActive?.()
     options.onStatus?.(options.reason ? `已切到浏览器转写：${options.reason}` : '浏览器语音识别已开启，正在听你说。')
   }
@@ -443,6 +544,7 @@ export function startBrowserSpeech(options = {}) {
       discarded = true
       stopping = true
       clearStopTimer()
+      recognition.onstart = null
       recognition.onend = null
       recognition.onresult = null
       recognition.onerror = null

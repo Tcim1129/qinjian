@@ -1,6 +1,6 @@
 <template>
   <dialog ref="dialog" class="task-result-dialog" aria-labelledby="task-result-title" @cancel.prevent="close" @click="backdrop">
-    <form @submit.prevent="save(false)">
+    <form class="task-result-panel" @submit.prevent="save(false)">
       <div class="task-result-head"><h3 id="task-result-title">这件事做得怎么样？</h3><button class="btn btn-ghost btn-sm" type="button" :disabled="saving" @click="close">关闭</button></div>
       <p>{{ task.title }}</p>
       <div class="task-result-options" role="group" aria-label="完成状态">
@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { inject, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/api'
 import { demoScheduleCache, feedbackOutcomes, buildTaskResultFeedback, buildTaskResultContext, scheduleDate } from '@/utils/taskSchedule'
@@ -31,6 +31,7 @@ import { saveSoloTaskResultEntry } from '@/utils/soloWorkspace'
 const props = defineProps({ task: { type: Object, required: true }, pairId: { default: null }, date: { type: String, default: () => scheduleDate('today') } })
 const emit = defineEmits(['close', 'saved', 'analyze'])
 const userStore = useUserStore()
+const showToast = inject('showToast', () => {})
 const dialog = ref(null)
 const status = ref(props.task.status === 'completed' ? 'completed' : 'pending')
 const note = ref(props.task.feedback?.note || '')
@@ -67,6 +68,7 @@ async function save(analyze) {
       if (!current()) return
       updated = result.task
     }
+    showToast(completed ? '已记为已完成' : '结果已保存')
     emit('saved', updated)
     if (analyze) emit('analyze', buildTaskResultContext(updated, { date: props.date, pairId: props.pairId }))
     emit('close')
@@ -80,11 +82,12 @@ onBeforeUnmount(() => { disposed = true; dialog.value?.close(); previousFocus?.f
 </script>
 
 <style scoped>
-.task-result-dialog { width: min(460px, calc(100vw - 28px)); margin: auto; padding: 22px; max-height: 85dvh; overflow: auto; color: var(--ink-soft); background: var(--paper-soft, #fffaf4); border: 1px solid var(--border-strong); border-radius: 18px; }
+.task-result-dialog { width: min(460px, calc(100vw - 28px)); margin: auto; padding: 0; max-height: 85dvh; overflow: auto; color: var(--ink-soft); background: var(--paper-soft, #fffaf4); border: 1px solid var(--border-strong); border-radius: 18px; }
 .task-result-dialog::backdrop { background: #30271f66; }
-form { display: grid; gap: 16px; }
+.task-result-panel { display: grid; gap: 16px; padding: 22px; }
 .task-result-head, .task-result-options, .task-result-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .task-result-head { justify-content: space-between; }
+.task-result-actions { position: sticky; bottom: 0; padding-top: 10px; background: var(--paper-soft, #fffaf4); }
 h3 { font-size: 18px; }
 .task-result-effect { margin: 0; padding: 0; border: 0; min-width: 0; }
 .task-result-effect legend { margin-bottom: 8px; font-size: 14px; }

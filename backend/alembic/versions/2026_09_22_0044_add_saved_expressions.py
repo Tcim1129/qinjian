@@ -5,6 +5,8 @@ Revises: 0043
 Create Date: 2026-09-21 00:00:00.000000
 
 """
+from typing import Union
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql

@@ -10,6 +10,28 @@ from typing import Any, Callable, Awaitable
 
 logger = logging.getLogger(__name__)
 
+SKILL_OUTPUT_FIELDS = {
+    'expression_clarify': {'people': list, 'events': list, 'user_emotion': str, 'core_need': str},
+    'stance_analysis': {'stances': list, 'common_ground': str, 'core_tension': str, 'power_dynamic': str},
+    'conflict_detect': {'has_conflict': bool, 'conflict_type': str, 'severity': str, 'severity_reason': str,
+                        'core_contradiction': str, 'escalation_risk': str, 'misunderstandings': list, 'priority_issue': str},
+    'action_plan': {'proposals': list, 'suggestion': str, 'timing': str},
+    'draft_message': {'drafts': list, 'opening_line': str, 'tone_guide': str, 'avoid': list, 'best_channel': str},
+    'review': {'event_summary': str, 'what_worked': list, 'what_to_improve': list, 'lesson': str,
+               'pattern_noticed': str, 'next_attention': str},
+    'memory_write': {'memories': list},
+}
+
+SKILL_LIST_FIELDS = {
+    'expression_clarify': {'people': {'name': str, 'role': str, 'emotion': str},
+                           'events': {'description': str, 'time': str, 'importance': str}},
+    'stance_analysis': {'stances': {'person': str, 'position': str, 'underlying_need': str, 'worry': str, 'flexibility': str}},
+    'action_plan': {'proposals': {'id': str, 'title': str, 'description': str, 'approach': str,
+                                 'pros': list, 'cons': list, 'effort': str, 'recommended': bool}},
+    'draft_message': {'drafts': {'style': str, 'content': str}},
+    'memory_write': {'memories': {'type': str, 'subject': str, 'content': str, 'importance': int}},
+}
+
 
 @dataclass
 class SkillOutput:
@@ -30,6 +52,7 @@ class SkillDefinition:
     handler: Callable[..., Awaitable[dict[str, Any]]]
     depends_on: list[str] = field(default_factory=list)
     max_timeout: float = 20.0       # 单个 Skill 超时（秒）
+    required_fields: dict[str, type] = field(default_factory=dict)
 
 
 # 全局注册表
@@ -103,22 +126,41 @@ async def execute_skill(
     *,
     context: dict[str, Any],
     previous_results: dict[str, SkillOutput],
+    timeout: float | None = None,
 ) -> SkillOutput:
     """执行单个 Skill，包含超时保护。"""
     started = time.monotonic()
+    if timeout is None:
+        from app.services.privacy_audit import get_privacy_audit_context
+        deadline = get_privacy_audit_context().get('chat_deadline')
+        if deadline is not None:
+            timeout = max(0, deadline - started)
     try:
         result = await asyncio.wait_for(
             skill.handler(context=context, previous_results=previous_results),
-            timeout=skill.max_timeout,
+            timeout=max(0, timeout) if timeout is not None else skill.max_timeout,
         )
+        if not isinstance(result, dict) or not result or set(result) in ({'raw'}, {'raw_text'}):
+            return SkillOutput(skill_name=skill.name, success=False, error=f'{skill.label}未返回可用的分析结果',
+                               duration_ms=(time.monotonic() - started) * 1000)
+        required = skill.required_fields or SKILL_OUTPUT_FIELDS.get(skill.name, {})
+        for key, kind in required.items():
+            if not isinstance(result.get(key), kind):
+                raise ValueError(f'{skill.label}缺少或格式不正确的字段：{key}')
+        for key, fields in SKILL_LIST_FIELDS.get(skill.name, {}).items():
+            for item in result.get(key, []):
+                if not isinstance(item, dict) or any(type(item.get(field)) is not kind for field, kind in fields.items()):
+                    raise ValueError(f'{skill.label}列表内容格式不正确：{key}')
+        if skill.name in {'action_plan', 'draft_message'} and not result.get('proposals' if skill.name == 'action_plan' else 'drafts'):
+            raise ValueError(f'{skill.label}未返回可用内容')
         return SkillOutput(
             skill_name=skill.name,
             success=True,
-            data=result if isinstance(result, dict) else {"raw": result},
+            data=result,
             duration_ms=(time.monotonic() - started) * 1000,
         )
     except asyncio.TimeoutError:
-        logger.warning("Skill %s timed out after %.1fs", skill.name, skill.max_timeout)
+        logger.warning("Skill %s timed out after %.1fs", skill.name, timeout if timeout is not None else skill.max_timeout)
         return SkillOutput(
             skill_name=skill.name,
             success=False,

@@ -8,69 +8,133 @@
       aria-label="关系协作智能体演示画布"
       @keydown.esc="closeOpenSurfaces"
     >
-      <img
-        class="demo-artboard__image"
-        src="/competition/relationship-agent-concept-v3.png"
-        alt="关系协作智能体：真实场景库、对话推演、证据与推理、建议行动"
-      />
+      <div class="demo-artboard__stage">
+        <img
+          class="demo-artboard__image"
+          src="/agent/relationship-agent-concept-v3.png"
+          alt="关系协作智能体：真实场景库、对话推演、证据与推理、建议行动"
+        />
 
-      <div
-        v-if="demoState !== 'idle'"
-        class="demo-live-layer"
-        :data-state="demoState"
-      >
-        <svg class="demo-live-path" viewBox="0 0 1568 1003" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M360 500 C430 350 510 520 595 465 S760 515 840 460 S1010 520 1100 440" />
-          <circle cx="1100" cy="440" r="8" />
-        </svg>
-        <p class="sr-only" aria-live="polite">{{ liveStateTitle }}。{{ liveStateMessage }}</p>
+        <div
+          v-if="demoState !== 'idle'"
+          class="demo-live-layer"
+          :data-state="demoState"
+        >
+          <svg class="demo-live-path" viewBox="0 0 1568 1003" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M360 500 C430 350 510 520 595 465 S760 515 840 460 S1010 520 1100 440" />
+            <circle cx="1100" cy="440" r="8" />
+          </svg>
+          <p class="sr-only" aria-live="polite">{{ liveStateTitle }}。{{ liveStateMessage }}</p>
+        </div>
+
+        <div class="demo-hotspot-layer" aria-label="可操作元素">
+          <button
+            v-for="scenario in scenarios"
+            :key="scenario.id"
+            class="demo-hotspot demo-hotspot--scenario"
+            :style="scenario.hotspot"
+            type="button"
+            :aria-label="scenario.label"
+            @click="openScenario(scenario)"
+          >
+            <span class="sr-only">{{ scenario.label }}：{{ scenario.prompt }}</span>
+          </button>
+
+          <button
+            class="demo-hotspot demo-hotspot--why"
+            type="button"
+            aria-label="它为什么这样判断"
+            @click="toggleEvidence"
+          ></button>
+
+          <button
+            v-for="step in steps"
+            :key="step.id"
+            class="demo-hotspot demo-hotspot--step"
+            :style="step.hotspot"
+            type="button"
+            :aria-label="step.title"
+            @click="openEvidence(step)"
+          >
+            <span class="sr-only">{{ step.title }}：{{ step.detail }}</span>
+          </button>
+
+          <button
+            class="demo-hotspot demo-hotspot--confirm"
+            type="button"
+            aria-label="确认创建"
+            @click="openAction('confirm')"
+          ></button>
+          <button
+            class="demo-hotspot demo-hotspot--smaller"
+            type="button"
+            aria-label="换个更小的"
+            @click="openAction('smaller')"
+          ></button>
+        </div>
       </div>
 
-      <div class="demo-hotspot-layer" aria-label="可操作元素">
-        <button
-          v-for="scenario in scenarios"
-          :key="scenario.id"
-          class="demo-hotspot demo-hotspot--scenario"
-          :style="scenario.hotspot"
-          type="button"
-          :aria-label="scenario.label"
-          @click="openScenario(scenario)"
-        >
-          <span class="sr-only">{{ scenario.label }}：{{ scenario.prompt }}</span>
-        </button>
-
-        <button
-          class="demo-hotspot demo-hotspot--why"
-          type="button"
-          aria-label="它为什么这样判断"
-          @click="toggleEvidence"
-        ></button>
-
-        <button
-          v-for="step in steps"
-          :key="step.id"
-          class="demo-hotspot demo-hotspot--step"
-          :style="step.hotspot"
-          type="button"
-          :aria-label="step.title"
-          @click="openEvidence(step)"
-        >
-          <span class="sr-only">{{ step.title }}：{{ step.detail }}</span>
-        </button>
-
-        <button
-          class="demo-hotspot demo-hotspot--confirm"
-          type="button"
-          aria-label="确认创建"
-          @click="openAction('confirm')"
-        ></button>
-        <button
-          class="demo-hotspot demo-hotspot--smaller"
-          type="button"
-          aria-label="换个更小的"
-          @click="openAction('smaller')"
-        ></button>
-      </div>
+      <section class="demo-mobile-controls" aria-label="智能体快捷操作">
+        <div class="demo-mobile-group">
+          <span class="demo-mobile-group__label">场景入口</span>
+          <div class="demo-mobile-chips">
+            <button
+              v-for="scenario in scenarios"
+              :key="`mobile-${scenario.id}`"
+              type="button"
+              class="demo-mobile-chip"
+              :class="{ active: conversationOpen && activeScenario.id === scenario.id }"
+              @click="openScenario(scenario)"
+            >
+              {{ scenario.label }}
+            </button>
+          </div>
+        </div>
+        <div class="demo-mobile-group">
+          <span class="demo-mobile-group__label">推理与证据</span>
+          <div class="demo-mobile-chips">
+            <button
+              v-for="step in steps"
+              :key="`mobile-step-${step.id}`"
+              type="button"
+              class="demo-mobile-chip"
+              :class="{ active: evidenceOpen && activeStep.id === step.id }"
+              @click="openEvidence(step)"
+            >
+              {{ step.no }} {{ step.title }}
+            </button>
+            <button
+              type="button"
+              class="demo-mobile-chip"
+              :class="{ active: evidenceOpen }"
+              @click="toggleEvidence"
+            >
+              它为什么这样判断
+            </button>
+          </div>
+        </div>
+        <div class="demo-mobile-group">
+          <span class="demo-mobile-group__label">建议行动</span>
+          <div class="demo-mobile-chips">
+            <button
+              type="button"
+              class="demo-mobile-chip demo-mobile-chip--primary"
+              :class="{ active: actionOpen && actionType === 'confirm' }"
+              @click="openAction('confirm')"
+            >
+              确认创建
+            </button>
+            <button
+              type="button"
+              class="demo-mobile-chip"
+              :class="{ active: actionOpen && actionType === 'smaller' }"
+              @click="openAction('smaller')"
+            >
+              换个更小的
+            </button>
+          </div>
+        </div>
+      </section>
 
       <aside
         v-if="evidenceOpen"
@@ -118,6 +182,7 @@
 
       <section
         v-if="conversationOpen"
+        ref="conversationPanelRef"
         class="conversation-dialog conversation-workspace"
         role="dialog"
         aria-modal="false"
@@ -127,7 +192,7 @@
           <div><small>真实对话</small><strong>{{ activeScenario.label }}</strong></div>
           <button type="button" aria-label="关闭对话" @click="closeConversation">×</button>
         </header>
-        <ChatPage ref="chatPageRef" embedded />
+        <ChatPage ref="chatPageRef" :key="activeScenario.id" embedded isolated :scene-context="{ sourceLabel: '智能体总览', title: activeScenario.label, summary: activeScenario.prompt }" />
       </section>
     </section>
   </main>
@@ -214,6 +279,7 @@ const conversationOpen = ref(false)
 const actionType = ref('confirm')
 const demoState = ref('idle')
 const chatPageRef = ref(null)
+const conversationPanelRef = ref(null)
 
 const actionTitle = computed(() => actionType.value === 'smaller' ? '换个更小的行动' : '确认创建前，再看一眼')
 const actionDescription = computed(() => actionType.value === 'smaller'
@@ -240,7 +306,12 @@ function openScenario(scenario) {
 function openConversation() {
   closeOpenSurfaces()
   conversationOpen.value = true
-  nextTick(() => chatPageRef.value?.applySuggestedPrompt?.(activeScenario.value.prompt))
+  nextTick(() => {
+    chatPageRef.value?.applySuggestedPrompt?.(activeScenario.value.prompt, { preserveDraft: true })
+    if (window.matchMedia('(max-width: 1179px)').matches) {
+      conversationPanelRef.value?.scrollIntoView({ block: 'start', behavior: 'auto' })
+    }
+  })
 }
 
 function openEvidence(step = activeStep.value) {
@@ -307,6 +378,14 @@ function closeConversation() {
   aspect-ratio: 1568 / 1003;
   overflow: hidden;
   isolation: isolate;
+}
+.demo-artboard__stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.demo-mobile-controls {
+  display: none;
 }
 .demo-artboard__image {
   display: block;
@@ -449,7 +528,124 @@ function closeConversation() {
 }
 
 @media (max-width: 1179px) {
-  .demo-page { place-items: start; }
-  .demo-artboard { min-width: 1180px; }
+  .demo-page {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .demo-artboard {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    aspect-ratio: auto;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .demo-artboard__stage {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1568 / 1003;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid rgba(23, 59, 49, 0.16);
+    background: #faf7ee;
+  }
+
+  .demo-mobile-controls {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(23, 59, 49, 0.18);
+    border-radius: 14px;
+    background: #faf7ee;
+    color: #173b31;
+    font-family: "Noto Serif SC", "Songti SC", serif;
+  }
+
+  .demo-mobile-group {
+    display: grid;
+    gap: 6px;
+  }
+
+  .demo-mobile-group__label {
+    color: #64756e;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .demo-mobile-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .demo-mobile-chip {
+    padding: 8px 12px;
+    border: 1px solid rgba(23, 59, 49, 0.24);
+    border-radius: 10px;
+    background: rgba(255, 253, 247, 0.9);
+    color: #173b31;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.3;
+    cursor: pointer;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .demo-mobile-chip.active,
+  .demo-mobile-chip--primary {
+    border-color: #d96842;
+    background: #d96842;
+    color: #fff;
+  }
+
+  .interaction-panel--evidence,
+  .interaction-panel--action,
+  .conversation-dialog {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    border: 1px solid rgba(23, 59, 49, 0.22);
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(39, 45, 35, 0.06);
+  }
+
+  .interaction-panel--action {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 18px 40px 18px 16px;
+  }
+
+  .interaction-panel--evidence {
+    padding-right: 40px;
+  }
+
+  .interaction-panel--action > p {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .interaction-panel--action .interaction-panel__buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .conversation-dialog {
+    min-height: 440px;
+    max-height: 75dvh;
+  }
 }
 </style>

@@ -1,10 +1,22 @@
 <template>
   <div id="app-shell" :class="appShellClasses">
+    <div
+      v-if="routeLoading"
+      class="route-progress-bar"
+      role="progressbar"
+      aria-label="页面加载中"
+    ></div>
     <AppHeader v-if="showChrome" />
     <main class="app-main">
       <router-view v-slot="{ Component, route }">
         <transition name="page" mode="out-in">
-          <component :is="Component" :key="route.name" class="route-view" />
+          <component v-if="Component" :is="Component" :key="route.name" class="route-view" />
+          <div v-else key="route-skeleton" class="route-skeleton page-shell" role="status" aria-live="polite">
+            <div class="route-skeleton__bar route-skeleton__bar--title"></div>
+            <div class="route-skeleton__card"></div>
+            <div class="route-skeleton__card route-skeleton__card--short"></div>
+            <span class="route-skeleton__text">正在加载页面内容…</span>
+          </div>
         </transition>
       </router-view>
     </main>
@@ -17,7 +29,7 @@
 import { provide, ref, reactive, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { warmCoreRouteComponents } from '@/router'
+import { routeLoading, warmCoreRouteComponents } from '@/router'
 import AppHeader from '@/components/AppHeader.vue'
 import TabBar from '@/components/TabBar.vue'
 
@@ -55,7 +67,7 @@ function syncMobileViewport(event) {
 
 onMounted(() => {
   warmLoggedInRoutes()
-  mobileViewportQuery = window.matchMedia('(max-width: 767px)')
+  mobileViewportQuery = window.matchMedia('(max-width: 900px)')
   syncMobileViewport(mobileViewportQuery)
   if (typeof mobileViewportQuery.addEventListener === 'function') {
     mobileViewportQuery.addEventListener('change', syncMobileViewport)
@@ -100,14 +112,56 @@ watch(() => userStore.isLoggedIn, warmLoggedInRoutes, { flush: 'post' })
   min-height: calc(100vh - var(--header-height));
   min-height: calc(100dvh - var(--header-height));
 }
+.route-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1200;
+  background: linear-gradient(90deg, rgba(189, 75, 53, 0.2), var(--seal, #c65d40), rgba(189, 75, 53, 0.2));
+  background-size: 200% 100%;
+  animation: route-progress-slide 1.1s linear infinite;
+}
+.route-skeleton {
+  display: grid;
+  gap: 16px;
+  padding-top: 28px;
+  padding-bottom: 32px;
+}
+.route-skeleton__bar,
+.route-skeleton__card {
+  border-radius: 16px;
+  background: linear-gradient(90deg, rgba(242, 232, 221, 0.65) 25%, rgba(252, 247, 241, 0.92) 50%, rgba(242, 232, 221, 0.65) 75%);
+  background-size: 200% 100%;
+  animation: route-progress-slide 1.4s ease infinite;
+}
+.route-skeleton__bar--title {
+  width: 180px;
+  height: 28px;
+}
+.route-skeleton__card {
+  height: 150px;
+}
+.route-skeleton__card--short {
+  height: 96px;
+}
+.route-skeleton__text {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+@keyframes route-progress-slide {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
-@media (min-width: 768px) {
+@media (min-width: 901px) {
   #app-shell.has-tabbar .app-main {
     padding-bottom: 0;
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 900px) {
   #app-shell.has-tabbar .route-view {
     min-height: calc(100vh - var(--header-height) - var(--tabbar-height) - env(safe-area-inset-bottom, 0px));
     min-height: calc(100dvh - var(--header-height) - var(--tabbar-height) - env(safe-area-inset-bottom, 0px));

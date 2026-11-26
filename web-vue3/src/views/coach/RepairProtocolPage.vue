@@ -4,6 +4,7 @@
       <div>
         <p class="eyebrow">缓和建议</p>
         <h2>吵架之后怎么办</h2>
+        <p class="coach-lead">下方步骤结合近期状态自动整理；如果你正遇到具体分歧，也可以直接写下来获取针对性缓和话术。</p>
       </div>
       <div class="coach-head__actions">
         <button class="btn btn-ghost btn-sm" :disabled="loading" @click="handleLoadProtocol">{{ refreshButtonLabel }}</button>
@@ -11,6 +12,38 @@
         <button class="btn btn-primary btn-sm" @click="$router.push('/alignment')">{{ alignmentButtonLabel }}</button>
       </div>
     </div>
+
+    <section class="card custom-conflict-card">
+      <div class="custom-conflict-card__head">
+        <div>
+          <p class="eyebrow">自定义冲突场景</p>
+          <h3>描述刚才发生了什么</h3>
+        </div>
+      </div>
+      <label class="field">
+        <span class="sr-only">输入刚才发生的冲突或分歧经过</span>
+        <textarea
+          v-model="customScenario"
+          class="input input-textarea"
+          rows="3"
+          maxlength="400"
+          placeholder="例如：刚才因为周末安排没说拢各自沉默了，我现在有点委屈，但又怕直接开口会让气氛更僵。"
+        ></textarea>
+      </label>
+      <div class="coach-head__actions">
+        <button
+          class="btn btn-primary btn-sm"
+          type="button"
+          :disabled="!customScenario.trim()"
+          @click="openCustomScenarioAgent"
+        >
+          按这个场景给缓和建议
+        </button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="$router.push('/message-simulation')">
+          去发前看看试一句
+        </button>
+      </div>
+    </section>
 
     <section v-if="protocol" class="protocol-hero">
       <div class="protocol-badge">
@@ -28,7 +61,7 @@
         <p class="eyebrow">第 {{ step.sequence }} 步</p>
         <h3>{{ step.title }}</h3>
         <p>{{ step.action }}</p>
-        <button class="step-ask-btn" type="button" @click="openStepAgent(step)">问问具体怎么做 ↗</button>
+        <button class="step-ask-btn" type="button" @click="openStepAgent(step)">问问具体怎么做</button>
       </article>
     </section>
 
@@ -75,6 +108,7 @@ const showToast = inject('showToast', () => {})
 const protocol = ref(null)
 const loading = ref(false)
 const agentContext = ref(null)
+const customScenario = ref('')
 const protocolRefreshGuard = createRefreshAttemptGuard({ maxAttempts: 2, windowMs: 60 * 1000 })
 
 const experienceMode = computed(() =>
@@ -99,14 +133,16 @@ const levelLabel = computed(() => {
 
 onMounted(loadProtocol)
 
-async function loadProtocol() {
+async function loadProtocol({ announce = false } = {}) {
   loading.value = true
   try {
     if (experienceMode.value.isDemoMode) {
       protocol.value = cloneDemo(demoFixture.repairProtocol)
+      if (announce) showToast('样例缓和建议已刷新')
       return
     }
     protocol.value = await api.getRepairProtocol(experienceMode.value.activePairId || null)
+    if (announce) showToast('缓和建议已按最新状态重新整理')
   } catch (e) {
     protocol.value = null
     showToast(e.message || '缓和建议没整理出来，请稍后再试')
@@ -122,7 +158,7 @@ function handleLoadProtocol() {
     return
   }
   protocolRefreshGuard.markRun()
-  return loadProtocol()
+  return loadProtocol({ announce: true })
 }
 
 function openGeneralAgent() {
@@ -148,6 +184,25 @@ function openStepAgent(step) {
     intent: 'wording',
   }
 }
+
+function openCustomScenarioAgent() {
+  const scenarioText = customScenario.value.trim()
+  if (!scenarioText) {
+    showToast('先写一句刚才发生的具体分歧吧')
+    return
+  }
+  const baseSummary = protocol.value
+    ? `当前参考方案：${protocol.value.title}（${levelLabel.value}）\n用户描述的冲突经过：${scenarioText}`
+    : `用户描述的冲突经过：${scenarioText}`
+  agentContext.value = {
+    title: '按你的冲突场景给缓和建议',
+    sourceLabel: `自定义冲突场景${experienceMode.value.isDemoMode ? ' · 样例' : ''}`,
+    summary: baseSummary,
+    question: `针对我刚才写的情况：“${scenarioText}”，请给我一个三步缓和方案和一句可以直接开口的破冰话术。`,
+    pairId: experienceMode.value.activePairId,
+    intent: 'repair',
+  }
+}
 </script>
 
 <style scoped>
@@ -168,6 +223,37 @@ function openStepAgent(step) {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.coach-lead {
+  margin-top: 8px;
+  color: var(--ink-soft);
+  line-height: 1.65;
+  max-width: 640px;
+}
+
+.custom-conflict-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.custom-conflict-card h3 {
+  margin-top: 4px;
+  font-family: var(--font-serif);
+  font-size: 18px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .protocol-hero {

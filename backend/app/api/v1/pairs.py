@@ -250,8 +250,8 @@ async def _build_pair_response(
                 "partner_id": partner.id,
                 "partner_nickname": partner.nickname,
                 "partner_avatar": partner.wechat_avatar or partner.avatar_url,
-                "partner_email": partner.email,
-                "partner_phone": partner.phone,
+                "partner_email": None if pair.status == PairStatus.PENDING else partner.email,
+                "partner_phone": None if pair.status == PairStatus.PENDING else partner.phone,
                 "custom_partner_nickname": custom_nickname,
             }
         )
@@ -325,6 +325,9 @@ async def _notify_user(
     target_path: str | None = None,
     notification_type: str = "pair_change",
 ) -> None:
+    from app.services.notification_preferences import in_app_notification_enabled
+    if not await in_app_notification_enabled(db, user_id, notification_type):
+        return
     db.add(
         UserNotification(
             user_id=user_id,
@@ -361,6 +364,7 @@ async def _record_pair_request_event(
     actor: User | None,
     request: PairChangeRequest,
     extra_payload: dict | None = None,
+    idempotency_suffix: str | None = None,
 ) -> RelationshipEvent:
     payload = {
         "request_id": str(request.id),
@@ -393,7 +397,11 @@ async def _record_pair_request_event(
         entity_id=request.id,
         source="system",
         payload=payload,
-        idempotency_key=f"{event_type}:{request.id}",
+        idempotency_key=(
+            f"{event_type}:{request.id}:{idempotency_suffix}"
+            if idempotency_suffix
+            else f"{event_type}:{request.id}"
+        ),
     )
 
 
@@ -1242,7 +1250,7 @@ async def append_break_request_message(
     if str(change_request.approver_user_id) != str(user.id):
         raise HTTPException(status_code=403, detail="只有挽留方可以继续追加留言")
 
-    await _create_change_request_message(
+    msg_item = await _create_change_request_message(
         db,
         request_id=change_request.id,
         sender_user_id=user.id,
@@ -1268,6 +1276,7 @@ async def append_break_request_message(
         pair=pair,
         actor=user,
         request=change_request,
+        idempotency_suffix=str(msg_item.id),
     )
     return await _build_pair_bundle_response(
         db, pair=pair, me=user, request=change_request

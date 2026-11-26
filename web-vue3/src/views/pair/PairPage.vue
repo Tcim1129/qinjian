@@ -119,7 +119,8 @@
           <strong>{{ currentPairInviteCode }}</strong>
         </div>
         <div v-else class="pair-empty-state">
-          <strong>正在准备邀请码</strong>
+          <strong>{{ creating ? '正在生成邀请码…' : '还没有生成邀请码' }}</strong>
+          <p v-if="!creating" class="pair-empty-state__desc">点击下方按钮生成专属 10 位邀请码，发给对方即可建立关系。</p>
         </div>
 
         <div class="pair-entry-card__actions">
@@ -148,7 +149,7 @@
             :disabled="creating"
             @click="handleCreate"
           >
-            {{ creating ? '准备中...' : '重新创建邀请码' }}
+            {{ creating ? '生成中...' : '生成邀请码' }}
           </button>
           <button
             v-if="currentInvitePair?.id && currentInvitePendingRequest"

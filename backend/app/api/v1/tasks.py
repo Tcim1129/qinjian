@@ -141,12 +141,19 @@ async def _analyze_attachment_from_checkins(
     )
 
 
-def _serialize_pair_attachment_response(pair: Pair, user: User) -> dict:
+def _serialize_pair_attachment_response(
+    pair: Pair,
+    user: User,
+    *,
+    sample_counts: dict[str, int] | None = None,
+    analysis_status: str | None = None,
+    reason: str | None = None,
+) -> dict:
     is_user_a = str(user.id) == str(pair.user_a_id)
     my_type = pair.attachment_style_a if is_user_a else pair.attachment_style_b
     partner_type = pair.attachment_style_b if is_user_a else pair.attachment_style_a
 
-    return {
+    payload = {
         "scope": "pair",
         "pair_id": str(pair.id),
         "attachment_a": _attachment_item(pair.attachment_style_a),
@@ -157,6 +164,13 @@ def _serialize_pair_attachment_response(pair: Pair, user: User) -> dict:
             str(pair.attachment_analyzed_at) if pair.attachment_analyzed_at else None
         ),
     }
+    if sample_counts is not None:
+        payload["sample_counts"] = sample_counts
+    if analysis_status is not None:
+        payload["analysis_status"] = analysis_status
+    if reason is not None:
+        payload["reason"] = reason
+    return payload
 
 
 async def _get_latest_solo_attachment_event(
@@ -485,6 +499,17 @@ async def get_daily_tasks(
 
     system_tasks = [task for task in existing_tasks if _task_source(task) == "system"]
     if not system_tasks:
+        await db.execute(select(Pair.id).where(Pair.id == pair.id).with_for_update())
+        existing_tasks = (
+            await db.execute(
+                select(RelationshipTask).where(
+                    RelationshipTask.pair_id == pair.id,
+                    RelationshipTask.due_date == target_date,
+                )
+            )
+        ).scalars().all()
+        system_tasks = [task for task in existing_tasks if _task_source(task) == "system"]
+    if not system_tasks:
         try:
             pack = await generate_ai_task_pack(
                 db,
@@ -624,7 +649,9 @@ async def create_manual_task(
     db: AsyncSession = Depends(get_db),
 ):
     pair = await validate_pair_access(pair_id, user, db, require_active=True)
-    if pair.status != PairStatus.ACTIVE or not pair.user_b_id:
+    # 单人模式下只有自己：给自己建提醒不需要对方，只有涉及两个人的安排才要求配对完整。
+    solo_scope = str(req.target_scope or "self").strip().lower() == "self"
+    if pair.status != PairStatus.ACTIVE or (not pair.user_b_id and not solo_scope):
         raise HTTPException(status_code=400, detail="配对尚未完成")
 
     parent_task = None
@@ -1085,6 +1112,44 @@ async def save_task_result(
         return {'task': _task_to_dict(task, viewer=user, feedback=feedback)}
 
 
+async def _count_pair_visible_checkins(
+    db: AsyncSession,
+    pair: Pair,
+) -> dict[str, int]:
+    counts = {"a": 0, "b": 0}
+    for uid, side in [(pair.user_a_id, "a"), (pair.user_b_id, "b")]:
+        if not uid:
+            continue
+        result = await db.execute(
+            select(Checkin.id)
+            .where(
+                Checkin.pair_id == pair.id,
+                Checkin.user_id == uid,
+                Checkin.visibility_scope.in_(PARTNER_VISIBLE_SCOPES),
+            )
+            .limit(30)
+        )
+        counts[side] = len(result.scalars().all())
+    return counts
+
+
+def _build_pair_attachment_sample_counts(
+    pair: Pair,
+    user: User,
+    counts: dict[str, int],
+    *,
+    required: int,
+) -> dict[str, int]:
+    is_user_a = str(user.id) == str(pair.user_a_id)
+    my_count = counts["a"] if is_user_a else counts["b"]
+    partner_count = counts["b"] if is_user_a else counts["a"]
+    return {
+        "my": my_count,
+        "partner": partner_count,
+        "required": required,
+    }
+
+
 @router.get("/attachment/{pair_id}")
 async def get_attachment_analysis(
     pair_id: uuid.UUID,
@@ -1092,7 +1157,17 @@ async def get_attachment_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     pair = await validate_pair_access(pair_id, user, db, require_active=True)
-    return _serialize_pair_attachment_response(pair, user)
+    relaxed_test_account = is_relaxed_test_account(user)
+    required = 0 if relaxed_test_account else ATTACHMENT_ANALYSIS_MIN_CHECKINS
+    counts = await _count_pair_visible_checkins(db, pair)
+    sample_counts = _build_pair_attachment_sample_counts(
+        pair, user, counts, required=required
+    )
+    return _serialize_pair_attachment_response(
+        pair,
+        user,
+        sample_counts=sample_counts,
+    )
 
 
 @router.get("/attachment")
@@ -1127,6 +1202,10 @@ async def trigger_attachment_analysis(
         bypass=relaxed_test_account,
     )
 
+    min_checkins = 0 if relaxed_test_account else ATTACHMENT_ANALYSIS_MIN_CHECKINS
+    counts = {"a": 0, "b": 0}
+    analyzed_sides: list[str] = []
+
     for uid, side in [(pair.user_a_id, "a"), (pair.user_b_id, "b")]:
         result = await db.execute(
             select(Checkin)
@@ -1140,23 +1219,67 @@ async def trigger_attachment_analysis(
             .limit(30)
         )
         checkins = result.scalars().all()
+        counts[side] = len(checkins)
         analysis = await _analyze_attachment_from_checkins(
             checkins,
-            min_checkins=0 if relaxed_test_account else ATTACHMENT_ANALYSIS_MIN_CHECKINS,
+            min_checkins=min_checkins,
         )
         if not analysis:
             continue
 
-        if side == "a":
-            pair.attachment_style_a = analysis.get("primary_type", "secure")
-        else:
-            pair.attachment_style_b = analysis.get("primary_type", "secure")
+        primary_type = str(analysis.get("primary_type") or "").strip() or "unknown"
+        if primary_type == "unknown":
+            continue
 
-    pair.attachment_analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        analyzed_sides.append(side)
+        if side == "a":
+            pair.attachment_style_a = primary_type
+        else:
+            pair.attachment_style_b = primary_type
+
+    if analyzed_sides:
+        pair.attachment_analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    sample_counts = _build_pair_attachment_sample_counts(
+        pair, user, counts, required=min_checkins
+    )
+    has_a = bool(pair.attachment_style_a and pair.attachment_style_a != "unknown")
+    has_b = bool(pair.attachment_style_b and pair.attachment_style_b != "unknown")
+    if has_a and has_b:
+        analysis_status = "completed"
+        message = "依恋类型分析完成"
+        reason = None
+    elif has_a or has_b:
+        analysis_status = "partial"
+        is_user_a = str(user.id) == str(pair.user_a_id)
+        missing_mine = (is_user_a and not has_a) or (not is_user_a and not has_b)
+        missing_who = "你的" if missing_mine else "对方的"
+        message = f"已完成其中一方的依恋倾向整理，{missing_who}共享记录仍不足 {min_checkins} 条"
+        reason = (
+            f"当前你已共享 {sample_counts['my']} 条、对方已共享 {sample_counts['partner']} 条，"
+            f"各方至少需要 {min_checkins} 条对伴侣可见的记录才能得出结论。"
+        )
+    else:
+        analysis_status = "insufficient_data"
+        if min_checkins > 0 and (counts["a"] < min_checkins or counts["b"] < min_checkins):
+            message = f"双方共享记录不足 {min_checkins} 条，暂时无法判断依恋倾向"
+            reason = (
+                f"当前你已共享 {sample_counts['my']} 条、对方已共享 {sample_counts['partner']} 条，"
+                f"双方各需要至少 {min_checkins} 条对伴侣可见的记录后才能分析。"
+            )
+        else:
+            message = "当前记录信息还不足以判断依恋倾向，建议多补充几条日常记录后再试"
+            reason = "现有记录中还缺少足够稳定的互动线索，因此暂时保持未分析状态。"
 
     return {
-        "message": "依恋类型分析完成",
-        **_serialize_pair_attachment_response(pair, user),
+        "message": message,
+        **_serialize_pair_attachment_response(
+            pair,
+            user,
+            sample_counts=sample_counts,
+            analysis_status=analysis_status,
+            reason=reason,
+        ),
     }
 
 

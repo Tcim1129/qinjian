@@ -26,6 +26,7 @@
           </div>
           <div class="stack-item__content">
             <strong>{{ tip.title || tip.content }}</strong>
+            <p v-if="tipDescription(tip)" class="community-tip-desc">{{ tipDescription(tip) }}</p>
           </div>
         </div>
       </div>
@@ -64,6 +65,7 @@
 </template>
 
 <script setup>
+import { formatBeijingMonthDayTime } from '@/utils/datetime'
 import { computed, ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -196,10 +198,15 @@ function handleLoadNotifications() {
   return loadNotifications()
 }
 
+function tipDescription(tip) {
+  const primary = String(tip?.title || tip?.content || '').trim()
+  const detail = String(tip?.description || tip?.content || '').trim()
+  if (!detail || detail === primary) return ''
+  return detail
+}
+
 function formatDate(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  return `${d.getMonth() + 1}-${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return formatBeijingMonthDayTime(v)
 }
 
 function openNotification(item) {
@@ -226,5 +233,11 @@ function openNotification(item) {
   margin-top: 10px;
   color: var(--ink-soft);
   line-height: 1.72;
+}
+.community-tip-desc {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.65;
 }
 </style>

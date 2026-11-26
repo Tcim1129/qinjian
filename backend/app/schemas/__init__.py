@@ -26,6 +26,7 @@ class RegisterRequest(RequestModel):
     email: str | None = Field(default=None, description="兼容旧版邮箱字段")
     nickname: str
     password: str
+    code: str | None = Field(default=None, max_length=16, description="已有手机号账号升级时的短信验证码")
 
 
 class LoginRequest(RequestModel):
@@ -177,7 +178,9 @@ class UserResponse(BaseModel):
     privacy_mode: Literal["cloud", "local_first"] = "cloud"
     preferred_entry: Literal["daily", "emergency", "reflection"] = "daily"
     preferred_language: Literal["zh", "en", "mixed"] = "zh"
-    tone_preference: Literal["gentle", "direct", "warm", "concise"] = "gentle"
+    tone_preference: Literal["gentle", "direct", "warm", "concise", "playful"] = "gentle"
+    pair_tone_preferences: dict[str, Literal["gentle", "direct", "warm", "concise", "playful"]] = Field(default_factory=dict)
+    expression_intensity: Literal["soft", "balanced", "sharp"] = "balanced"
     response_length: Literal["short", "medium", "long"] = "medium"
     habit_profile: HabitProfile = Field(default_factory=HabitProfile)
     relationship_space_theme: Literal["classic", "stardust", "engine"] = "classic"
@@ -215,7 +218,9 @@ class UserUpdateRequest(RequestModel):
     privacy_mode: Literal["cloud", "local_first"] | None = None
     preferred_entry: Literal["daily", "emergency", "reflection"] | None = None
     preferred_language: Literal["zh", "en", "mixed"] | None = None
-    tone_preference: Literal["gentle", "direct", "warm", "concise"] | None = None
+    tone_preference: Literal["gentle", "direct", "warm", "concise", "playful"] | None = None
+    pair_tone_preferences: dict[str, Literal["gentle", "direct", "warm", "concise", "playful"]] | None = None
+    expression_intensity: Literal["soft", "balanced", "sharp"] | None = None
     response_length: Literal["short", "medium", "long"] | None = None
     habit_profile: HabitProfile | None = None
     relationship_space_theme: Literal["classic", "stardust", "engine"] | None = None
@@ -419,6 +424,7 @@ class ClientContextPayload(RequestModel):
 class CheckinRequest(RequestModel):
     pair_id: uuid.UUID | None = None
     content: str
+    checkin_date: date | None = None
     mood_tags: list[str] | None = None
     image_url: str | None = None
     voice_url: str | None = None
@@ -1021,6 +1027,8 @@ class RelationshipTimelineEventDetailResponse(BaseModel):
 
 class MessageSimulationRequest(RequestModel):
     draft: str = Field(min_length=1, max_length=2000)
+    tone_preference: Literal["gentle", "direct", "warm", "concise", "playful"] | None = None
+    expression_intensity: Literal["soft", "balanced", "sharp"] | None = None
 
 
 class DecisionFeedbackRequest(RequestModel):
@@ -1036,7 +1044,15 @@ class MessageSimulationResponse(BaseModel):
     risk_level: str
     risk_level_label: str | None = None
     risk_reason: str
+    speaker_attribution: str | None = None
+    pressure_risk_level: str | None = None
+    pressure_risk_label: str | None = None
+    escalation_friction_level: str | None = None
+    escalation_friction_label: str | None = None
+    escalation_cues: list[str] = Field(default_factory=list)
     safer_rewrite: str
+    rewrite_blocked: bool = False
+    rewrite_block_reason: str | None = None
     suggested_tone: str
     conversation_goal: str | None = None
     do_list: list[str] = Field(default_factory=list)
@@ -1058,6 +1074,7 @@ class MessageSimulationResponse(BaseModel):
     limitation_note: str | None = None
     safety_handoff: str | None = None
     crisis_support: CrisisSupportResponse | None = None
+    stage_timings_ms: dict[str, int] | None = None
 
 
 class RepairProtocolStepResponse(BaseModel):
@@ -1680,6 +1697,8 @@ class AgentChatRequest(RequestModel):
     voice_evidence: VoiceEvidencePayload | None = None
     multi_agent: bool = False
     scene_context: AgentSceneContext | None = None
+    tone_preference: Literal["gentle", "direct", "warm", "concise", "playful"] | None = None
+    expression_intensity: Literal["soft", "balanced", "sharp"] | None = None
 
     @model_validator(mode="after")
     def _validate_message_content(self):
@@ -1770,6 +1789,10 @@ class MobileCheckinCreateRequest(MobileScopeRequest):
     content: str
     mood_score: int | None = None
     mood_tags: list[str] | None = None
+    interaction_freq: int | None = None
+    interaction_initiative: Literal["me", "partner", "equal"] | None = None
+    deep_conversation: bool | None = None
+    task_completed: bool | None = None
     image_url: str | None = None
     voice_url: str | None = None
     visibility_scope: Literal["private", "shared_summary"] | None = None
@@ -1810,6 +1833,18 @@ class MobileCheckinDetailResponse(BaseModel):
     locked_reason: str | None = None
     detail_version: str
     not_modified: bool = False
+    data_minimized: bool = True
+
+
+class MobileCheckinSharingPreviewRequest(RequestModel):
+    record_id: uuid.UUID
+
+
+class MobileCheckinSharingPreviewResponse(BaseModel):
+    record_id: uuid.UUID
+    title: str
+    summary: str
+    detail_version: str
     data_minimized: bool = True
 
 
@@ -2022,6 +2057,8 @@ class MobileRealtimeVoiceTicketResponse(BaseModel):
 
 
 class MobileTimelineRequest(MobileScopeRequest):
+    record_filter: Literal["all", "mine", "partner", "private"] = "all"
+    local_date: date | None = None
     limit: int = Field(default=20, ge=1, le=50)
     cursor: str | None = None
     known_page_version: str | None = None
@@ -2050,6 +2087,23 @@ class MobileTimelineResponse(BaseModel):
     items: list[MobileTimelineItemResponse] = Field(default_factory=list)
     next_cursor: str | None = None
     has_more: bool = False
+    data_minimized: bool = True
+
+
+class MobileCalendarMonthRequest(MobileScopeRequest):
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+class MobileCalendarDayResponse(BaseModel):
+    local_date: str
+    items: list[MobileTimelineItemResponse] = Field(default_factory=list)
+
+
+class MobileCalendarMonthResponse(BaseModel):
+    month: str
+    scope: Literal["solo", "relationship"]
+    relationship_space_id: uuid.UUID | None = None
+    days: list[MobileCalendarDayResponse] = Field(default_factory=list)
     data_minimized: bool = True
 
 
@@ -2225,6 +2279,8 @@ class MobileWeeklySummaryResponse(BaseModel):
 
 class MobileActionListRequest(MobileScopeRequest):
     status: Literal["pending", "completed", "skipped"] | None = None
+    due_from: date | None = None
+    due_through: date | None = None
 
 
 class MobileActionItemResponse(BaseModel):
@@ -2237,6 +2293,9 @@ class MobileActionItemResponse(BaseModel):
     status: Literal["pending", "completed", "skipped"] = "pending"
     due_date: date
     completed_at: datetime | None = None
+    outcome: Literal["done", "partial", "not_started", "reset"] | None = None
+    reason: str | None = None
+    state_version: str = ""
     deduplicated: bool = False
     data_minimized: bool = True
 
@@ -2244,6 +2303,17 @@ class MobileActionItemResponse(BaseModel):
 class MobileActionCompleteRequest(RequestModel):
     relationship_space_id: uuid.UUID
     action_id: uuid.UUID
+    expected_version: str | None = Field(default=None, max_length=64)
+    client_request_id: str | None = Field(default=None, max_length=96)
+
+
+class MobileActionResultRequest(RequestModel):
+    relationship_space_id: uuid.UUID
+    action_id: uuid.UUID
+    expected_version: str = Field(min_length=8, max_length=64)
+    outcome: Literal["done", "partial", "not_started", "reset"]
+    reason: str | None = Field(default=None, max_length=200)
+    client_request_id: str = Field(min_length=8, max_length=96)
 
 
 class MobileActionFeedbackRequest(RequestModel):
@@ -2649,3 +2719,9 @@ class MobileNarrativeAlignmentFeedbackResponse(BaseModel):
     deduplicated: bool = False
     submitted_at: datetime
     data_minimized: bool = True
+
+class StyleFeedbackRequest(BaseModel):
+    """用户对某条回复的一句话评价：只影响语气，不进人物画像。"""
+
+    verdict: Literal["like", "dislike"]
+    note: str | None = Field(default=None, max_length=80)

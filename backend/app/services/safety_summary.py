@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -138,9 +138,19 @@ def _build_evidence_summary(
                 f"最近自我照顾动作完成率约为 {round(float(task_rate) * 100)}%，用于判断当前节奏是否可持续。"
             )
 
-    trend = str(risk_summary.get("trend") or "").strip()
+    trend = str(risk_summary.get("trend") or "").strip().lower()
     if trend:
-        evidence.append(f"风险趋势当前显示为“{trend}”，系统会用它来决定是保持、减压还是转介。")
+        trend_label = {
+            "stable": "保持平稳",
+            "steady": "保持平稳",
+            "improving": "持续向好",
+            "declining": "需要留意",
+            "worsening": "波动偏大",
+            "rising": "风险上升",
+            "falling": "风险回落",
+            "unknown": "暂不明确",
+        }.get(trend, translate_inline_codes(trend))
+        evidence.append(f"风险趋势当前显示为“{trend_label}”，系统会用它来决定是保持、减压还是转介。")
 
     if active_plan:
         goal = (active_plan.goal_json or {}).get("primary_goal") or plan_type_label(active_plan.plan_type)
@@ -159,7 +169,12 @@ def _build_why_now(
 ) -> str:
     risk_level = _normalize_level(risk_level)
     risk_summary = (snapshot.risk_summary or {}) if snapshot else {}
-    trend = str(risk_summary.get("trend") or "").strip()
+    trend = str(risk_summary.get("trend") or "").strip().lower()
+    trend = {
+        "stable": "保持平稳", "steady": "保持平稳", "improving": "持续向好",
+        "declining": "需要留意", "worsening": "波动偏大", "rising": "风险上升",
+        "falling": "风险回落", "unknown": "暂不明确",
+    }.get(trend, translate_inline_codes(trend))
 
     if risk_level == "severe":
         return (
@@ -389,5 +404,5 @@ async def build_safety_status(
             risk_level=risk_level,
         ),
         "crisis_support": crisis_support,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }

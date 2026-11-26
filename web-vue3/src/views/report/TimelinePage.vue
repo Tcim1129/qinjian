@@ -56,6 +56,14 @@
           <span class="empty-day" aria-hidden="true">{{ selectedDateKey.slice(-2) }}</span>
           <strong>暂未找到当天记录</strong>
           <p v-if="loadError || archiveNextBefore">{{ loadError ? '部分记录加载失败，请刷新重试。' : '还有更早的记录未加载。' }}</p>
+          <button
+            v-if="canBackfillSelectedDate"
+            class="btn btn-secondary btn-sm"
+            type="button"
+            @click="openBackfillForDate"
+          >
+            补记这一天
+          </button>
         </div>
         <button v-if="selectedDayItems.length" class="day-agent-button" type="button" @click="openAgentForDay"><span>和 AI 聊聊这一天</span><span aria-hidden="true">↗</span></button>
       </article>
@@ -90,6 +98,8 @@ import { resolveExperienceMode } from '@/utils/experienceMode'
 import { buildPairQuery, resolveScopedPairId } from '@/utils/reportScopeSelection'
 import { createRefreshAttemptGuard } from '@/utils/refreshGuards'
 import { buildCalendarDays, buildDemoTimelineEvents, mergeTimelineItems, parseTimelineInstant, timelineBusinessDateKey, validDateKey } from '@/utils/timelineCalendar'
+import { buildTimelineDaySummary } from '@/utils/contextAgent'
+import { getCheckinDateBounds } from '@/utils/checkinForm'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,6 +147,13 @@ const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 const monthLabel = computed(() => { const [year, month] = displayedMonth.value.split('-'); return year + '年' + Number(month) + '月' })
 const selectedDateLabel = computed(() => formatDate(selectedDateKey.value))
 const selectedDayItems = computed(() => eventsByDate.value.get(selectedDateKey.value) || [])
+const canBackfillSelectedDate = computed(() => {
+  const bounds = getCheckinDateBounds(todayKey())
+  return Boolean(selectedDateKey.value) && selectedDateKey.value >= bounds.min && selectedDateKey.value <= bounds.max
+})
+function openBackfillForDate() {
+  router.push({ path: '/checkin', query: { date: selectedDateKey.value } })
+}
 const detailTitle = computed(() => detailItem.value?.title || detailItem.value?.summary || '记录详情')
 const detailDateLabel = computed(() => formatDate(timelineBusinessDateKey(detailItem.value)))
 const detailSummary = computed(() => detailData.value?.event_summary || detailItem.value?.summary || '')
@@ -174,9 +191,29 @@ async function onCalendarKey(event, key) {
   await nextTick()
   calendar?.querySelector('[aria-pressed="true"]')?.focus()
 }
+const RAW_TIMELINE_PLACEHOLDERS = new Set(['none', 'unknown', 'null', 'undefined'])
+
+function cleanTimelineText(value) {
+  const text = String(value || '').trim()
+  if (!text || RAW_TIMELINE_PLACEHOLDERS.has(text.toLowerCase())) return ''
+  return text
+}
+
 function normalizeEvent(event) {
   const payload = event.payload || {}
-  return { ...event, label: payload.event_label || event.label || '关系事件', summary: event.summary || payload.summary || '留下一条记录' }
+  const cleanedTags = Array.isArray(event.tags)
+    ? event.tags.map((item) => cleanTimelineText(item)).filter(Boolean)
+    : []
+  const cleanedLabel = cleanTimelineText(payload.event_label || event.label) || '关系事件'
+  const cleanedSummary = cleanTimelineText(event.summary || payload.summary) || '留下一条记录'
+  const cleanedDetail = cleanTimelineText(event.detail)
+  return {
+    ...event,
+    label: cleanedLabel,
+    summary: cleanedSummary,
+    detail: cleanedDetail,
+    tags: cleanedTags,
+  }
 }
 function selectInitialDate() {
   if (userSelectedDate || eventsByDate.value.has(selectedDateKey.value)) return
@@ -263,8 +300,8 @@ async function loadDetail() {
 function resetDetail() { detailVersion++; detailItem.value = null; detailData.value = null; detailError.value = ''; detailLoading.value = false }
 function closeDetail() { detailDialog.value?.close(); resetDetail(); returnFocus?.focus?.(); returnFocus = null }
 function openAgentForDay() {
-  const records = selectedDayItems.value.slice(0, 6).map(item => (item.title || item.summary) + (item.detail && item.detail !== item.summary ? '：' + item.detail : ''))
-  agentContext.value = { title: '聊聊这一天', sourceLabel: selectedDateLabel.value + (selectedDayItems.value.length > 6 ? ' · 节选 6 条' : '') + (experienceMode.value.isDemoMode ? ' · 样例' : ''), summary: records.join('\n'), question: '帮我看看这一天发生的事，接下来可以做些什么？先给一个简单的建议就好。', pairId: pairId.value }
+  const summary = buildTimelineDaySummary(selectedDayItems.value)
+  agentContext.value = { title: '聊聊这一天', sourceLabel: selectedDateLabel.value + (selectedDayItems.value.length > 6 ? ' · 节选 6 条' : '') + (experienceMode.value.isDemoMode ? ' · 样例' : ''), summary, question: '帮我看看这一天发生的事，接下来可以做些什么？先给一个简单的建议就好。', pairId: pairId.value }
 }
 function openAgentForDetail() {
   const context = { title: '聊聊这件事', sourceLabel: detailDateLabel.value + ' · ' + (detailItem.value?.label || '记录') + (experienceMode.value.isDemoMode ? ' · 样例' : ''), summary: [detailSummary.value, detailItem.value?.detail].filter(Boolean).filter((value, index, items) => items.indexOf(value) === index).join('\n'), question: '帮我理一理这件事，哪些地方还需要问清楚？', pairId: pairId.value }

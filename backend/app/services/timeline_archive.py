@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.time import current_local_date, local_date_cutoff_to_utc_naive
-from app.models import Checkin, Report, ReportStatus
+from app.models import Checkin, Report, ReportStatus, ReportType
 from app.services.behavior_judgement import summarize_text_emotion
 from app.services.upload_access import (
     is_local_upload_path,
@@ -278,9 +278,13 @@ def build_checkin_archive_insight(
     }
 
 
-def ensure_checkin_archive_fields(checkin: Checkin) -> dict[str, Any]:
+def ensure_checkin_archive_fields(
+    checkin: Checkin,
+    *,
+    refresh: bool = False,
+) -> dict[str, Any]:
     context = _safe_dict(checkin.client_context)
-    archive_insight = _safe_dict(context.get("archive_insight"))
+    archive_insight = {} if refresh else _safe_dict(context.get("archive_insight"))
     if not archive_insight:
         archive_insight = build_checkin_archive_insight(
             content=checkin.content,
@@ -290,13 +294,13 @@ def ensure_checkin_archive_fields(checkin: Checkin) -> dict[str, Any]:
     context["archive_insight"] = archive_insight
     checkin.client_context = context
 
-    if not _clean_text(checkin.archive_title):
+    if refresh or not _clean_text(checkin.archive_title):
         checkin.archive_title = str(archive_insight.get("title") or "留下一条今天的记录")
-    if not _clean_text(checkin.archive_summary):
+    if refresh or not _clean_text(checkin.archive_summary):
         checkin.archive_summary = str(
             archive_insight.get("summary") or "这天留下了一条记录。"
         )
-    if not isinstance(checkin.archive_tags, list) or not checkin.archive_tags:
+    if refresh or not isinstance(checkin.archive_tags, list) or not checkin.archive_tags:
         checkin.archive_tags = _safe_list(archive_insight.get("tags"))
     if (
         checkin.raw_retention_until is None
@@ -402,14 +406,17 @@ def serialize_archive_checkin_item(
     tags = _safe_list(checkin.archive_tags) or _safe_list(archive_insight.get("tags"))
 
     if not is_owner:
+        from app.services.checkin_visibility import build_partner_projection
+
+        projection = build_partner_projection(archive_insight)
         return {
             "id": checkin.id,
             "item_type": "partner_record_placeholder",
             "occurred_at": checkin.created_at,
             "local_date": local_date,
             "title": "对方在这天也留下了一条记录",
-            "summary": summary,
-            "tags": tags,
+            "summary": projection["summary"],
+            "tags": projection["tags"],
             "visibility": "shared_summary",
             "locked_reason": "原文和原媒体默认仅记录者本人可见。",
             "has_raw_content": False,
@@ -645,6 +652,7 @@ async def list_archive_checkins(
     *,
     pair_id: str | None,
     user_id: str | None,
+    actor_user_id: uuid.UUID | str | None = None,
     before_at: datetime | None = None,
     before_seen_ids: list[uuid.UUID] | None = None,
     date_from: date | None = None,
@@ -655,6 +663,9 @@ async def list_archive_checkins(
     stmt = select(Checkin)
     if pair_id:
         stmt = stmt.where(Checkin.pair_id == _as_uuid(pair_id))
+        shared = and_(Checkin.visibility_scope == "shared_summary", Checkin.raw_deleted_at.is_(None))
+        viewer_id = actor_user_id or user_id
+        stmt = stmt.where(or_(Checkin.user_id == _as_uuid(viewer_id), shared) if viewer_id else shared)
     else:
         stmt = stmt.where(
             Checkin.user_id == _as_uuid(user_id),
@@ -696,6 +707,7 @@ async def list_archive_reports(
     *,
     pair_id: str | None,
     user_id: str | None,
+    actor_user_id: uuid.UUID | str | None = None,
     before_at: datetime | None = None,
     before_seen_ids: list[uuid.UUID] | None = None,
     date_from: date | None = None,
@@ -706,6 +718,9 @@ async def list_archive_reports(
     stmt = select(Report).where(Report.status == ReportStatus.COMPLETED)
     if pair_id:
         stmt = stmt.where(Report.pair_id == _as_uuid(pair_id))
+        viewer_id = actor_user_id or user_id
+        shared = Report.type != ReportType.SOLO
+        stmt = stmt.where(or_(Report.user_id == _as_uuid(viewer_id), shared) if viewer_id else shared)
     else:
         stmt = stmt.where(
             Report.user_id == _as_uuid(user_id),

@@ -1,8 +1,10 @@
 """AI 模块 - 通用 OpenAI 兼容客户端"""
 
+import asyncio
 import json
 import time
-from openai import AsyncOpenAI
+from urllib.parse import urlparse
+from openai import APIConnectionError, AsyncOpenAI
 from app.ai.asr import ASRTranscriptionResult, transcribe_file
 from app.core.config import settings
 from app.models import User
@@ -61,6 +63,45 @@ client = AsyncOpenAI(
 )
 
 
+def _is_aliyun_chat_gateway() -> bool:
+    host = (urlparse(_resolve_base_url() or '').hostname or '').lower()
+    return host.endswith(('.maas.aliyuncs.com', '.dashscope.aliyuncs.com')) or host in {
+        'dashscope.aliyuncs.com', 'dashscope-intl.aliyuncs.com', 'dashscope-us.aliyuncs.com',
+    }
+
+
+def _interactive_fallback(model: str, exc: Exception) -> str | None:
+    transient = isinstance(exc, (APIConnectionError, TimeoutError)) or getattr(exc, 'status_code', None) in {408, 429, 500, 502, 503, 504}
+    if not transient:
+        return None
+    fallback = _resolve_fallback_model(model)
+    if not fallback and model == settings.AI_CHAT_PRIMARY_MODEL.strip():
+        fallback = settings.AI_TEXT_MODEL
+    if not fallback and _is_aliyun_chat_gateway() and model == 'qwen3.8-flash':
+        fallback = settings.AI_CHAT_ALIYUN_FALLBACK_MODEL.strip()
+    return fallback if fallback and fallback != model else None
+
+
+async def _request_completion(model, messages, temperature, kwargs, chat_deadline, request_timeout=None):
+    request = dict(kwargs)
+    if chat_deadline is None:
+        return await client.chat.completions.create(model=model, messages=messages, temperature=temperature, **request)
+
+    remaining = chat_deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError('chat response budget exhausted')
+    request_budget = settings.AI_CHAT_MODEL_TIMEOUT_SECONDS if request_timeout is None else request_timeout
+    budget = min(remaining, max(0.01, request_budget))
+    if _is_aliyun_chat_gateway() and model in {'qwen3.8-flash', 'qwen3.7-flash', 'deepseek-v4.1-flash'}:
+        extra_body = dict(request.get('extra_body') or {})
+        extra_body.setdefault('enable_thinking', not settings.AI_CHAT_ALIYUN_FAST_MODE)
+        request['extra_body'] = extra_body
+    # 这个上限覆盖连接、等待生成和整个 SDK 调用。备用模型也使用同一轮剩余时间。
+    interactive_client = client.with_options(max_retries=0) if client.max_retries else client
+    async with asyncio.timeout(budget):
+        return await interactive_client.chat.completions.create(model=model, messages=messages, temperature=temperature, **request)
+
+
 async def _release_read_only_transaction(db) -> None:
     """Avoid holding SQLite read locks while waiting on external AI calls."""
     if not db:
@@ -98,13 +139,19 @@ async def create_chat_completion(
     """统一聊天出口，便于挂载隐私沙盒与后续审计。
     model 传 "default" 时解析为当前的 AI_TEXT_MODEL。
     """
-    if not model or model == "default":
-        model = settings.AI_TEXT_MODEL
     audit_context = get_privacy_audit_context()
+    chat_deadline = audit_context.get('chat_deadline')
+    use_default_model = not model or model == "default"
+    if use_default_model:
+        model = settings.AI_TEXT_MODEL
+    if chat_deadline is not None and use_default_model and settings.AI_CHAT_PRIMARY_MODEL.strip():
+        model = settings.AI_CHAT_PRIMARY_MODEL.strip()
     privacy_mode = await _resolve_privacy_mode(audit_context)
     proxy_strategy = "redact_only"
     context_pack = kwargs.pop("context_pack", None)
     context_enabled = kwargs.pop("context_enabled", True)
+    context_mode = kwargs.pop('context_mode', 'full')
+    request_timeout = kwargs.pop('request_timeout_seconds', None)
     current_input = kwargs.pop("current_input", None)
     session_id = kwargs.pop("session_id", None)
     # 这些值仅供上下文和审计使用，不是 OpenAI 接口参数，发送请求前需要移除。
@@ -128,20 +175,22 @@ async def create_chat_completion(
                     session_id=session_id,
                     current_input=current_input,
                 )
-                await _release_read_only_transaction(db)
+                # 对话工具可能已经 flush 写入，不能在最终回复成功前提交它们。
+                if chat_deadline is None:
+                    await _release_read_only_transaction(db)
             except Exception:
                 context_pack = None
-    safe_messages = redact_message_payload(messages)
-    if context_pack:
-        safe_messages = [format_context_pack_message(context_pack), *safe_messages]
+    if context_pack and context_mode == 'safety_only':
+        context_pack = {key: context_pack[key] for key in ('scope', 'guidance_policy', 'crisis_support', 'risk') if key in context_pack}
+    outbound_messages = (
+        [format_context_pack_message(context_pack), *messages]
+        if context_pack
+        else messages
+    )
+    safe_messages = redact_message_payload(outbound_messages)
     started_at = time.perf_counter()
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=safe_messages,
-            temperature=temperature,
-            **kwargs,
-        )
+        response = await _request_completion(model, safe_messages, temperature, kwargs, chat_deadline, request_timeout)
     except Exception as exc:
         await _log_chat_call(
             audit_context,
@@ -156,18 +205,16 @@ async def create_chat_completion(
             proxy_strategy=proxy_strategy,
             proxy_metrics={},
         )
-        fallback_model = _resolve_fallback_model(model)
-        if not fallback_model or not _should_try_fallback(exc):
+        if chat_deadline is None:
+            fallback_model = _resolve_fallback_model(model) if _should_try_fallback(exc) else None
+        else:
+            fallback_model = _interactive_fallback(model, exc) if chat_deadline - time.monotonic() >= 1 else None
+        if not fallback_model:
             raise
 
         fallback_started_at = time.perf_counter()
         try:
-            response = await client.chat.completions.create(
-                model=fallback_model,
-                messages=safe_messages,
-                temperature=temperature,
-                **kwargs,
-            )
+            response = await _request_completion(fallback_model, safe_messages, temperature, kwargs, chat_deadline, request_timeout)
         except Exception as fallback_exc:
             await _log_chat_call(
                 audit_context,
@@ -273,8 +320,14 @@ async def analyze_sentiment(text: str) -> dict:
         {"role": "user", "content": text},
     ]
     result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
+    cleaned = str(result or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[-1]
+        if cleaned.endswith("```"):
+            cleaned = cleaned.rsplit("```", 1)[0]
+        cleaned = cleaned.strip()
     try:
-        return json.loads(result)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
         return {"sentiment": "neutral", "score": 5, "emotions": []}
 

@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # 应用
-    APP_NAME: str = "亲健（基于生成式 AI 的泛亲密关系智能感知与维系系统）"
+    APP_NAME: str = "亲健泛亲密关系智能感知与维系系统"
     APP_TIMEZONE: str = "Asia/Shanghai"
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8小时
     ENABLE_API_DOCS: bool = False
     ADDITIONAL_TRUSTED_HOSTS: str = ""
+    PHONE_VERIFICATION_ENABLED: bool = False
     PHONE_CODE_EXPIRE_MINUTES: int = 5
     PHONE_CODE_RESEND_COOLDOWN_SECONDS: int = 60
     PHONE_CODE_MAX_ATTEMPTS: int = 5
@@ -43,6 +44,11 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.deepseek.com"
     AI_TIMEOUT_SECONDS: int = 60
+    AI_CHAT_ALIYUN_FAST_MODE: bool = False
+    AI_CHAT_PRIMARY_MODEL: str = ""
+    AI_CHAT_MODEL_TIMEOUT_SECONDS: float = 24
+    AI_CHAT_ALIYUN_FALLBACK_MODEL: str = "deepseek-v4.1-flash"
+    AI_CHAT_COMPACT_ANALYSIS: bool = True
     AGENT_SESSION_TTL_HOURS: int = 12
     AGENT_CHAT_HISTORY_LIMIT: int = 8
     ASR_PROVIDER: str = "qwen3"
@@ -93,6 +99,10 @@ class Settings(BaseSettings):
     AI_TEXT_FALLBACK_MODEL: str = "deepseek-v4.1-flash"
     AI_MULTIMODAL_FALLBACK_MODEL: str = "qwen3.8-flash"
 
+    MEMORY_REMOVAL_RETENTION_DAYS: int = 30
+    MEMORY_REMOVAL_AUDIT_DAYS: int = 180
+    MEMORY_REMOVAL_CONFIRM_MINUTES: int = 10
+
     # 文件上传
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
@@ -107,11 +117,9 @@ class Settings(BaseSettings):
     model_config = {"env_file": (".env", ".env.local"), "extra": "ignore"}
 
     def frontend_origins(self) -> list[str]:
-        origins = {
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            (self.FRONTEND_ORIGIN or "").strip(),
-        }
+        origins = {(self.FRONTEND_ORIGIN or "").strip()}
+        if self.DEBUG:
+            origins.update({"http://localhost:3000", "http://127.0.0.1:3000"})
 
         raw_extra = (self.ADDITIONAL_FRONTEND_ORIGINS or "").replace(";", ",")
         for item in raw_extra.split(","):

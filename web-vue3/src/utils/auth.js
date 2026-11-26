@@ -48,6 +48,14 @@ export function isDemoToken(token = getAuthToken()) {
   return token === DEMO_TOKEN
 }
 
+export function shouldExpireSession({ status, requestUrl, requestToken, currentToken }) {
+  return status === 401
+    && !String(requestUrl || '').startsWith('/auth/')
+    && Boolean(currentToken)
+    && !isDemoToken(currentToken)
+    && requestToken === currentToken
+}
+
 export function canUsePasswordCredentialStore() {
   return typeof window !== 'undefined'
     && typeof navigator !== 'undefined'

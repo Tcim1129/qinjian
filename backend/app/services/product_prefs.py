@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from app.services.task_planner import normalize_task_planner_defaults
+from app.services.tone_preference import default_profile, read_profile
 
 
 PrivacyMode = Literal["cloud"]
@@ -16,6 +17,8 @@ DEFAULT_PRODUCT_PREFS: dict[str, object] = {
     "preferred_entry": "daily",
     "preferred_language": "zh",
     "tone_preference": "gentle",
+    "pair_tone_preferences": {},
+    "expression_intensity": "balanced",
     "response_length": "medium",
     "relationship_space_theme": "classic",
     "spiritual_support_enabled": False,
@@ -34,6 +37,7 @@ DEFAULT_PRODUCT_PREFS: dict[str, object] = {
         "comfort_preferences": [],
         "custom_notes": "",
     },
+    "tone_profile": default_profile(),
 }
 
 DEFAULT_SUGGESTED_TABOOS = (
@@ -67,7 +71,8 @@ DEFAULT_CHECKIN_MOOD_SET = frozenset(DEFAULT_CHECKIN_MOODS)
 VALID_PRIVACY_MODES = {"cloud"}
 VALID_PREFERRED_ENTRIES = {"daily", "emergency", "reflection"}
 VALID_PREFERRED_LANGUAGES = {"zh", "en", "mixed"}
-VALID_TONE_PREFERENCES = {"gentle", "direct", "warm", "concise"}
+VALID_TONE_PREFERENCES = {"gentle", "direct", "warm", "concise", "playful"}
+VALID_EXPRESSION_INTENSITIES = {"soft", "balanced", "sharp"}
 VALID_RESPONSE_LENGTHS = {"short", "medium", "long"}
 VALID_RELATIONSHIP_SPACE_THEMES = {"classic", "stardust", "engine"}
 MAX_LIVING_REGION_LENGTH = 40
@@ -211,6 +216,24 @@ def normalize_product_prefs(raw: dict | None) -> dict[str, object]:
     if tone_preference in VALID_TONE_PREFERENCES:
         payload["tone_preference"] = tone_preference
 
+    raw_pair_tones = raw.get("pair_tone_preferences")
+    if isinstance(raw_pair_tones, dict):
+        pair_tones: dict[str, str] = {}
+        for key, value in raw_pair_tones.items():
+            pair_key = str(key or "").strip()[:MAX_SELECTED_PAIR_ID_LENGTH]
+            style_val = str(value or "").strip()
+            if pair_key and style_val in VALID_TONE_PREFERENCES:
+                pair_tones[pair_key] = style_val
+            if len(pair_tones) >= 32:
+                break
+        payload["pair_tone_preferences"] = pair_tones
+    else:
+        payload["pair_tone_preferences"] = {}
+
+    expression_intensity = str(raw.get("expression_intensity") or "").strip()
+    if expression_intensity in VALID_EXPRESSION_INTENSITIES:
+        payload["expression_intensity"] = expression_intensity
+
     response_length = str(raw.get("response_length") or "").strip()
     if response_length in VALID_RESPONSE_LENGTHS:
         payload["response_length"] = response_length
@@ -245,6 +268,17 @@ def normalize_product_prefs(raw: dict | None) -> dict[str, object]:
     payload["habit_profile"] = _normalize_habit_profile(
         raw.get("habit_profile")
     )
+    payload["tone_profile"] = read_profile(raw.get("tone_profile"))
+
+    # 保留移动端写入的通知与诊断偏好，防止网页端保存设置时将其抹掉
+    if isinstance(raw.get("mobile_notification_preferences"), dict):
+        payload["mobile_notification_preferences"] = dict(
+            raw["mobile_notification_preferences"]
+        )
+    if isinstance(raw.get("mobile_runtime_diagnostics_enabled"), bool):
+        payload["mobile_runtime_diagnostics_enabled"] = raw[
+            "mobile_runtime_diagnostics_enabled"
+        ]
 
     return payload
 

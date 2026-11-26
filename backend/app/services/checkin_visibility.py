@@ -10,17 +10,20 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from fastapi import HTTPException, status
-from sqlalchemy import Text, cast, delete, select
+from sqlalchemy import Text, cast, delete, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Checkin,
     CheckinVisibilityEvent,
+    InterventionPlan,
     RelationshipEvent,
     RelationshipMemory,
     RelationshipProfileSnapshot,
@@ -111,13 +114,49 @@ def report_source_snapshot(checkins: Sequence[Checkin | None]) -> list[list[Any]
     """记录生成任务入队时来源记录的授权版本，供落库前复核。"""
     snapshot: list[list[Any]] = []
     for checkin in checkins:
-        if checkin is None:
+        if checkin is None or not is_partner_visible(str(checkin.visibility_scope or DEFAULT_SCOPE)):
             continue
         snapshot.append([str(checkin.id), int(checkin.visibility_version or 1)])
     return snapshot
 
 
-async def report_sources_authorized(db: AsyncSession, sources: Sequence[Any] | None) -> bool:
+def _report_content_digest(content: dict | None) -> str:
+    encoded = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def report_input_snapshot(reports: Sequence[Report]) -> list[list[str]]:
+    """记录周报和月报实际使用的报告及其内容。"""
+    return [[str(report.id), _report_content_digest(report.content)] for report in reports]
+
+
+async def report_inputs_current(
+    db: AsyncSession, sources: Sequence[Any] | None, *, lock: bool = False
+) -> bool:
+    """输入报告被撤回清空或替换后，旧生成结果不能落库。"""
+    if sources is None:
+        return True
+    for item in sources:
+        try:
+            report_id, digest = uuid.UUID(str(item[0])), str(item[1])
+        except (TypeError, ValueError, IndexError):
+            return False
+        query = select(Report).where(Report.id == report_id).execution_options(populate_existing=True)
+        if lock:
+            query = query.with_for_update(read=True)
+        report = (await db.execute(query)).scalar_one_or_none()
+        if (
+            report is None
+            or report.status != ReportStatus.COMPLETED
+            or _report_content_digest(report.content) != digest
+        ):
+            return False
+    return True
+
+
+async def report_sources_authorized(
+    db: AsyncSession, sources: Sequence[Any] | None, *, lock: bool = False
+) -> bool:
     """复核来源记录是否仍对伴侣可见、且授权版本未变。
 
     撤回共享后，排队中或运行中的生成任务必须据此作废，不能把撤回前的内容写回报告。
@@ -130,7 +169,10 @@ async def report_sources_authorized(db: AsyncSession, sources: Sequence[Any] | N
             normalized_id = uuid.UUID(str(checkin_id))
         except (TypeError, ValueError, IndexError):
             return False
-        checkin = await db.get(Checkin, normalized_id)
+        query = select(Checkin).where(Checkin.id == normalized_id).execution_options(populate_existing=True)
+        if lock:
+            query = query.with_for_update(read=True)
+        checkin = (await db.execute(query)).scalar_one_or_none()
         if checkin is None:
             return False
         if not is_partner_visible(str(checkin.visibility_scope or DEFAULT_SCOPE)):
@@ -269,6 +311,26 @@ async def invalidate_derived_artifacts(
 
     marker = str(checkin.id)
 
+    alignment_ids = select(RelationshipEvent.id).where(
+        RelationshipEvent.pair_id == pair_id,
+        RelationshipEvent.event_type == ALIGNMENT_EVENT_TYPE,
+        cast(RelationshipEvent.payload, Text).like(f"%{marker}%"),
+    )
+    snapshot_ids = select(RelationshipProfileSnapshot.id).where(
+        RelationshipProfileSnapshot.pair_id == pair_id,
+        RelationshipProfileSnapshot.snapshot_date >= checkin.checkin_date,
+    )
+    plans = (await db.execute(select(InterventionPlan).where(or_(
+        InterventionPlan.trigger_snapshot_id.in_(snapshot_ids),
+        InterventionPlan.trigger_event_id.in_(alignment_ids),
+    )))).scalars().all()
+    for plan in plans:
+        plan.trigger_snapshot_id = None
+        plan.trigger_event_id = None
+        plan.status = "invalidated"
+        plan.goal_json = {"reason": "记录可见范围已变更，需要重新生成建议"}
+    await db.flush()
+
     alignment_result = await db.execute(
         delete(RelationshipEvent).where(
             RelationshipEvent.pair_id == pair_id,
@@ -281,6 +343,9 @@ async def invalidate_derived_artifacts(
     memory_result = await db.execute(
         delete(RelationshipMemory).where(
             RelationshipMemory.pair_id == pair_id,
+            RelationshipMemory.user_id == checkin.user_id,
+            RelationshipMemory.source_session_id.is_(None),
+            ~cast(RelationshipMemory.content, Text).like('%"source_user_message_id"%'),
             RelationshipMemory.created_at >= checkin.created_at,
         )
     )
@@ -307,7 +372,7 @@ async def invalidate_derived_artifacts(
     for report in reports:
         report.content = None
         report.health_score = None
-        report.status = ReportStatus.PENDING
+        report.status = ReportStatus.FAILED
     counts["reports_invalidated"] = len(reports)
 
     await db.flush()
@@ -330,7 +395,9 @@ async def change_visibility(
         existing = (
             await db.execute(
                 select(CheckinVisibilityEvent).where(
-                    CheckinVisibilityEvent.client_request_id == client_request_id
+                    CheckinVisibilityEvent.actor_user_id == actor_user_id,
+                    CheckinVisibilityEvent.checkin_id == record_id,
+                    CheckinVisibilityEvent.client_request_id == client_request_id,
                 )
             )
         ).scalar_one_or_none()

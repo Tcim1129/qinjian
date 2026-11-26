@@ -11,35 +11,25 @@
           <span class="home-dossier__dynamic-title">{{ heroHeadline }}</span>
         </h2>
         <div class="hero-actions hero-actions--primary">
-          <button class="btn btn-primary" @click="$router.push(primaryAction.route)">
+          <button class="btn btn-primary home-hero-btn" @click="$router.push(primaryAction.route)">
             <component :is="primaryActionIcon" :size="16" /> {{ primaryAction.buttonLabel }}
           </button>
-          <button class="btn btn-secondary" @click="$router.push('/alignment')">
-            {{ alignmentEntryLabel }} <ChevronRight :size="16" />
+          <button class="btn btn-secondary home-hero-btn" @click="$router.push('/chat')">
+            <MessageCircle :size="16" /> 去聊一聊
           </button>
-        </div>
-        <div class="hero-subactions">
-          <button class="hero-subactions__link" @click="$router.push('/chat')">聊一聊</button>
-          <button class="hero-subactions__link" @click="$router.push('/message-simulation')">发前看看</button>
-          <button class="hero-subactions__link" @click="$router.push('/repair-protocol')">缓和建议</button>
-          <button class="hero-subactions__link" @click="$router.push('/challenges')">今日安排</button>
-          <button class="hero-subactions__link" @click="$router.push('/timeline')">关系日历</button>
         </div>
       </div>
 
       <div class="dossier-ledger" aria-label="今日摘要">
-        <label v-if="relationshipOptions.length" class="relationship-switcher">
-          <span>当前关系</span>
-          <select :value="selectedRelationshipId" @change="handleRelationshipSelect">
-            <option
-              v-for="option in relationshipOptions"
-              :key="option.id"
-              :value="option.id"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <div class="home-relation-bar">
+          <div class="home-relation-bar__meta">
+            <span>{{ relationSectionLabel }}</span>
+            <strong>{{ relationshipView.relationLabel }}</strong>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" @click="$router.push('/pair')">
+            {{ relationshipOptions.length ? '关系管理' : '去建立关系' }}
+          </button>
+        </div>
         <div class="home-metrics" aria-label="关系状态摘要">
           <div class="metric-item metric-item--warm">
             <span style="display:flex; align-items:center; gap: 4px;"><CalendarDays :size="14" /> 连续记录</span>
@@ -61,107 +51,27 @@
       </div>
     </section>
 
-    <section class="home-analytics-strip" aria-label="关系数据概览">
-      <article class="home-chart-card home-chart-card--trend">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">30 天变化</p>
-            <h3>最近走势</h3>
+    <section class="home-spotlight" aria-label="核心特色与快捷入口">
+      <button
+        v-for="item in spotlightEntries"
+        :key="item.route"
+        type="button"
+        class="spotlight-card"
+        :class="`spotlight-card--${item.tone}`"
+        @click="$router.push(item.route)"
+      >
+        <div class="spotlight-card__icon">
+          <component :is="item.icon" :size="19" stroke-width="2.1" />
+        </div>
+        <div class="spotlight-card__body">
+          <div class="spotlight-card__head">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.badge }}</span>
           </div>
-          <span class="home-chart-card__badge">{{ homeTrendBadge }}</span>
+          <p>{{ item.desc }}</p>
         </div>
-        <template v-if="hasHomeTrendData">
-          <svg class="home-line-chart" viewBox="0 0 360 150" role="img" aria-label="最近三十天关系走势">
-            <path class="home-line-chart__grid" d="M28 36 H332 M28 76 H332 M28 116 H332" />
-            <path class="home-line-chart__axis" d="M28 126 H332" />
-            <polyline :points="homeTrendPolyline" class="home-line-chart__line" />
-            <circle
-              v-for="point in homeTrendPoints"
-              :key="point.label"
-              :cx="point.x"
-              :cy="point.y"
-              r="4.5"
-              class="home-line-chart__dot"
-            />
-            <text
-              v-for="point in homeTrendPoints"
-              :key="`${point.label}-score`"
-              :x="point.x"
-              :y="point.labelY"
-              text-anchor="middle"
-              class="home-line-chart__value"
-            >{{ point.score }}</text>
-          </svg>
-          <div class="home-chart-axis">
-            <span
-              v-for="point in homeTrendPoints"
-              :key="point.label"
-              :style="{ left: `${point.axisX}%` }"
-            >{{ point.label }}</span>
-          </div>
-        </template>
-        <div v-else class="home-chart-empty">
-          <strong>还没有趋势数据</strong>
-          <span>多记几次日常，这里就会画出你们的心情走势图啦~</span>
-        </div>
-      </article>
-
-      <article class="home-chart-card home-chart-card--radar">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">关系五边形</p>
-            <h3>五项关系状态</h3>
-          </div>
-          <span class="home-chart-card__badge home-chart-card__badge--blue">{{ homeRadarBadge }}</span>
-        </div>
-        <div v-if="hasHomeRadarData" class="home-radar-layout">
-          <svg class="home-radar-chart" viewBox="0 0 240 230" role="img" :aria-label="homeRadarAriaLabel">
-            <polygon points="110,24 192,84 161,180 59,180 28,84" class="home-radar-chart__grid" />
-            <polygon points="110,58 160,95 141,154 79,154 60,95" class="home-radar-chart__grid home-radar-chart__grid--inner" />
-            <text x="116" y="35" class="home-radar-chart__scale">100</text>
-            <text x="116" y="64" class="home-radar-chart__scale">70</text>
-            <line
-              v-for="axis in homeRadarAxes"
-              :key="axis.label"
-              x1="110"
-              y1="110"
-              :x2="axis.x"
-              :y2="axis.y"
-              class="home-radar-chart__axis"
-            />
-            <polygon :points="homeRadarPolygon" class="home-radar-chart__shape" />
-            <g v-for="axis in homeRadarAxes" :key="`${axis.label}-point`">
-              <circle
-                :cx="axis.valueX"
-                :cy="axis.valueY"
-                r="4"
-                class="home-radar-chart__dot"
-              />
-              <text
-                :x="axis.valueLabelX"
-                :y="axis.valueLabelY"
-                :text-anchor="axis.valueTextAnchor"
-                class="home-radar-chart__value"
-              >{{ axis.value }}</text>
-              <text
-                :x="axis.labelX"
-                :y="axis.labelY"
-                :text-anchor="axis.labelAnchor"
-                class="home-radar-chart__label"
-              >{{ axis.label }}</text>
-            </g>
-          </svg>
-          <div class="home-radar-list">
-            <span v-for="axis in homeRadarAxes" :key="axis.label">
-              {{ axis.label }} <strong>{{ axis.value }}</strong>
-            </span>
-          </div>
-        </div>
-        <div v-else class="home-chart-empty">
-          <strong>还没有维度数据</strong>
-          <span>做过一次小体检或有了简报后，就能看到你们的关系雷达图啦~</span>
-        </div>
-      </article>
+        <ChevronRight class="spotlight-card__arrow" :size="16" />
+      </button>
     </section>
 
     <div class="home-ledger">
@@ -297,6 +207,127 @@
         </section>
       </aside>
     </div>
+
+    <details class="home-analytics-disclosure" :open="analyticsExpanded">
+      <summary class="home-analytics-disclosure__summary" @click.prevent="analyticsExpanded = !analyticsExpanded">
+        <div class="home-analytics-disclosure__title">
+          <p class="eyebrow">阶段回顾</p>
+          <h3>近 30 天走势与五项关系状态</h3>
+        </div>
+        <div class="home-analytics-disclosure__meta">
+          <span class="home-chart-card__badge">{{ homeTrendBadge }}</span>
+          <span class="home-chart-card__badge home-chart-card__badge--blue">{{ homeRadarBadge }}</span>
+          <span class="home-analytics-disclosure__toggle">{{ analyticsExpanded ? '收起图表' : '展开查看' }}</span>
+        </div>
+      </summary>
+
+      <section
+        class="home-analytics-strip"
+        :class="{ 'home-analytics-strip--compact': !hasHomeTrendData && !hasHomeRadarData }"
+        aria-label="关系数据概览"
+      >
+        <article class="home-chart-card home-chart-card--trend">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">30 天变化</p>
+              <h3>最近走势</h3>
+            </div>
+            <span class="home-chart-card__badge">{{ homeTrendBadge }}</span>
+          </div>
+          <template v-if="hasHomeTrendData">
+            <svg class="home-line-chart" viewBox="0 0 360 150" role="img" aria-label="最近三十天关系走势">
+              <path class="home-line-chart__grid" d="M28 36 H332 M28 76 H332 M28 116 H332" />
+              <path class="home-line-chart__axis" d="M28 126 H332" />
+              <polyline :points="homeTrendPolyline" class="home-line-chart__line" />
+              <circle
+                v-for="point in homeTrendPoints"
+                :key="point.key || point.label"
+                :cx="point.x"
+                :cy="point.y"
+                r="4.5"
+                class="home-line-chart__dot"
+              />
+              <text
+                v-for="point in homeTrendPoints"
+                :key="`${point.key || point.label}-score`"
+                :x="point.x"
+                :y="point.labelY"
+                text-anchor="middle"
+                class="home-line-chart__value"
+              >{{ point.score }}</text>
+            </svg>
+            <div class="home-chart-axis">
+              <span
+                v-for="point in homeTrendPoints"
+                :key="point.key || point.label"
+                :style="{ left: `${point.axisX}%` }"
+              >{{ point.label }}</span>
+            </div>
+          </template>
+          <div v-else class="home-chart-empty">
+            <strong>还没有趋势数据</strong>
+            <span>多记几次日常，这里会逐步画出你们的走势变化。</span>
+          </div>
+        </article>
+
+        <article class="home-chart-card home-chart-card--radar">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">关系五边形</p>
+              <h3>五项关系状态</h3>
+            </div>
+            <span class="home-chart-card__badge home-chart-card__badge--blue">{{ homeRadarBadge }}</span>
+          </div>
+          <div v-if="hasHomeRadarData" class="home-radar-layout">
+            <svg class="home-radar-chart" viewBox="0 0 240 230" role="img" :aria-label="homeRadarAriaLabel">
+              <polygon points="110,24 192,84 161,180 59,180 28,84" class="home-radar-chart__grid" />
+              <polygon points="110,58 160,95 141,154 79,154 60,95" class="home-radar-chart__grid home-radar-chart__grid--inner" />
+              <text x="116" y="35" class="home-radar-chart__scale">100</text>
+              <text x="116" y="64" class="home-radar-chart__scale">70</text>
+              <line
+                v-for="axis in homeRadarAxes"
+                :key="axis.label"
+                x1="110"
+                y1="110"
+                :x2="axis.x"
+                :y2="axis.y"
+                class="home-radar-chart__axis"
+              />
+              <polygon :points="homeRadarPolygon" class="home-radar-chart__shape" />
+              <g v-for="axis in homeRadarAxes" :key="`${axis.label}-point`">
+                <circle
+                  :cx="axis.valueX"
+                  :cy="axis.valueY"
+                  r="4"
+                  class="home-radar-chart__dot"
+                />
+                <text
+                  :x="axis.valueLabelX"
+                  :y="axis.valueLabelY"
+                  :text-anchor="axis.valueTextAnchor"
+                  class="home-radar-chart__value"
+                >{{ axis.value }}</text>
+                <text
+                  :x="axis.labelX"
+                  :y="axis.labelY"
+                  :text-anchor="axis.labelAnchor"
+                  class="home-radar-chart__label"
+                >{{ axis.label }}</text>
+              </g>
+            </svg>
+            <div class="home-radar-list">
+              <span v-for="axis in homeRadarAxes" :key="axis.label">
+                {{ axis.label }} <strong>{{ axis.value }}</strong>
+              </span>
+            </div>
+          </div>
+          <div v-else class="home-chart-empty">
+            <strong>还没有维度数据</strong>
+            <span>完成一次关系体检或生成简报后，这里会展示五项维度状态。</span>
+          </div>
+        </article>
+      </section>
+    </details>
     <TaskResultDialog v-if="resultTask" :task="resultTask" :pair-id="userStore.activePairId" :date="scheduleDate(homeTaskScopeTab)" @close="resultTask = null" @saved="loadHomeTasks" @analyze="scheduleContext = $event" />
     <ContextAgentDialog v-if="scheduleContext" :context="scheduleContext" @close="scheduleContext = null" />
   </div>
@@ -308,7 +339,7 @@ import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
 import TaskResultDialog from '@/components/TaskResultDialog.vue'
 import { buildDemoSchedule, buildScheduleContext, createLatestRequest, scheduleDate, demoScheduleCache } from '@/utils/taskSchedule'
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { FolderHeart, PenLine, FileText, Handshake, ChevronRight, CalendarDays, UserCheck, Users, Activity, RotateCcw } from 'lucide-vue-next'
+import { FolderHeart, PenLine, FileText, Handshake, ChevronRight, CalendarDays, UserCheck, Users, Activity, RotateCcw, MessageCircle, SendHorizontal, ShieldCheck, LayoutGrid } from 'lucide-vue-next'
 import { clampDailyNote, getNextDailyNote, DAILY_NOTE_CANDIDATES } from '@/utils/dailyNotes'
 import { api } from '@/api'
 import { cloneDemo, demoFixture } from '@/demo/fixtures'
@@ -320,6 +351,7 @@ import { featureUnavailableReason, resolveExperienceMode } from '@/utils/experie
 import { resolveRelationshipDisplayPair } from '@/utils/relationshipDisplay'
 import { normalizeEnergyNodes } from '@/utils/relationshipTreeEnergy'
 import { getPartnerDisplayName } from '@/utils/relationshipSpaces'
+import { buildHomeRadarAxes, buildHomeTrendView } from '@/utils/homeAnalytics'
 
 function isoDate(offset = 0) {
   const now = new Date()
@@ -372,6 +404,7 @@ const homeTaskScopeTab = ref('today')
 const homeTaskPayload = ref({ tasks: [] })
 const homeTaskLoading = ref(false)
 const customHomeDailyNote = ref('')
+const analyticsExpanded = ref(false)
 
 const displayHomeDailyNote = computed(() => {
   if (customHomeDailyNote.value) {
@@ -485,10 +518,46 @@ const primaryActionIcon = computed(() => {
 const isPrimaryCheckinAction = computed(() => primaryAction.value.route === '/checkin')
 const showSidePrimaryAction = computed(() => !isPrimaryCheckinAction.value)
 const alignmentEntryLabel = computed(() => {
-  if (experienceMode.value.isDemoMode) return '看双视角样例'
-  if (experienceMode.value.canUseDualPerspective) return '看双视角'
+  if (experienceMode.value.isDemoMode) return '双视角样例'
+  if (experienceMode.value.canUseDualPerspective) return '双视角'
   return '双视角'
 })
+const spotlightEntries = computed(() => [
+  {
+    route: '/message-simulation',
+    title: '发前看看',
+    badge: 'AI 预演',
+    desc: '发送前改顺口，少踩雷',
+    icon: SendHorizontal,
+    tone: 'warm',
+  },
+  {
+    route: '/alignment',
+    title: '双视角',
+    badge: '特色对照',
+    desc: experienceMode.value.canUseDualPerspective || experienceMode.value.isDemoMode
+      ? '对照双方想法，找出误会'
+      : '配对后对照彼此视角',
+    icon: Users,
+    tone: 'sky',
+  },
+  {
+    route: '/repair-protocol',
+    title: '缓和建议',
+    badge: '情绪降温',
+    desc: '气氛发紧时先降温',
+    icon: ShieldCheck,
+    tone: 'rose',
+  },
+  {
+    route: '/discover',
+    title: '全部功能',
+    badge: '工具目录',
+    desc: '日历、体检、异地等工具',
+    icon: LayoutGrid,
+    tone: 'moss',
+  },
+])
 const heroHeadline = computed(() => {
   if (primaryAction.value.actionKind === 'report') {
     if (primaryAction.value.reportState === 'pending') {
@@ -610,54 +679,19 @@ const treeLeaves = computed(() => homeStore.tree?.leaves?.length ? homeStore.tre
   { label: '缓和', value: '0 次', note: '做完小行动后会长出新枝叶。' },
 ])
 
-const DEMO_HOME_TREND_POINTS = [
-  { label: '30天前', x: 28, y: 112, score: 58 },
-  { label: '24天前', x: 88.8, y: 98, score: 63 },
-  { label: '18天前', x: 149.6, y: 104, score: 61 },
-  { label: '12天前', x: 210.4, y: 76, score: 72 },
-  { label: '6天前', x: 271.2, y: 68, score: 75 },
-  { label: '今天', x: 332, y: 46, score: 82 },
-]
-DEMO_HOME_TREND_POINTS.forEach((point) => {
-  point.labelY = Math.max(18, point.y - 10)
-  point.axisX = Number(((point.x / 360) * 100).toFixed(2))
-})
-
-const DEMO_HOME_RADAR_AXES = [
-  { label: '表达', x: 110, y: 24, value: 72 },
-  { label: '信任', x: 192, y: 84, value: 64 },
-  { label: '缓和', x: 161, y: 180, value: 70 },
-  { label: '节奏', x: 59, y: 180, value: 58 },
-  { label: '活力', x: 28, y: 84, value: 76 },
-]
-
-const homeTrendPoints = computed(() => (experienceMode.value.isDemoMode ? DEMO_HOME_TREND_POINTS : []))
+const homeTrendView = computed(() => buildHomeTrendView({
+  isDemoMode: experienceMode.value.isDemoMode,
+  reportTrend: homeStore.reportTrend,
+  assessmentTrend: homeStore.assessmentTrend,
+}))
+const homeTrendPoints = computed(() => homeTrendView.value.points)
 const hasHomeTrendData = computed(() => homeTrendPoints.value.length > 0)
 const homeTrendPolyline = computed(() => homeTrendPoints.value.map((point) => `${point.x},${point.y}`).join(' '))
-const homeTrendBadge = computed(() => (hasHomeTrendData.value ? '样例趋势' : '暂无数据'))
-const homeRadarAxes = computed(() => {
-  if (!experienceMode.value.isDemoMode) return []
-  const center = { x: 110, y: 110 }
-  return DEMO_HOME_RADAR_AXES.map((axis) => {
-    const ratio = axis.value / 100
-    const dx = axis.x - center.x
-    const dy = axis.y - center.y
-    const length = Math.hypot(dx, dy) || 1
-    const unitX = dx / length
-    const unitY = dy / length
-    return {
-      ...axis,
-      valueX: Number((center.x + (axis.x - center.x) * ratio).toFixed(1)),
-      valueY: Number((center.y + (axis.y - center.y) * ratio).toFixed(1)),
-      valueLabelX: Number((center.x + dx * ratio + unitX * 12).toFixed(1)),
-      valueLabelY: Number((center.y + dy * ratio + unitY * 12 + 4).toFixed(1)),
-      valueTextAnchor: axis.x > 130 ? 'start' : axis.x < 90 ? 'end' : 'middle',
-      labelX: Number((axis.x + unitX * 18).toFixed(1)),
-      labelY: Number((axis.y + unitY * 18 + 4).toFixed(1)),
-      labelAnchor: axis.x > 130 ? 'start' : axis.x < 90 ? 'end' : 'middle',
-    }
-  })
-})
+const homeTrendBadge = computed(() => homeTrendView.value.badge)
+const homeRadarAxes = computed(() => buildHomeRadarAxes({
+  isDemoMode: experienceMode.value.isDemoMode,
+  assessmentTrend: homeStore.assessmentTrend,
+}))
 const hasHomeRadarData = computed(() => homeRadarAxes.value.length > 0)
 const homeRadarPolygon = computed(() => homeRadarAxes.value.map((axis) => `${axis.valueX},${axis.valueY}`).join(' '))
 const homeRadarAverage = computed(() => {
@@ -781,11 +815,11 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
 .home-dossier {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) minmax(376px, 420px);
   gap: 20px;
-  align-items: stretch;
+  align-items: center;
   margin-bottom: 16px;
-  padding: 24px;
+  padding: 20px 24px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background:
@@ -799,7 +833,7 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
   content: "";
   position: absolute;
   left: 28px;
-  top: 28px;
+  top: 24px;
   width: 74px;
   height: 1px;
   background: linear-gradient(90deg, rgba(215, 104, 72, 0.48), rgba(215, 104, 72, 0));
@@ -807,8 +841,11 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
 
 .dossier-copy {
   position: relative;
-  min-height: 220px;
-  padding-right: 12px;
+  min-height: 144px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: 88px;
 }
 
 .dossier-stamp {
@@ -851,38 +888,140 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
 }
 
 .hero-actions--primary {
-  margin-top: 16px;
-}
-
-.hero-subactions {
+  margin-top: 18px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: center;
-  margin-top: 12px;
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.7;
+  gap: 10px;
 }
 
-.hero-subactions__link {
-  display: inline-flex;
+.home-hero-btn {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.home-spotlight {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.spotlight-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
-  min-height: 30px;
-  padding: 0 11px;
-  border: 1px solid rgba(68, 52, 40, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 251, 247, 0.56);
+  gap: 12px;
+  min-height: 82px;
+  padding: 14px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  background: rgba(255, 253, 249, 0.9);
+  box-shadow: 0 10px 24px rgba(91, 67, 51, 0.045);
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.spotlight-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(189, 75, 53, 0.3);
+  box-shadow: 0 14px 28px rgba(91, 67, 51, 0.08);
+}
+
+.spotlight-card:active {
+  transform: scale(0.985);
+}
+
+.spotlight-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.spotlight-card--warm .spotlight-card__icon {
+  background: linear-gradient(135deg, rgba(255, 226, 206, 0.96), rgba(255, 241, 232, 0.92));
   color: var(--seal-deep);
-  font-size: 12px;
-  font-weight: 600;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
-.hero-subactions__link:hover {
-  transform: translateY(-1px);
-  border-color: rgba(215, 104, 72, 0.22);
-  background: rgba(255, 248, 243, 0.9);
+.spotlight-card--sky .spotlight-card__icon {
+  background: linear-gradient(135deg, rgba(210, 231, 244, 0.96), rgba(232, 242, 249, 0.92));
+  color: var(--sky-deep);
+}
+
+.spotlight-card--rose .spotlight-card__icon {
+  background: linear-gradient(135deg, rgba(248, 219, 224, 0.96), rgba(255, 237, 240, 0.92));
+  color: #b54d67;
+}
+
+.spotlight-card--moss .spotlight-card__icon {
+  background: linear-gradient(135deg, rgba(212, 236, 221, 0.96), rgba(233, 245, 238, 0.92));
+  color: var(--moss-deep);
+}
+
+.spotlight-card__body {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.spotlight-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.spotlight-card__head strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.spotlight-card__head span {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(68, 52, 40, 0.06);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.spotlight-card--warm .spotlight-card__head span {
+  background: rgba(215, 104, 72, 0.12);
+  color: var(--seal-deep);
+}
+
+.spotlight-card--sky .spotlight-card__head span {
+  background: rgba(48, 93, 104, 0.11);
+  color: var(--sky-deep);
+}
+
+.spotlight-card__body p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spotlight-card__arrow {
+  color: var(--ink-faint);
+  flex-shrink: 0;
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.spotlight-card:hover .spotlight-card__arrow {
+  color: var(--seal-deep);
+  transform: translateX(2px);
 }
 
 .dossier-ledger {
@@ -1049,11 +1188,110 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
   white-space: nowrap;
 }
 
+.home-analytics-disclosure {
+  margin-top: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  background: rgba(255, 253, 249, 0.82);
+  overflow: hidden;
+}
+
+.home-analytics-disclosure__summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 20px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.home-analytics-disclosure__summary::-webkit-details-marker {
+  display: none;
+}
+
+.home-analytics-disclosure__title h3 {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.home-analytics-disclosure__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-analytics-disclosure__toggle {
+  color: var(--seal-deep);
+  font-size: 13px;
+  font-weight: 700;
+  padding-left: 4px;
+}
+
+.home-analytics-disclosure[open] .home-analytics-disclosure__summary {
+  border-bottom: 1px dashed rgba(68, 52, 40, 0.12);
+}
+
 .home-analytics-strip {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 14px;
-  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.home-relation-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: rgba(255, 253, 250, 0.82);
+}
+
+.home-relation-bar__meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-relation-bar__meta span {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-weight: 700;
+}
+
+.home-relation-bar__meta strong {
+  font-size: 14px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-analytics-strip--compact .home-chart-card {
+  padding: 14px 16px;
+  border-radius: 20px;
+}
+
+.home-analytics-strip--compact .home-chart-empty {
+  min-height: 74px;
+  padding: 12px 14px;
+  gap: 4px;
+}
+
+.home-analytics-strip--compact .home-chart-empty strong {
+  font-size: 14px;
+}
+
+.home-analytics-strip--compact .home-chart-empty span {
+  font-size: 12px;
 }
 
 .home-chart-card {
@@ -1551,6 +1789,12 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
   50% { transform: scale(1.18); opacity: 1; }
 }
 
+@media (max-width: 1160px) {
+  .home-spotlight {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 940px) {
   .home-dossier,
   .home-ledger,
@@ -1558,31 +1802,83 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
     grid-template-columns: 1fr;
   }
 
-  .dossier-copy { min-height: auto; }
-  .dossier-ledger { grid-template-columns: 1fr; }
+  .dossier-copy {
+    min-height: auto;
+    padding-right: 0;
+  }
+  .dossier-ledger {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
   .home-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
   .home-page {
-    width: min(100% - 16px, var(--content-max));
-    padding-top: 18px;
+    width: min(100% - 20px, var(--content-max));
+    padding-top: 14px;
   }
 
   .home-dossier {
-    padding: 18px;
+    padding: 18px 16px;
     row-gap: 14px;
   }
 
-  .dossier-stamp,
-  .hero-subactions {
+  .dossier-stamp {
     display: none;
   }
 
   .dossier-copy h2 {
-    max-width: calc(100% - 160px);
-    margin-right: 160px;
-    font-size: 22px;
+    max-width: none;
+    margin-right: 0;
+    font-size: 24px;
+    line-height: 1.3;
+  }
+
+  .hero-actions--primary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .home-hero-btn {
+    width: 100%;
+    min-height: 46px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  .home-spotlight {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .spotlight-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 8px;
+    min-height: 104px;
+    padding: 13px 12px;
+    border-radius: 16px;
+  }
+
+  .spotlight-card__icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .spotlight-card__arrow {
+    display: none;
+  }
+
+  .spotlight-card__body p {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   .tree-leaves {
@@ -1599,61 +1895,33 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
   }
 
   .dossier-ledger {
-    display: block;
-    gap: 0;
-  }
-
-  .relationship-switcher {
-    position: absolute;
-    top: 42px;
-    right: 18px;
-    grid-template-columns: auto minmax(84px, 1fr);
-    width: 158px;
-    padding: 7px 8px;
-    white-space: nowrap;
-  }
-
-  .relationship-switcher span {
-    font-size: 9.5px;
-  }
-
-  .relationship-switcher select {
-    min-height: 30px;
-    padding-left: 6px;
-    padding-right: 18px;
-    font-size: 11.5px;
+    display: grid;
+    gap: 10px;
   }
 
   .home-metrics {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .metric-item {
-    min-height: 60px;
-    padding: 9px 3px 7px;
-    border-radius: 12px;
+    min-height: 62px;
+    padding: 10px 12px;
+    border-radius: 14px;
   }
 
   .metric-item::before {
-    left: 8px;
-    width: 18px;
+    left: 12px;
+    width: 20px;
   }
 
   .metric-item span {
-    gap: 3px !important;
-    font-size: 10px;
-  }
-
-  .metric-item span svg {
-    width: 12px;
-    height: 12px;
-    flex: 0 0 12px;
+    font-size: 11.5px;
   }
 
   .metric-item strong {
-    margin-top: 5px;
-    font-size: 13px;
+    margin-top: 4px;
+    font-size: 15px;
   }
 
   .archive-panel { padding: 16px; }
@@ -1661,40 +1929,20 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
 
 @media (max-width: 340px) {
   .home-page {
-    width: min(100% - 12px, var(--content-max));
+    width: min(100% - 14px, var(--content-max));
   }
 
   .home-dossier {
     padding: 14px;
   }
 
-  .relationship-switcher {
-    top: 36px;
-    right: 14px;
-    width: 150px;
-  }
-
   .dossier-copy h2 {
-    max-width: calc(100% - 152px);
-    margin-right: 152px;
-    font-size: 20px;
+    font-size: 21px;
   }
 
-  .home-metrics {
-    gap: 3px;
-  }
-
-  .metric-item {
-    min-height: 58px;
-    padding-inline: 2px;
-  }
-
-  .metric-item span {
-    font-size: 9px;
-  }
-
-  .metric-item strong {
-    font-size: 12px;
+  .home-hero-btn {
+    min-height: 44px;
+    font-size: 13px;
   }
 }
 

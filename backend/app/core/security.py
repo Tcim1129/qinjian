@@ -23,12 +23,13 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str) -> str:
+def create_access_token(user_id: str, *, token_version: int = 0) -> str:
     issued_at = datetime.now(timezone.utc)
     expire = issued_at + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "type": "access",
+        "tv": int(token_version or 0),
         "iat": issued_at,
         "nbf": issued_at,
         "exp": expire,
@@ -36,8 +37,8 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> str | None:
-    """解码JWT，返回user_id或None"""
+def decode_access_token_payload(token: str) -> dict | None:
+    """解码访问令牌，返回包含用户与令牌版本号的字典。"""
     try:
         payload = jwt.decode(
             token,
@@ -50,18 +51,29 @@ def decode_access_token(token: str) -> str | None:
         subject = payload.get("sub")
         if not isinstance(subject, str) or not subject.strip():
             return None
-        return subject
+        try:
+            token_version = int(payload.get("tv", 0) or 0)
+        except (TypeError, ValueError):
+            return None
+        return {"user_id": subject, "token_version": token_version}
     except InvalidTokenError:
         return None
 
 
-def create_realtime_ws_ticket(user_id: str) -> str:
+def decode_access_token(token: str) -> str | None:
+    """解码JWT，返回user_id或None"""
+    payload = decode_access_token_payload(token)
+    return payload["user_id"] if payload else None
+
+
+def create_realtime_ws_ticket(user_id: str, *, token_version: int = 0) -> str:
     """生成实时语音连接使用的临时访问令牌。"""
     issued_at = datetime.now(timezone.utc)
     expire = issued_at + timedelta(seconds=settings.REALTIME_ASR_TICKET_EXPIRE_SECONDS)
     payload = {
         "sub": user_id,
         "type": "realtime_ws",
+        "tv": int(token_version or 0),
         "iat": issued_at,
         "nbf": issued_at,
         "exp": expire,
@@ -70,8 +82,8 @@ def create_realtime_ws_ticket(user_id: str) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_realtime_ws_ticket(ticket: str) -> str | None:
-    """检查实时语音连接的临时访问令牌是否有效。"""
+def decode_realtime_ws_ticket_payload(ticket: str) -> dict | None:
+    """检查实时语音临时票据并返回完整声明。"""
     if not ticket:
         return None
 
@@ -85,11 +97,34 @@ def decode_realtime_ws_ticket(ticket: str) -> str | None:
         if payload.get("type") != "realtime_ws":
             return None
         subject = payload.get("sub")
-        if not isinstance(subject, str) or not subject.strip():
+        jti = payload.get("jti")
+        if (
+            not isinstance(subject, str)
+            or not subject.strip()
+            or not isinstance(jti, str)
+            or not jti.strip()
+        ):
             return None
-        return subject
+        try:
+            token_version = int(payload.get("tv", 0) or 0)
+        except (TypeError, ValueError):
+            return None
+        exp = payload.get("exp")
+        remaining_seconds = max(1, int(exp - datetime.now(timezone.utc).timestamp())) if exp else 60
+        return {
+            "user_id": subject,
+            "jti": jti,
+            "token_version": token_version,
+            "remaining_seconds": remaining_seconds,
+        }
     except InvalidTokenError:
         return None
+
+
+def decode_realtime_ws_ticket(ticket: str) -> str | None:
+    """检查实时语音连接的临时访问令牌是否有效。"""
+    payload = decode_realtime_ws_ticket_payload(ticket)
+    return payload["user_id"] if payload else None
 
 
 MEDIA_UPLOAD_TICKET_TTL_SECONDS = 600

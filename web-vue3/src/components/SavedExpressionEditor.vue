@@ -55,6 +55,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Loader2 } from 'lucide-vue-next'
 import { api } from '@/api'
 import { createSavedExpressions } from '@/utils/savedExpressions'
+import { formatBeijingMonthDayTime } from '@/utils/datetime'
 
 const props = defineProps({ modelValue: { type: String, default: '' }, hasSuggestion: Boolean,
   pairId: { type: String, default: null }, ownerKey: { type: String, default: '' }, isDemo: Boolean, disabled: Boolean })
@@ -77,8 +78,7 @@ watch(() => props.modelValue, () => { copyNotice.value = '' })
 onBeforeUnmount(() => { scopeRevision++; store.setScope({ enabled: false }) })
 
 function displayDate(value) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return formatBeijingMonthDayTime(value)
 }
 async function reuse(text) {
   emit('update:modelValue', text)

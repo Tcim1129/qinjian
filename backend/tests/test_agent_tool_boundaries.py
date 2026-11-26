@@ -2,13 +2,27 @@ import asyncio
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.ai import agent_loop, multi_agent, tools
 from app.core.database import Base
 from app.core.time import current_local_date
-from app.models import Checkin, Pair, PairType, PairStatus, RelationshipTask, User
+from app.models import Checkin, CrisisLevel, Pair, PairType, PairStatus, RelationshipTask, User
+
+
+@pytest.mark.parametrize("level,expected", [
+    (CrisisLevel.MILD, 'low'),
+    (CrisisLevel.MODERATE, 'medium'),
+    (CrisisLevel.SEVERE, 'severe'),
+    ('CrisisLevel.MILD', 'low'),
+    ('CrisisLevel.MODERATE', 'medium'),
+    ('severe', 'severe'),
+])
+def test_crisis_level_normalization_accepts_stored_enum_and_legacy_text(level, expected):
+    assert tools._normalize_crisis_level(level) == expected
 
 
 def test_tools_only_expose_visible_records_and_actor_tasks():
@@ -32,7 +46,8 @@ def test_tools_only_expose_visible_records_and_actor_tasks():
                 recent = await tools.execute_tool('get_recent_events', {'user_id': str(b.id)}, **context)
                 assert recent.get('status') == 'success', recent
                 assert 'SECRET_RAW' not in json.dumps(recent, ensure_ascii=False)
-                assert '愿意分享的摘要' in json.dumps(recent, ensure_ascii=False)
+                assert '这天更像在记录平静。' in json.dumps(recent, ensure_ascii=False)
+                assert '愿意分享的摘要' not in json.dumps(recent, ensure_ascii=False)
                 search = await tools.execute_tool('search_timeline', {'query': 'SECRET_RAW'}, **context)
                 assert search['data'] == []
                 tasks = await tools.execute_tool('get_active_tasks', {}, **context)
@@ -121,3 +136,26 @@ def test_agent_loop_reuses_pair_access_validation(monkeypatch):
             await engine.dispose()
     asyncio.run(run())
     assert validations['count'] == 1, f"权限校验应只执行一次，实际 {validations['count']} 次"
+
+def test_relationship_status_tool_accepts_pair_and_user_together():
+    """配对和个人同时传进来时不能崩，安全状态只按配对看。"""
+    async def run():
+        engine = create_async_engine('sqlite+aiosqlite:///:memory:')
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        try:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+                a = User(email='scope-a@audit.test', nickname='A', password_hash='unused')
+                db.add(a); await db.flush()
+                pair = Pair(user_a_id=a.id, user_b_id=None, type=PairType.COUPLE, status=PairStatus.ACTIVE, invite_code='SCOPETOOL')
+                db.add(pair); await db.flush()
+
+                result = await tools._get_relationship_status(db, pair_id=pair.id, user_id=a.id)
+                assert isinstance(result, dict)
+                personal = await tools._get_relationship_status(db, user_id=a.id)
+                assert isinstance(personal, dict)
+                empty = await tools._get_relationship_status(db)
+                assert empty['status'] == 'ok'
+        finally:
+            await engine.dispose()
+    asyncio.run(run())

@@ -41,13 +41,18 @@ const dialog = ref(null)
 const chatPage = ref(null)
 const chatOpen = ref(false)
 const draft = ref(String(props.context.question || '帮我理一理这件事。').slice(0, 600))
+let suggestedDraft = draft.value
 const intent = ref(props.context.intent || 'reflect')
 const intentOptions = [
   { value: 'reflect', label: '理一理', question: '帮我理一理这件事。' },
   { value: 'wording', label: '换个说法', question: '这件事我怎么开口比较自然？' },
   { value: 'plan', label: '想想下一步', question: '现在先做什么比较合适？给我一个简单的办法。' },
 ]
-function selectIntent(option) { intent.value = option.value; draft.value = option.question }
+function selectIntent(option) {
+  intent.value = option.value
+  if (!draft.value.trim() || draft.value === suggestedDraft) draft.value = option.question
+  suggestedDraft = option.question
+}
 const scopeCurrent = computed(() => isContextScopeAvailable(props.context, userStore.activePairId, userStore.pairs))
 const scopeLabel = computed(() => props.context.pairId ? (userStore.pairs.find(pair => pair.id === props.context.pairId)?.partner_nickname || '所选关系') : '我的记录')
 let returnFocus = null

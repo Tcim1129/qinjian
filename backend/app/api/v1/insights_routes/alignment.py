@@ -1,5 +1,6 @@
 """Narrative alignment insight routes."""
 
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -8,7 +9,10 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, validate_pair_access
-from app.ai.narrative_alignment import generate_narrative_alignment
+from app.ai.narrative_alignment import (
+    ALIGNMENT_TIMEOUT_SECONDS,
+    generate_narrative_alignment,
+)
 from app.core.database import get_db
 from app.core.time import current_local_date
 from app.models import RelationshipEvent, RelationshipProfileSnapshot, User
@@ -425,6 +429,7 @@ async def generate_latest_narrative_alignment(
         scope="pair",
         run_type="narrative_alignment",
         privacy_mode=resolve_privacy_mode(getattr(user, "product_prefs", None)),
+        chat_deadline=time.monotonic() + ALIGNMENT_TIMEOUT_SECONDS,
     ):
         alignment = await generate_narrative_alignment(
             context=context,

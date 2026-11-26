@@ -6,7 +6,8 @@ import logging
 import uuid
 from datetime import date, datetime, timezone
 from app.core.time import current_local_date
-from time import perf_counter
+from contextlib import asynccontextmanager
+from time import monotonic, perf_counter
 from typing import Any, Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
@@ -17,9 +18,10 @@ from app.api.deps import get_current_user, validate_pair_access
 from app.ai.asr import create_realtime_asr_client
 from app.core.security import (
     create_realtime_ws_ticket,
-    decode_access_token,
-    decode_realtime_ws_ticket,
+    decode_access_token_payload,
+    decode_realtime_ws_ticket_payload,
 )
+from app.services.ws_ticket_store import get_ws_ticket_store
 from app.models import (
     User,
     Pair,
@@ -44,6 +46,7 @@ from app.schemas import (
     DecisionFeedbackRequest,
     MessageSimulationRequest,
     MessageSimulationResponse,
+    StyleFeedbackRequest,
     TaskCreateRequest,
 )
 from app.ai import create_chat_completion
@@ -52,8 +55,21 @@ from app.ai.multi_agent import run_multi_agent_flow
 from app.ai.tools import AGENT_TOOL_GUIDANCE
 from app.ai.policy import compose_relationship_system_prompt
 from app.ai.conversation import build_agent_system_prompt
+from app.services.relationship_memory import get_active_taboos
+from app.services.product_prefs import normalize_product_prefs
+from app.services.tone_preference import (
+    guide_text as tone_guide_text,
+    is_default as tone_is_default,
+    read_profile as tone_read_profile,
+    record_signal as tone_record_signal,
+    reset_profile as tone_reset_profile,
+)
 from app.services.agent_delivery import prepare_chat_turn, complete_chat_turn, fail_chat_turn
-from app.ai.message_simulator import simulate_message_preview, MessageSimulationUnavailableError
+from app.ai.message_simulator import (
+    SIMULATION_TIMEOUT_SECONDS,
+    simulate_message_preview,
+    MessageSimulationUnavailableError,
+)
 from app.core.config import settings
 from app.services.relationship_intelligence import (
     record_relationship_event,
@@ -71,6 +87,7 @@ from app.services.display_labels import (
     emotion_label,
     language_label,
     risk_level_label,
+    translate_inline_codes,
 )
 from app.services.guidance_policy import build_crisis_support
 from app.services.agent_session_memory import (
@@ -103,15 +120,73 @@ router = APIRouter(prefix="/agent", tags=["智能陪伴"])
 logger = logging.getLogger(__name__)
 
 
+import re
+
+_CN_DIGIT_MAP = str.maketrans("零一二三四五六七八九两", "01234567892")
+_PROPOSAL_NOISE_RE = re.compile(r"[\s，。、；：！？,.!?;:（）()\[\]“”\"'·\-—]+")
+_PROPOSAL_PREFIX_RE = re.compile(r"^(?:今晚|今天|明天|睡前|晚饭后|下班后|抽空|一起|共同|双方)+")
+
+
+def _normalize_proposal_text(text: Any) -> str:
+    raw = str(text or "").strip().lower().translate(_CN_DIGIT_MAP)
+    raw = re.sub(r"十(\d)", r"1\1", raw)
+    raw = re.sub(r"(\d)十", r"\g<1>0", raw)
+    raw = raw.replace("十", "10")
+    raw = _PROPOSAL_NOISE_RE.sub("", raw)
+    return _PROPOSAL_PREFIX_RE.sub("", raw) or raw
+
+
+def _char_bigrams(text: str) -> set[str]:
+    if len(text) < 2:
+        return {text} if text else set()
+    return {text[i : i + 2] for i in range(len(text) - 1)}
+
+
+def _is_similar_task_proposal(candidate: dict[str, Any], existing: dict[str, Any]) -> bool:
+    if str(candidate.get("due_date") or "") != str(existing.get("due_date") or ""):
+        return False
+    title_a = _normalize_proposal_text(candidate.get("title"))
+    title_b = _normalize_proposal_text(existing.get("title"))
+    if title_a and title_b:
+        if title_a == title_b:
+            return True
+        shorter, longer = (title_a, title_b) if len(title_a) <= len(title_b) else (title_b, title_a)
+        if len(shorter) >= 4 and shorter in longer:
+            return True
+        bigrams_a, bigrams_b = _char_bigrams(title_a), _char_bigrams(title_b)
+        union = bigrams_a | bigrams_b
+        if union and (len(bigrams_a & bigrams_b) / len(union)) >= 0.45:
+            return True
+
+    full_a = _normalize_proposal_text(f"{candidate.get('title') or ''}{candidate.get('description') or ''}")
+    full_b = _normalize_proposal_text(f"{existing.get('title') or ''}{existing.get('description') or ''}")
+    if full_a and full_b:
+        if full_a == full_b:
+            return True
+        bigrams_a, bigrams_b = _char_bigrams(full_a), _char_bigrams(full_b)
+        union = bigrams_a | bigrams_b
+        if union and (len(bigrams_a & bigrams_b) / len(union)) >= 0.55:
+            return True
+    return False
+
+
 def _task_proposals_from_steps(steps):
-    proposals = {}
+    proposals: list[dict[str, Any]] = []
     for step in steps:
         for item in step.tool_results or []:
             result = item.get('result') or {}
             data = result.get('data') or {}
             if item.get('name') == 'create_task' and result.get('status') == 'success' and data.get('requires_confirmation'):
-                proposals[data['proposal_id']] = data
-    return list(proposals.values())[:5]
+                matched_index = next(
+                    (idx for idx, existing in enumerate(proposals) if _is_similar_task_proposal(data, existing)),
+                    None,
+                )
+                if matched_index is not None:
+                    proposals[matched_index] = data
+                    continue
+                if len(proposals) < 5:
+                    proposals.append(data)
+    return proposals
 
 
 @router.post('/sessions/{session_id}/messages/{message_id}/tasks/{proposal_id}/confirm')
@@ -231,7 +306,10 @@ async def create_agent_asr_ws_ticket(
 ):
     """生成实时语音临时访问令牌，避免在 WebSocket 地址中暴露长期有效的 JWT。"""
     return AgentRealtimeTicketResponse(
-        ticket=create_realtime_ws_ticket(str(user.id)),
+        ticket=create_realtime_ws_ticket(
+            str(user.id),
+            token_version=int(getattr(user, "token_version", 0) or 0),
+        ),
         expires_in=max(30, settings.REALTIME_ASR_TICKET_EXPIRE_SECONDS),
     )
 
@@ -424,8 +502,9 @@ async def chat_with_agent(
     if not session or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="会话不存在")
     page, path = _surface_page_context(req.surface)
+    pair = None
     if session.pair_id:
-        await validate_pair_access(session.pair_id, user, db, require_active=True)
+        pair = await validate_pair_access(session.pair_id, user, db, require_active=True)
     voice_evidence_payload = _build_voice_evidence_payload(
         req.voice_evidence.model_dump(exclude_none=True)
         if req.voice_evidence is not None
@@ -495,8 +574,37 @@ async def chat_with_agent(
         # Summary failures must also leave the saved turn retryable.
         history = await refresh_session_summary_if_needed(db, session=session)
         await db.commit()
+        active_taboos = []
+        if session.pair_id:
+            try:
+                active_taboos = await get_active_taboos(db, pair_id=session.pair_id, user_id=user.id)
+            except Exception:
+                active_taboos = []
+        from app.services.companion_style import (
+            build_companion_style_prompt,
+            merge_taboos,
+            resolve_companion_context,
+        )
+        companion_ctx = resolve_companion_context(
+            user,
+            pair=pair,
+            pair_id=session.pair_id,
+            requested_style=req.tone_preference,
+            requested_intensity=req.expression_intensity,
+            current_text=effective_content,
+        )
+        system_prompt = build_agent_system_prompt(
+            surface=req.surface,
+            intent=req.scene_context.intent if req.scene_context else 'auto',
+            taboos=merge_taboos(companion_ctx.get("habit_taboos"), active_taboos),
+            companion_style_block=build_companion_style_prompt(companion_ctx),
+        )
+        from app.services.chat_memory_permission import save_question_guard
+        guard = save_question_guard(history)
+        if guard:
+            system_prompt = f"{system_prompt}\n\n## 这一轮要注意\n- {guard}"
         messages_for_llm = build_messages_for_llm(
-            system_prompt=build_agent_system_prompt(surface=req.surface, intent=req.scene_context.intent if req.scene_context else 'auto'),
+            system_prompt=system_prompt,
             history=history,
         )
         try:
@@ -507,6 +615,7 @@ async def chat_with_agent(
                 scope="pair" if session.pair_id else "solo",
                 run_type="agent_chat",
                 privacy_mode=privacy_mode,
+                chat_deadline=monotonic() + AGENT_COMPLETION_TIMEOUT_SECONDS,
             ):
                 reply_content, agent_steps, checkin_extracted = await asyncio.wait_for(
                     run_agent_loop(
@@ -514,14 +623,15 @@ async def chat_with_agent(
                         pair_id=str(session.pair_id) if session.pair_id else None,
                         user_id=str(user.id),
                         session_id=str(session.id),
+                        user_message_id=str(user_msg.id),
                         db=db,
-                        include_checkin_tool=include_checkin
+                        include_checkin_tool=include_checkin,
                     ),
                     timeout=AGENT_COMPLETION_TIMEOUT_SECONDS,
                 )
         except asyncio.TimeoutError:
             logger.warning("agent chat completion timed out")
-            raise HTTPException(status_code=504, detail="处理超过 1 分钟，已自动超时，请稍后再试")
+            raise HTTPException(status_code=504, detail="这次没能及时收到模型回复，请稍后重试这条消息。")
         except Exception as exc:
             logger.warning("agent loop failed: %s", exc.__class__.__name__)
             raise HTTPException(status_code=502, detail="这次没能连上助手，请稍后重试。") from exc
@@ -529,6 +639,27 @@ async def chat_with_agent(
         # 如果没有内容则兜底
         if not reply_content or not reply_content.strip():
             raise HTTPException(status_code=502, detail="这次没有收到回复，请重试。")
+
+        from app.services.reply_style import polish_reply
+        from app.services.draft_grounding import needs_draft_review
+        reply_content = polish_reply(reply_content, draft_requested=bool(
+            (req.scene_context and req.scene_context.intent == 'wording') or needs_draft_review(messages_for_llm)))
+        if not reply_content.strip():
+            raise HTTPException(status_code=502, detail="这次没有收到完整回复，请重试。")
+
+        if session.pair_id:
+            # 用户自己说出危险信号时留一份预警，私密单聊只通知本人。
+            try:
+                from app.services.crisis_processor import record_chat_crisis_signal
+                await record_chat_crisis_signal(
+                    db,
+                    pair_id=session.pair_id,
+                    user_id=user.id,
+                    text=effective_content,
+                    source_ref=f"session:{session.id}",
+                )
+            except Exception as exc:
+                logger.warning("record chat crisis signal failed: %s", exc.__class__.__name__)
 
         action = "chat"
         if checkin_extracted:
@@ -553,7 +684,7 @@ async def chat_with_agent(
                     content=func_args.get("diary_content", "通过对话生成的今日打卡..."),
                     mood_score=func_args.get("mood_score", 5),
                     interaction_freq=func_args.get("interaction_freq", 3),
-                    interaction_initiative="both",
+                    interaction_initiative="equal",
                     deep_conversation=func_args.get("deep_conversation", False),
                     task_completed=False,
                 )
@@ -572,9 +703,12 @@ async def chat_with_agent(
 
         # 保存 AI 最终回复和思路
         task_proposals = _task_proposals_from_steps(agent_steps)
+        reply_payload = {'task_proposals': task_proposals} if task_proposals else {}
+        if ((user_msg.payload or {}).get('memory_removal_request') or {}).get('state') == 'pending':
+            reply_payload['memory_removal_request_id'] = str(user_msg.id)
         assistant_msg = AgentChatMessage(
             session_id=session.id, role="assistant", content=reply_content,
-            payload={'task_proposals': task_proposals} if task_proposals else None,
+            payload=reply_payload or None,
         )
         db.add(assistant_msg)
         await db.flush()
@@ -692,7 +826,10 @@ async def run_active_checkup(
         raise HTTPException(status_code=404, detail="会话不存在")
 
     from app.services.safety_summary import build_safety_status
-    from app.services.intervention_evaluation import build_intervention_evaluation
+    from app.services.intervention_evaluation import (
+        RECOMMENDATION_LABELS,
+        build_intervention_evaluation,
+    )
     from app.ai.tools import _get_crisis_status, _get_active_tasks
 
     privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
@@ -741,6 +878,7 @@ async def run_active_checkup(
         risk_reason = str(
             intervention.get("reason")
             or intervention.get("risk_reason")
+            or intervention.get("recommendation_reason")
             or risk_reason
         )
     urgency = "monitor"
@@ -760,11 +898,22 @@ async def run_active_checkup(
         report_lines.append(f"本期主动巡查完成。关系健康分约 {health}/100，")
     else:
         report_lines.append("本期主动巡查完成。")
-    report_lines.append(f"当前风险等级为「{risk_level}」。")
+    risk_display = (
+        "低风险（整体平稳）"
+        if risk_level in ("low", "none")
+        else risk_level_label(risk_level)
+    )
+    report_lines.append(f"当前风险等级为“{risk_display}”。")
     if risk_reason:
-        report_lines.append(risk_reason)
+        report_lines.append(translate_inline_codes(risk_reason))
     if isinstance(intervention, dict) and intervention.get("recommendation"):
-        report_lines.append(f"建议：{intervention['recommendation']}")
+        recommendation = str(intervention["recommendation"])
+        recommendation_text = (
+            intervention.get("recommendation_label")
+            or RECOMMENDATION_LABELS.get(recommendation)
+            or translate_inline_codes(recommendation)
+        )
+        report_lines.append(f"建议：{recommendation_text}")
     else:
         report_lines.append("当前整体平稳，建议保持规律记录与沟通节奏。")
     report = "".join(report_lines)
@@ -797,6 +946,10 @@ async def run_active_checkup(
     )
 
 
+def _resolve_background_tasks(background_tasks: BackgroundTasks) -> BackgroundTasks:
+    return background_tasks
+
+
 @router.post(
     "/sessions/{session_id}/collaborate",
     response_model=AgentSwarmResponse,
@@ -804,6 +957,7 @@ async def run_active_checkup(
 async def collaborate_multi_agent(
     session_id: uuid.UUID,
     req: AgentChatRequest,
+    background_tasks: BackgroundTasks = Depends(_resolve_background_tasks),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -815,96 +969,219 @@ async def collaborate_multi_agent(
     if not session or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="会话不存在")
 
+    pair = None
     if session.pair_id:
-        await validate_pair_access(session.pair_id, user, db, require_active=True)
+        pair = await validate_pair_access(session.pair_id, user, db, require_active=True)
     checkin_extracted = False
     effective_content = str(req.content or "").strip()
-    user_msg = AgentChatMessage(
+    user_payload = {
+        "surface": req.surface,
+        "multi_agent": True,
+        **({"scene_context": req.scene_context.model_dump()} if req.scene_context else {}),
+    }
+    user_msg, cached_reply, _ = await prepare_chat_turn(
+        db,
         session_id=session.id,
-        role="user",
+        client_message_id=req.client_message_id,
         content=effective_content,
-        payload={"surface": req.surface, "multi_agent": True, **({'scene_context': req.scene_context.model_dump()} if req.scene_context else {})},
+        payload=user_payload,
     )
-    db.add(user_msg)
+    if cached_reply is not None:
+        return AgentSwarmResponse(
+            reply=cached_reply.reply,
+            action=cached_reply.action,
+            message_id=cached_reply.message_id,
+            task_proposals=cached_reply.task_proposals,
+            swarm=[],
+            trace=[],
+        )
     touch_session_activity(session)
     await db.flush()
+    user_message_id = user_msg.id
     await db.commit()
-
-    history = await refresh_session_summary_if_needed(db, session=session)
-    await db.commit()
-    messages_for_llm = build_messages_for_llm(
-        system_prompt=build_agent_system_prompt(surface=req.surface, intent=req.scene_context.intent if req.scene_context else 'auto'),
-        history=history,
-    )
-    privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
 
     try:
-        with privacy_audit_scope(
-            db=db,
-            user_id=user.id,
+        history = await refresh_session_summary_if_needed(db, session=session)
+        await db.commit()
+        active_taboos = []
+        if session.pair_id:
+            try:
+                active_taboos = await get_active_taboos(db, pair_id=session.pair_id, user_id=user.id)
+            except Exception:
+                active_taboos = []
+        from app.services.companion_style import (
+            build_companion_style_prompt,
+            merge_taboos,
+            resolve_companion_context,
+        )
+        companion_ctx = resolve_companion_context(
+            user,
+            pair=pair,
             pair_id=session.pair_id,
-            scope="pair" if session.pair_id else "solo",
-            run_type="agent_collaborate",
-            privacy_mode=privacy_mode,
-        ):
-            final_reply, final_steps, swarm, checkin_extracted = await asyncio.wait_for(
-                run_multi_agent_flow(
-                    messages=messages_for_llm,
-                    pair_id=str(session.pair_id) if session.pair_id else None,
-                    user_id=str(user.id),
-                    session_id=str(session.id),
-                    db=db,
-                ),
-                timeout=MULTI_AGENT_COMPLETION_TIMEOUT_SECONDS,
-            )
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="协作深度思考较久，请稍后再试或减少内容量")
-    except Exception as exc:
-        logger.warning("multi-agent collaborate failed: %s", exc.__class__.__name__)
-        raise HTTPException(status_code=502, detail="这次协作没能完成，请重试。") from exc
+            requested_style=req.tone_preference,
+            requested_intensity=req.expression_intensity,
+            current_text=effective_content,
+        )
+        system_prompt = build_agent_system_prompt(
+            surface=req.surface,
+            intent=req.scene_context.intent if req.scene_context else 'auto',
+            taboos=merge_taboos(companion_ctx.get("habit_taboos"), active_taboos),
+            companion_style_block=build_companion_style_prompt(companion_ctx),
+        )
+        from app.services.chat_memory_permission import save_question_guard
+        guard = save_question_guard(history)
+        if guard:
+            system_prompt = f"{system_prompt}\n\n## 这一轮要注意\n- {guard}"
+        messages_for_llm = build_messages_for_llm(
+            system_prompt=system_prompt,
+            history=history,
+        )
+        privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
 
-    if not final_reply or not final_reply.strip():
-        raise HTTPException(status_code=502, detail="这次没有收到回复，请重试。")
-    action = "checkin_extracted" if checkin_extracted else "chat"
+        try:
+            with privacy_audit_scope(
+                db=db,
+                user_id=user.id,
+                pair_id=session.pair_id,
+                scope="pair" if session.pair_id else "solo",
+                run_type="agent_collaborate",
+                privacy_mode=privacy_mode,
+                chat_deadline=monotonic() + MULTI_AGENT_COMPLETION_TIMEOUT_SECONDS,
+            ):
+                final_reply, final_steps, swarm, checkin_extracted = await asyncio.wait_for(
+                    run_multi_agent_flow(
+                        messages=messages_for_llm,
+                        pair_id=str(session.pair_id) if session.pair_id else None,
+                        user_id=str(user.id),
+                        session_id=str(session.id),
+                        user_message_id=str(user_msg.id),
+                        db=db,
+                    ),
+                    timeout=MULTI_AGENT_COMPLETION_TIMEOUT_SECONDS,
+                )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="协作深度思考较久，请稍后再试或减少内容量")
+        except Exception as exc:
+            logger.warning("multi-agent collaborate failed: %s", exc.__class__.__name__)
+            raise HTTPException(status_code=502, detail="这次协作没能完成，请重试。") from exc
 
-    task_proposals = _task_proposals_from_steps(final_steps)
-    assistant_msg = AgentChatMessage(
-        session_id=session.id, role="assistant", content=final_reply,
-        payload={'task_proposals': task_proposals} if task_proposals else None,
-    )
-    db.add(assistant_msg)
-    for step in final_steps:
-        if step.tool_calls:
-            db.add(AgentThought(
-                session_id=session.id,
-                step_index=step.step_index,
-                thought=step.thought,
-                tool_calls_json=json.dumps(step.tool_calls, ensure_ascii=False),
-                tool_results_json=json.dumps(step.tool_results, ensure_ascii=False),
-                duration_ms=step.duration_ms,
-            ))
-    touch_session_activity(session)
-    await db.commit()
-    await refresh_session_summary_if_needed(db, session=session)
-    await db.commit()
+        if not final_reply or not final_reply.strip():
+            raise HTTPException(status_code=502, detail="这次没有收到回复，请重试。")
 
-    return AgentSwarmResponse(
-        reply=final_reply,
-        action=action,
-        message_id=assistant_msg.id,
-        task_proposals=task_proposals,
-        swarm=[
-            {
-                "role": s.role,
-                "role_name": s.role_name,
-                "summary": s.summary,
-                "status": s.status,
-                "duration_ms": s.duration_ms,
-            }
-            for s in swarm
-        ],
-        trace=_serialize_agent_steps(final_steps),
-    )
+        from app.services.reply_style import polish_reply
+        from app.services.draft_grounding import needs_draft_review
+        final_reply = polish_reply(final_reply, draft_requested=bool(
+            (req.scene_context and req.scene_context.intent == 'wording') or needs_draft_review(messages_for_llm)))
+        if not final_reply.strip():
+            raise HTTPException(status_code=502, detail="这次没有收到完整回复，请重试。")
+
+        if session.pair_id:
+            try:
+                from app.services.crisis_processor import record_chat_crisis_signal
+                await record_chat_crisis_signal(
+                    db,
+                    pair_id=session.pair_id,
+                    user_id=user.id,
+                    text=effective_content,
+                    source_ref=f"session:{session.id}",
+                )
+            except Exception as exc:
+                logger.warning("record collaborate crisis signal failed: %s", exc.__class__.__name__)
+
+        action = "checkin_extracted" if checkin_extracted else "chat"
+        if checkin_extracted:
+            func_args = {}
+            for step in final_steps:
+                for tc in getattr(step, "tool_calls", None) or []:
+                    fn = tc.get("function") or {}
+                    if fn.get("name") == "extract_checkin_data":
+                        try:
+                            func_args = json.loads(fn.get("arguments") or "{}")
+                        except Exception:
+                            pass
+                        break
+            if func_args:
+                from app.api.v1.checkins import create_checkin
+                from app.schemas import CheckinRequest
+
+                checkin_req = CheckinRequest(
+                    pair_id=session.pair_id,
+                    content=func_args.get("diary_content", "通过对话生成的今日打卡..."),
+                    mood_score=func_args.get("mood_score", 5),
+                    interaction_freq=func_args.get("interaction_freq", 3),
+                    interaction_initiative="equal",
+                    deep_conversation=func_args.get("deep_conversation", False),
+                    task_completed=False,
+                )
+                try:
+                    resolved_tasks = (
+                        background_tasks
+                        if isinstance(background_tasks, BackgroundTasks)
+                        else BackgroundTasks()
+                    )
+                    await create_checkin(
+                        req=checkin_req,
+                        background_tasks=resolved_tasks,
+                        mode="solo" if not session.pair_id else None,
+                        user=user,
+                        db=db,
+                    )
+                    session.has_extracted_checkin = True
+                except Exception as exc:
+                    logger.error("Save collaborative checkin failed: %s", exc.__class__.__name__)
+
+        task_proposals = _task_proposals_from_steps(final_steps)
+        reply_payload = {'task_proposals': task_proposals} if task_proposals else {}
+        if ((user_msg.payload or {}).get('memory_removal_request') or {}).get('state') == 'pending':
+            reply_payload['memory_removal_request_id'] = str(user_msg.id)
+        assistant_msg = AgentChatMessage(
+            session_id=session.id, role="assistant", content=final_reply,
+            payload=reply_payload or None,
+        )
+        db.add(assistant_msg)
+        await db.flush()
+        complete_chat_turn(user_msg, reply_id=assistant_msg.id, action=action)
+        for step in final_steps:
+            if step.tool_calls:
+                db.add(AgentThought(
+                    session_id=session.id,
+                    step_index=step.step_index,
+                    thought=step.thought,
+                    tool_calls_json=json.dumps(step.tool_calls, ensure_ascii=False),
+                    tool_results_json=json.dumps(step.tool_results, ensure_ascii=False),
+                    duration_ms=step.duration_ms,
+                ))
+        touch_session_activity(session)
+        await db.commit()
+        await refresh_session_summary_if_needed(db, session=session)
+        await db.commit()
+
+        return AgentSwarmResponse(
+            reply=final_reply,
+            action=action,
+            message_id=assistant_msg.id,
+            task_proposals=task_proposals,
+            swarm=[
+                {
+                    "role": s.role,
+                    "role_name": s.role_name,
+                    "summary": s.summary,
+                    "status": s.status,
+                    "duration_ms": s.duration_ms,
+                }
+                for s in swarm
+            ],
+            trace=_serialize_agent_steps(final_steps),
+        )
+    except HTTPException:
+        await db.rollback()
+        await fail_chat_turn(db, user_message_id)
+        raise
+    except Exception:
+        await db.rollback()
+        await fail_chat_turn(db, user_message_id)
+        logger.exception("multi-agent collaborate failed")
+        raise HTTPException(status_code=500, detail="智能服务暂时不可用，请稍后再试")
 
 
 @router.post("/simulate-message", response_model=MessageSimulationResponse)
@@ -915,6 +1192,7 @@ async def simulate_message(
     db: AsyncSession = Depends(get_db),
 ):
     """在消息发出前做一轮关系语境下的风险预演。"""
+    t_total_start = perf_counter()
     if not req.draft.strip():
         raise HTTPException(status_code=400, detail="请先输入准备发送的内容")
     privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
@@ -931,6 +1209,7 @@ async def simulate_message(
         bypass=is_relaxed_test_account(user),
     )
 
+    t_snapshot_start = perf_counter()
     if pair:
         result = await db.execute(
             select(RelationshipProfileSnapshot)
@@ -971,6 +1250,7 @@ async def simulate_message(
             .limit(1)
         )
         active_plan = plan_result.scalar_one_or_none()
+    snapshot_ms = int((perf_counter() - t_snapshot_start) * 1000)
 
     context = _simulation_fallback_context(pair, user) if pair else _simulation_solo_context(user, snapshot)
     if pair and snapshot:
@@ -988,7 +1268,30 @@ async def simulate_message(
             "risk_level": active_plan.risk_level,
             "goal_json": active_plan.goal_json or {},
         }
+    from app.services.companion_style import (
+        build_simulation_style_context,
+        resolve_companion_context,
+    )
+    pair_taboos = []
+    if pair:
+        try:
+            pair_taboos = await get_active_taboos(db, pair_id=pair.id, user_id=user.id)
+        except Exception:
+            pair_taboos = []
+    companion_ctx = resolve_companion_context(
+        user,
+        pair=pair,
+        pair_id=pair.id if pair else None,
+        requested_style=req.tone_preference,
+        requested_intensity=req.expression_intensity,
+        current_text=req.draft,
+    )
+    context["communication_profile"] = build_simulation_style_context(
+        companion_ctx,
+        pair_taboos=pair_taboos,
+    )
 
+    t_model_start = perf_counter()
     try:
         with privacy_audit_scope(
             db=db,
@@ -997,12 +1300,15 @@ async def simulate_message(
             scope="pair" if pair else "solo",
             run_type="message_simulation",
             privacy_mode=privacy_mode,
+            chat_deadline=monotonic() + SIMULATION_TIMEOUT_SECONDS,
         ):
             simulation = await simulate_message_preview(req.draft, context)
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="处理超过 1 分钟，已自动超时，请稍后再试")
     except MessageSimulationUnavailableError:
         raise HTTPException(status_code=502, detail="这次没能完成改写，原句已保留，请重试。")
+    model_ms = int((perf_counter() - t_model_start) * 1000)
+    t_post_start = perf_counter()
     safety_status = await build_safety_status(
         db,
         pair_id=pair.id if pair else None,
@@ -1037,7 +1343,9 @@ async def simulate_message(
             "risk_level": simulation.get("risk_level"),
             "conversation_goal": simulation.get("conversation_goal"),
             "suggested_tone": simulation.get("suggested_tone"),
-            "safer_rewrite": (simulation.get("safer_rewrite") or req.draft)[:200],
+            "safer_rewrite": simulation.get("safer_rewrite", "")[:200],
+            "rewrite_blocked": simulation.get("rewrite_blocked", False),
+            "rewrite_block_reason": simulation.get("rewrite_block_reason"),
             "algorithm_version": simulation.get("algorithm_version"),
             "confidence": simulation.get("confidence"),
             "decision_trace": simulation.get("decision_trace") or {},
@@ -1079,7 +1387,8 @@ async def simulate_message(
             {
                 "conversation_goal": simulation.get("conversation_goal"),
                 "suggested_tone": simulation.get("suggested_tone"),
-                "safer_rewrite": (simulation.get("safer_rewrite") or req.draft)[:200],
+                "safer_rewrite": simulation.get("safer_rewrite", "")[:200],
+                "rewrite_blocked": simulation.get("rewrite_blocked", False),
                 "algorithm_version": simulation.get("algorithm_version"),
                 "confidence": simulation.get("confidence"),
                 "decision_trace": simulation.get("decision_trace") or {},
@@ -1098,6 +1407,18 @@ async def simulate_message(
 
     if pair:
         await refresh_profile_and_plan(db, pair_id=pair.id)
+    post_persist_ms = int((perf_counter() - t_post_start) * 1000)
+    total_ms = int((perf_counter() - t_total_start) * 1000)
+    sim_sub = simulation.get("_timings_ms") or {}
+    stage_timings_ms = {
+        "snapshot_ms": snapshot_ms,
+        "baseline_ms": int(sim_sub.get("baseline_ms") or 0),
+        "llm_ms": int(sim_sub.get("llm_ms") or model_ms),
+        "model_stage_ms": model_ms,
+        "persist_ms": post_persist_ms,
+        "total_ms": total_ms,
+    }
+    logger.info("message_simulation_timings scope=%s timings=%s", "pair" if pair else "solo", stage_timings_ms)
 
     return MessageSimulationResponse(
         event_id=simulation_event.id,
@@ -1107,7 +1428,15 @@ async def simulate_message(
         risk_level=simulation.get("risk_level", "medium"),
         risk_level_label=simulation.get("risk_level_label") or risk_level_label(simulation.get("risk_level", "medium")),
         risk_reason=simulation.get("risk_reason", ""),
+        speaker_attribution=simulation.get("speaker_attribution"),
+        pressure_risk_level=simulation.get("pressure_risk_level"),
+        pressure_risk_label=simulation.get("pressure_risk_label"),
+        escalation_friction_level=simulation.get("escalation_friction_level"),
+        escalation_friction_label=simulation.get("escalation_friction_label"),
+        escalation_cues=simulation.get("escalation_cues") or [],
         safer_rewrite=simulation.get("safer_rewrite", req.draft),
+        rewrite_blocked=simulation.get("rewrite_blocked", False),
+        rewrite_block_reason=simulation.get("rewrite_block_reason"),
         suggested_tone=simulation.get("suggested_tone", ""),
         conversation_goal=simulation.get("conversation_goal"),
         do_list=simulation.get("do_list") or [],
@@ -1129,6 +1458,7 @@ async def simulate_message(
         limitation_note=safety_status.get("limitation_note"),
         safety_handoff=safety_handoff,
         crisis_support=crisis_support or safety_status.get("crisis_support"),
+        stage_timings_ms=stage_timings_ms,
     )
 
 
@@ -1196,20 +1526,50 @@ async def submit_message_decision_feedback(
     }
 
 
+@asynccontextmanager
+async def _open_ws_db_session(websocket: WebSocket):
+    db_dep = websocket.app.dependency_overrides.get(get_db, get_db)
+    gen = db_dep()
+    db = await anext(gen)
+    try:
+        yield db
+    except Exception:
+        try:
+            await gen.athrow(Exception("ws_db_rollback"))
+        except StopAsyncIteration:
+            pass
+        except Exception:
+            pass
+        raise
+    else:
+        try:
+            await anext(gen)
+        except StopAsyncIteration:
+            pass
+    finally:
+        await gen.aclose()
+
+
 async def _authenticate_realtime_asr_websocket(
     websocket: WebSocket,
     db: AsyncSession,
 ) -> User | None:
     ticket = str(websocket.query_params.get("ticket") or "").strip()
-    user_id = decode_realtime_ws_ticket(ticket) if ticket else None
+    auth_payload = decode_realtime_ws_ticket_payload(ticket) if ticket else None
     auth_header = ""
 
-    if not user_id:
+    if auth_payload is not None:
+        consumed = await get_ws_ticket_store().consume_once(
+            auth_payload["jti"], auth_payload["remaining_seconds"]
+        )
+        if not consumed:
+            auth_payload = None
+    elif not ticket:
         auth_header = websocket.headers.get("authorization", "").strip()
         token = auth_header.removeprefix("Bearer ").strip()
-        user_id = decode_access_token(token) if token else None
+        auth_payload = decode_access_token_payload(token) if token else None
 
-    if not user_id:
+    if not auth_payload:
         message = "登录已失效，请重新登录" if ticket or auth_header else "缺少认证令牌"
         await websocket.send_json(
             {"type": "error", "code": "unauthorized", "message": message}
@@ -1218,7 +1578,7 @@ async def _authenticate_realtime_asr_websocket(
         return None
 
     try:
-        user_uuid = uuid.UUID(str(user_id))
+        user_uuid = uuid.UUID(str(auth_payload["user_id"]))
     except (TypeError, ValueError):
         await websocket.send_json(
             {"type": "error", "code": "unauthorized", "message": "登录信息无效，请重新登录"}
@@ -1228,9 +1588,14 @@ async def _authenticate_realtime_asr_websocket(
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
-    if not user:
+    if (
+        not user
+        or (user.email or "").startswith("deleted_")
+        or int(getattr(user, "token_version", 0) or 0)
+        != int(auth_payload.get("token_version", 0) or 0)
+    ):
         await websocket.send_json(
-            {"type": "error", "code": "unauthorized", "message": "用户不存在"}
+            {"type": "error", "code": "unauthorized", "message": "登录已失效，请重新登录"}
         )
         await websocket.close(code=4401)
         return None
@@ -1512,13 +1877,14 @@ async def _log_realtime_asr_audit(
 @router.websocket("/asr/realtime")
 async def realtime_asr(
     websocket: WebSocket,
-    db: AsyncSession = Depends(get_db),
 ):
     """统一实时语音识别入口，由后端代理到配置的 realtime ASR provider。"""
     await websocket.accept()
-    user = await _authenticate_realtime_asr_websocket(websocket, db)
+    async with _open_ws_db_session(websocket) as auth_db:
+        user = await _authenticate_realtime_asr_websocket(websocket, auth_db)
     if not user:
         return
+    user_id = user.id
 
     provider = None
     provider_task: asyncio.Task | None = None
@@ -1558,14 +1924,15 @@ async def realtime_asr(
                     realtime_result,
                 )
                 if provider_name and provider_model:
-                    await _log_realtime_asr_audit(
-                        db,
-                        user_id=user.id,
-                        provider_name=provider_name,
-                        model_name=provider_model,
-                        started_at=session_started_at,
-                        result=realtime_result,
-                    )
+                    async with _open_ws_db_session(websocket) as audit_db:
+                        await _log_realtime_asr_audit(
+                            audit_db,
+                            user_id=user_id,
+                            provider_name=provider_name,
+                            model_name=provider_model,
+                            started_at=session_started_at,
+                            result=realtime_result,
+                        )
                     realtime_audit_logged = True
                 await provider.close()
                 provider = None
@@ -1586,8 +1953,16 @@ async def realtime_asr(
                     )
                     continue
 
-                provider_name = str(payload.get("provider") or settings.REALTIME_ASR_PROVIDER)
-                requested_model = payload.get("model")
+                provider_name = str(settings.REALTIME_ASR_PROVIDER)
+                sample_rate_raw = int(payload.get("sample_rate") or 16000)
+                sample_rate = (
+                    sample_rate_raw
+                    if sample_rate_raw in {8000, 16000, 24000, 44100, 48000}
+                    else 16000
+                )
+                audio_format_raw = str(payload.get("format") or "pcm").lower()
+                audio_format = audio_format_raw if audio_format_raw in {"pcm", "wav", "opus"} else "pcm"
+                language_raw = str(payload.get("language") or "zh").strip()[:16] or "zh"
                 session_started_at = perf_counter()
                 realtime_audit_logged = False
                 realtime_result = {
@@ -1597,14 +1972,13 @@ async def realtime_asr(
                 }
                 provider = create_realtime_asr_client(
                     provider=provider_name,
-                    model=str(requested_model) if requested_model else None,
-                    language=str(payload.get("language") or "zh"),
-                    sample_rate=int(payload.get("sample_rate") or 16000),
-                    input_audio_format=str(payload.get("format") or "pcm"),
+                    model=None,
+                    language=language_raw,
+                    sample_rate=sample_rate,
+                    input_audio_format=audio_format,
                 )
                 provider_model = str(
                     getattr(provider, "model", None)
-                    or requested_model
                     or settings.QWEN_ASR_REALTIME_MODEL
                 )
                 await provider.connect()
@@ -1649,14 +2023,15 @@ async def realtime_asr(
                     realtime_result,
                 )
                 if provider_name and provider_model:
-                    await _log_realtime_asr_audit(
-                        db,
-                        user_id=user.id,
-                        provider_name=provider_name,
-                        model_name=provider_model,
-                        started_at=session_started_at,
-                        result=realtime_result,
-                    )
+                    async with _open_ws_db_session(websocket) as audit_db:
+                        await _log_realtime_asr_audit(
+                            audit_db,
+                            user_id=user_id,
+                            provider_name=provider_name,
+                            model_name=provider_model,
+                            started_at=session_started_at,
+                            result=realtime_result,
+                        )
                     realtime_audit_logged = True
                 await provider.close()
                 provider = None
@@ -1674,7 +2049,7 @@ async def realtime_asr(
             )
 
     except WebSocketDisconnect:
-        logger.info("realtime asr websocket disconnected user=%s", user.id)
+        logger.info("realtime asr websocket disconnected user=%s", user_id)
         realtime_result = {
             "transcript": realtime_result.get("transcript") or "",
             "status": "error",
@@ -1717,14 +2092,15 @@ async def realtime_asr(
             and provider_model
             and session_started_at is not None
         ):
-            await _log_realtime_asr_audit(
-                db,
-                user_id=user.id,
-                provider_name=provider_name,
-                model_name=provider_model,
-                started_at=session_started_at,
-                result=realtime_result,
-            )
+            async with _open_ws_db_session(websocket) as audit_db:
+                await _log_realtime_asr_audit(
+                    audit_db,
+                    user_id=user_id,
+                    provider_name=provider_name,
+                    model_name=provider_model,
+                    started_at=session_started_at,
+                    result=realtime_result,
+                )
         if provider is not None:
             await provider.close()
         try:
@@ -1740,6 +2116,7 @@ async def realtime_asr(
 async def skill_analyze(
     pair_id: uuid.UUID,
     content: str,
+    save_memories: bool = False,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1747,6 +2124,9 @@ async def skill_analyze(
 
     前端用这个端点发送复杂关系事件，后端自动执行：
     表达澄清 → 立场分析 → 冲突识别 → 行动规划 → 记忆提取
+
+    记忆提取的结果默认只作为建议返回，不直接落库；用户在界面上确认要长期记住，
+    调用时带上 save_memories=true 再写一次，和单聊里的保存口径保持一致。
     """
     from app.ai.skill_orchestrator import orchestrate
     from app.services.relationship_memory import recall_memories, batch_store_from_skill
@@ -1759,13 +2139,15 @@ async def skill_analyze(
         db, pair_id=pair_id, user_id=user.id, query=content, limit=5,
     )
 
-    # 按计划调用各分析模块
-    package = await orchestrate(
-        content,
-        pair_id=str(pair_id),
-        user_id=str(user.id),
-        relationship_memories=memories,
-    )
+    # 独立分析遵守整轮等待预算，分析模型由编排器明确选择。
+    with privacy_audit_scope(chat_deadline=monotonic() + AGENT_COMPLETION_TIMEOUT_SECONDS):
+        package = await orchestrate(
+            content,
+            combine_core=True,
+            pair_id=str(pair_id),
+            user_id=str(user.id),
+            relationship_memories=memories,
+        )
 
     delivery = package.to_dict()
 
@@ -1779,21 +2161,37 @@ async def skill_analyze(
     )
     db.add(record)
 
-    # 批量写入长期记忆
-    if package.memories_to_save:
+    # 记忆提取结果默认只回给前端当建议，用户确认后再写
+    stored_memories = 0
+    if package.memories_to_save and save_memories:
         await batch_store_from_skill(
             db,
             pair_id=pair_id,
             user_id=user.id,
             memories=package.memories_to_save,
         )
+        stored_memories = len(package.memories_to_save)
 
     await db.commit()
+
+    failed_skills = [
+        {
+            "skill": step["skill_name"],
+            "status": step["status"],
+            "reason": step.get("reason"),
+        }
+        for step in delivery["skill_trace"]
+        if step["status"] not in {"ok", "success"}
+    ]
 
     return {
         "record_id": str(record.id),
         "delivery": delivery,
         "related_memories": memories,
+        "pending_memories": package.memories_to_save or [],
+        "memories_saved": stored_memories,
+        "partial": bool(failed_skills),
+        "failed_skills": failed_skills,
     }
 
 
@@ -1812,7 +2210,7 @@ async def skill_select_proposal(
     await validate_pair_access(pair_id, user, db, require_active=True)
 
     record = await db.get(SkillAnalysisRecord, record_id)
-    if not record or record.user_id != user.id:
+    if not record or record.user_id != user.id or record.pair_id != pair_id:
         raise HTTPException(status_code=404, detail="分析记录不存在")
 
     # 从保存的分析结果中提取上下文
@@ -1826,11 +2224,12 @@ async def skill_select_proposal(
     if delivery_json.get("proposals"):
         analysis_results["action_plan"] = {"proposals": delivery_json["proposals"]}
 
-    draft = await generate_draft_for_proposal(
-        record.user_input,
-        proposal_id,
-        analysis_results=analysis_results,
-    )
+    with privacy_audit_scope(chat_deadline=monotonic() + AGENT_COMPLETION_TIMEOUT_SECONDS):
+        draft = await generate_draft_for_proposal(
+            record.user_input,
+            proposal_id,
+            analysis_results=analysis_results,
+        )
 
     # 更新记录（使用新字典赋值触发 SQLAlchemy JSON 字段变更保存）
     record.selected_proposal_id = proposal_id
@@ -1845,10 +2244,14 @@ async def skill_review(
     pair_id: uuid.UUID,
     content: str,
     record_id: uuid.UUID | None = None,
+    save_memories: bool = False,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """复盘 — 对一次关系事件进行复盘分析。"""
+    """复盘 — 对一次关系事件进行复盘分析。
+
+    复盘里顺带提取的记忆同样先当建议返回，用户确认（save_memories=true）才写库。
+    """
     from app.ai.skill_registry import SKILL_REGISTRY, execute_skill
     from app.ai.skill_registry import SkillOutput
     from app.services.relationship_memory import batch_store_from_skill
@@ -1862,27 +2265,52 @@ async def skill_review(
         raise HTTPException(status_code=500, detail="复盘模块不可用")
 
     context = {"user_input": content, "review_input": content}
-    review_output = await execute_skill(
-        review_skill, context=context, previous_results={},
-    )
-
-    # 同时提取记忆
     memories_to_save = []
-    if memory_skill:
-        memory_output = await execute_skill(
-            memory_skill, context=context,
-            previous_results={"review": review_output},
+    memories_saved = 0
+    memory_output = None
+    with privacy_audit_scope(chat_deadline=monotonic() + AGENT_COMPLETION_TIMEOUT_SECONDS):
+        review_output = await execute_skill(
+            review_skill, context=context, previous_results={},
         )
-        if memory_output.success:
-            memories_to_save = memory_output.data.get("memories", [])
+        if memory_skill:
+            memory_output = await execute_skill(
+                memory_skill, context=context,
+                previous_results={"review": review_output},
+            )
+
+    # 同时提取记忆（默认只回建议）
+    if memory_output and memory_output.success:
+        memories_to_save = memory_output.data.get("memories", [])
+        if save_memories and memories_to_save:
             await batch_store_from_skill(
                 db, pair_id=pair_id, user_id=user.id, memories=memories_to_save,
             )
+            memories_saved = len(memories_to_save)
 
     await db.commit()
+    failed_skills = []
+    if not review_output.success:
+        failed_skills.append(
+            {
+                "skill": "review",
+                "status": "ok" if review_output.success else "error",
+                "reason": review_output.error,
+            }
+        )
+    if memory_output is not None and not memory_output.success:
+        failed_skills.append(
+            {
+                "skill": "memory_write",
+                "status": "ok" if memory_output.success else "error",
+                "reason": memory_output.error,
+            }
+        )
     return {
         "review": review_output.data if review_output.success else {},
-        "memories_saved": len(memories_to_save),
+        "memories_saved": memories_saved,
+        "pending_memories": memories_to_save,
+        "partial": bool(failed_skills),
+        "failed_skills": failed_skills,
     }
 
 
@@ -1912,3 +2340,70 @@ async def skill_memories(
         )
 
     return {"memories": results, "total": len(results)}
+
+
+@router.get("/companion-styles")
+async def get_companion_styles(
+    pair_id: uuid.UUID | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """返回亲健 4 种陪聊风格、3 档表达力度及当前账号/关系生效的配置。"""
+    from app.services.companion_style import (
+        list_companion_styles,
+        list_expression_intensities,
+        resolve_companion_context,
+    )
+
+    pair = None
+    if pair_id is not None:
+        pair = await validate_pair_access(pair_id, user, db, require_active=True)
+    ctx = resolve_companion_context(user, pair=pair, pair_id=pair_id)
+    prefs = normalize_product_prefs(user.product_prefs)
+    return {
+        "styles": list_companion_styles(),
+        "default_style": ctx["requested_style_key"] if pair_id is None else prefs.get("tone_preference", "gentle"),
+        "active_style": ctx["style_key"],
+        "pair_tone_preferences": dict(prefs.get("pair_tone_preferences") or {}),
+        "intensities": list_expression_intensities(),
+        "default_intensity": prefs.get("expression_intensity", "balanced"),
+        "active_intensity": ctx["intensity_key"],
+    }
+
+
+@router.get("/style-profile")
+async def get_style_profile(user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """当前用户的说话方式档位。只有风格偏好会进这里，当轮情绪不进。"""
+    prefs = normalize_product_prefs(user.product_prefs)
+    profile = tone_read_profile(prefs.get("tone_profile"))
+    return {"profile": profile, "guide": tone_guide_text(profile), "is_default": tone_is_default(profile)}
+
+
+@router.post("/style-feedback")
+async def submit_style_feedback(
+    payload: StyleFeedbackRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """记一条语气反馈。单次点击不改档位，同一方向攒够三条且满七天才会挪一格。"""
+    prefs = normalize_product_prefs(user.product_prefs)
+    profile, result = tone_record_signal(prefs.get("tone_profile"), verdict=payload.verdict, note=payload.note)
+    merged = dict(user.product_prefs or {})
+    merged["tone_profile"] = profile
+    user.product_prefs = normalize_product_prefs(merged)
+    await db.commit()
+    return {"profile": profile, "guide": tone_guide_text(profile), "result": result}
+
+
+@router.post("/style-profile/reset")
+async def reset_style_profile(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """一键回到默认语气，留着历史以便事后查。"""
+    merged = dict(user.product_prefs or {})
+    profile = tone_reset_profile(merged.get("tone_profile"))
+    merged["tone_profile"] = profile
+    user.product_prefs = normalize_product_prefs(merged)
+    await db.commit()
+    return {"profile": profile, "guide": tone_guide_text(profile), "result": {"changed": True, "reason": "已回到默认语气。"}}

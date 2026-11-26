@@ -4,6 +4,17 @@ import { existsSync } from 'node:fs'
 
 const utilityUrl = new URL('./contextAgent.js', import.meta.url)
 
+test('day chat carries archive summaries alongside titles without forwarding hidden fields', async () => {
+  const { buildTimelineDaySummary } = await import(utilityUrl)
+  const summary = buildTimelineDaySummary([
+    { title: '拒绝加班', summary: '没有答应明天补班', detail: '没有答应明天补班', payload: { secret: 'PRIVATE' } },
+    { summary: '需要休息' },
+  ])
+  assert.equal(summary, '拒绝加班：没有答应明天补班\n需要休息')
+  assert.doesNotMatch(summary, /PRIVATE/)
+  assert.equal(buildTimelineDaySummary(Array.from({ length: 7 }, (_, i) => ({ title: String(i) }))).split('\n').length, 6)
+})
+
 test('context prompts contain the selected source and question without forwarding hidden payloads', async () => {
   assert.ok(existsSync(utilityUrl), 'selected-context prompt helper is missing')
   const { buildContextPrompt } = await import(utilityUrl)

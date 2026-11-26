@@ -7,6 +7,7 @@ import { useCheckinStore } from '@/stores/checkin'
 import { DEMO_TOKEN, cloneDemo, demoFixture } from '@/demo/fixtures'
 import { setRefreshAttemptGuardBypass } from '@/utils/refreshGuards'
 import { setStorageOwner, clearStorageOwner } from '@/utils/accountStorage'
+import { clearAllScopedDrafts } from '@/utils/draftPersistence'
 
 export const useUserStore = defineStore('user', () => {
   const me = ref(null)
@@ -16,6 +17,7 @@ export const useUserStore = defineStore('user', () => {
   const notifications = ref([])
   watch(token, () => {
     clearStorageOwner()
+    clearAllScopedDrafts()
     useHomeStore().reset()
     useReportStore().reset()
     useCheckinStore().reset()
@@ -71,6 +73,7 @@ export const useUserStore = defineStore('user', () => {
 
   function logout() {
     clearStorageOwner()
+    clearAllScopedDrafts()
     token.value = ''
     me.value = null
     pairs.value = []
@@ -311,9 +314,13 @@ export const useUserStore = defineStore('user', () => {
     try {
       await Promise.all([fetchMe(), fetchPairs(), loadNotifications()])
       return requestToken === token.value
-    } catch {
-      if (requestToken === token.value) logout()
-      return false
+    } catch (error) {
+      const status = Number(error?.statusCode || error?.status || 0)
+      if ((status === 401 || status === 403) && requestToken === token.value) {
+        logout()
+        return false
+      }
+      return requestToken === token.value && Boolean(token.value)
     }
   }
 

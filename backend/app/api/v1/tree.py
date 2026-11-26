@@ -1,5 +1,6 @@
 """关系树游戏化接口"""
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +25,7 @@ from app.models import (
 from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
 
 router = APIRouter(prefix="/tree", tags=["关系树"])
+logger = logging.getLogger(__name__)
 
 LEVEL_NAME = {
     TreeLevel.SEED: "种子",
@@ -69,11 +71,14 @@ def _parse_pair_uuid(pair_id: uuid.UUID | str) -> uuid.UUID:
 async def _get_or_create_tree(
     pair_id: uuid.UUID | str,
     db: AsyncSession,
+    *,
+    lock: bool = False,
 ) -> RelationshipTree:
     pair_uuid = _parse_pair_uuid(pair_id)
-    result = await db.execute(
-        select(RelationshipTree).where(RelationshipTree.pair_id == pair_uuid)
-    )
+    stmt = select(RelationshipTree).where(RelationshipTree.pair_id == pair_uuid)
+    if lock:
+        stmt = stmt.with_for_update()
+    result = await db.execute(stmt)
     tree = result.scalar_one_or_none()
     if not tree:
         tree = RelationshipTree(pair_id=pair_uuid)
@@ -98,14 +103,21 @@ def _progress_percent(growth_points: int, next_threshold: int | None) -> int:
 def _reset_energy_state_if_needed(
     tree: RelationshipTree,
     today_iso: str,
+    user_id: uuid.UUID | None = None,
 ) -> set[str]:
     state = tree.energy_state if isinstance(tree.energy_state, dict) else {}
     if state.get("date") != today_iso:
-        tree.energy_state = {"date": today_iso, "collected": []}
+        tree.energy_state = {"date": today_iso, "collected": [], "by_user": {}}
+        return set()
+    by_user = state.get("by_user")
+    if user_id is not None and isinstance(by_user, dict):
+        user_items = by_user.get(str(user_id))
+        if isinstance(user_items, list):
+            return {str(item) for item in user_items}
         return set()
     collected = state.get("collected")
     if not isinstance(collected, list):
-        tree.energy_state = {"date": today_iso, "collected": []}
+        tree.energy_state = {"date": today_iso, "collected": [], "by_user": {}}
         return set()
     return {str(item) for item in collected}
 
@@ -192,7 +204,7 @@ async def _serialize_tree_status(
 ) -> dict:
     today = current_local_date()
     today_iso = str(today)
-    collected = _reset_energy_state_if_needed(tree, today_iso)
+    collected = _reset_energy_state_if_needed(tree, today_iso, user.id)
     energy_nodes = _build_energy_nodes(
         await _load_today_activity(db, pair=pair, user=user),
         collected,
@@ -223,7 +235,7 @@ def _apply_growth(tree: RelationshipTree, points: int) -> bool:
     level_up = tree.level != old_level
     if level_up:
         today = current_local_date()
-        milestones = tree.milestones or []
+        milestones = list(tree.milestones or [])
         milestones.append(
             {"type": "level_up", "level": tree.level.value, "date": str(today)}
         )
@@ -260,7 +272,7 @@ async def get_tree_status(
 
     pair_uuid = _parse_pair_uuid(pair_id)
     pair = await validate_pair_access(pair_uuid, user, db, require_active=True)
-    tree = await _get_or_create_tree(pair_uuid, db)
+    tree = await _get_or_create_tree(pair_uuid, db, lock=True)
     return await _serialize_tree_status(db, pair=pair, user=user, tree=tree)
 
 
@@ -284,9 +296,9 @@ async def collect_tree_energy(
 
     pair_uuid = _parse_pair_uuid(pair_id)
     pair = await validate_pair_access(pair_uuid, user, db, require_active=True)
-    tree = await _get_or_create_tree(pair_uuid, db)
+    tree = await _get_or_create_tree(pair_uuid, db, lock=True)
     today_iso = str(current_local_date())
-    collected = _reset_energy_state_if_needed(tree, today_iso)
+    collected = _reset_energy_state_if_needed(tree, today_iso, user.id)
     nodes = {
         node["key"]: node
         for node in _build_energy_nodes(
@@ -301,7 +313,14 @@ async def collect_tree_energy(
         raise HTTPException(status_code=400, detail=node["hint"])
 
     collected.add(node_key)
-    tree.energy_state = {"date": today_iso, "collected": sorted(collected)}
+    prev_state = tree.energy_state if isinstance(tree.energy_state, dict) else {}
+    by_user = dict(prev_state.get("by_user") or {}) if prev_state.get("date") == today_iso else {}
+    by_user[str(user.id)] = sorted(collected)
+    tree.energy_state = {
+        "date": today_iso,
+        "collected": sorted(collected),
+        "by_user": by_user,
+    }
     tree.last_watered = current_local_date()
     points_added = ENERGY_RULES[node_key]["points"]
     level_up = _apply_growth(tree, points_added)
@@ -359,6 +378,9 @@ async def grow_tree_on_checkin(
     _ = both_done, streak
     from app.core.database import async_session
 
-    async with async_session() as db:
-        await _get_or_create_tree(pair_id, db)
-        await db.commit()
+    try:
+        async with async_session() as db:
+            await _get_or_create_tree(pair_id, db)
+            await db.commit()
+    except Exception as exc:
+        logger.warning("后台初始化关系树失败，已跳过: %s", exc.__class__.__name__)

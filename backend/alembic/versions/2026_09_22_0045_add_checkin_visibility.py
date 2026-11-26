@@ -9,6 +9,8 @@ Default scope follows the settled product decision: ``shared_summary``
 remains an explicit per-record opt-out.
 """
 
+from typing import Union
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql

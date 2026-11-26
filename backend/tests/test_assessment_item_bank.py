@@ -105,3 +105,31 @@ async def test_build_weekly_assessment_pack_uses_long_distance_profile_copy():
     assert payload["title"] == "异地关系体检"
     assert "异地关系" in payload["subtitle"]
     assert "隔着距离" in payload["items"][0]["prompt"]
+
+
+@pytest.mark.anyio
+async def test_weekly_assessment_trend_handles_single_first_submission():
+    from datetime import datetime
+    from app.services.weekly_assessments import get_weekly_assessment_trend
+
+    single_event = SimpleNamespace(
+        id=uuid.uuid4(),
+        pair_id=uuid.uuid4(),
+        user_id=None,
+        occurred_at=datetime(2026, 11, 25, 10, 0, 0),
+        created_at=datetime(2026, 11, 25, 10, 0, 0),
+        payload={
+            "total_score": 82,
+            "dimension_scores": [{"id": "connection", "label": "连接与表达", "score": 82, "status": "strong"}],
+            "change_summary": "第一次评估",
+        },
+    )
+
+    class OneEventSession:
+        async def execute(self, *_args, **_kwargs):
+            return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [single_event]))
+
+    trend = await get_weekly_assessment_trend(OneEventSession(), pair_id=single_event.pair_id, limit=4)
+    assert trend["latest_score"] == 82
+    assert len(trend["trend_points"]) == 1
+    assert "第一次" in trend["change_summary"]

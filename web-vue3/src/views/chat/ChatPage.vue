@@ -6,14 +6,36 @@
         <h2>有什么想聊的？</h2>
       </div>
       <div class="chat-head__actions">
-        <button class="btn btn-ghost btn-sm" type="button" :disabled="startingNewTopic || voiceActive || voiceFinalizing" @click="startNewTopic">
+        <button
+          class="btn btn-ghost btn-sm"
+          type="button"
+          :class="{ 'is-active': historyPanelOpen }"
+          :aria-expanded="historyPanelOpen"
+          :disabled="sessionPending || responsePending"
+          @click="toggleSessionHistory"
+        >
+          <History :size="14" />
+          历史话题
+        </button>
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="sessionPending || responsePending || uploadingVoice || voiceActive || voiceFinalizing" @click="startNewTopic">
           {{ startingNewTopic ? '切换中...' : '新话题' }}
         </button>
-        <button class="btn btn-ghost btn-sm" type="button" :disabled="runningCheckup" @click="runCheckup">
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="sessionPending || responsePending || runningCheckup" @click="runCheckup">
           {{ runningCheckup ? '巡查中...' : '主动巡查' }}
         </button>
-        <button class="btn btn-ghost btn-sm" type="button" :disabled="collaborating" @click="runCollaboration">
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="sessionPending || responsePending || uploadingVoice || voiceActive || voiceFinalizing" @click="runCollaboration">
           {{ collaborating ? '协作中...' : '多智能体' }}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm"
+          type="button"
+          :class="{ 'is-active': voicePreferencePanelOpen }"
+          :aria-expanded="voicePreferencePanelOpen"
+          aria-controls="voice-preference-panel"
+          @click="voicePreferencePanelOpen = !voicePreferencePanelOpen"
+        >
+          <Settings2 :size="14" />
+          语音偏好
         </button>
         <button class="btn btn-secondary btn-sm" type="button" @click="moveToCheckin">
           整理成今日记录
@@ -23,23 +45,45 @@
     </section>
 
     <section class="chat-shell">
-      <header v-if="!embedded" class="chat-shell__toolbar">
-        <div class="chat-shell__mode">
-          <button
-            class="voice-preference-trigger"
-            type="button"
-            :aria-expanded="voicePreferencePanelOpen"
-            aria-controls="voice-preference-panel"
-            @click="voicePreferencePanelOpen = !voicePreferencePanelOpen"
-          >
-            <Settings2 :size="14" />
-            <span class="voice-preference-trigger__full">语音偏好：{{ voicePreferenceSummary }}</span>
-            <span class="voice-preference-trigger__short">语音偏好</span>
-            <strong>调整</strong>
+      <section
+        v-if="!embedded && historyPanelOpen"
+        class="chat-history-panel"
+        aria-label="历史话题"
+      >
+        <div class="chat-history-panel__head">
+          <div>
+            <strong>最近话题</strong>
+            <span>{{ historySessions.length ? `共 ${historySessions.length} 条记录` : '切回之前的对话继续聊' }}</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" @click="historyPanelOpen = false">
+            <X :size="14" />
+            收起
           </button>
-          <span class="chat-shell__privacy">最长 {{ recordingMaxSecondsLabel }} · {{ voiceSendPreferenceHint }}</span>
         </div>
-      </header>
+        <div v-if="loadingSessions" class="chat-history-panel__empty">正在加载历史话题...</div>
+        <div v-else-if="experienceMode.isDemoMode && !realAgentDemo" class="chat-history-panel__empty">
+          演示模式下可通过顶部切换关系查看不同样例对话。
+        </div>
+        <div v-else-if="!historySessions.length" class="chat-history-panel__empty">
+          还没有可切换的历史话题，先在这里聊几句吧。
+        </div>
+        <div v-else class="chat-history-panel__list">
+          <button
+            v-for="item in historySessions"
+            :key="item.session_id"
+            type="button"
+            class="chat-history-item"
+            :class="{ active: String(item.session_id) === String(sessionId) }"
+            @click="selectHistorySession(item)"
+          >
+            <div class="chat-history-item__top">
+              <strong>{{ formatSessionTopic(item) }}</strong>
+              <span>{{ formatSessionTime(item.updated_at || item.created_at) }}</span>
+            </div>
+            <p>{{ item.last_message || `共 ${item.message_count || 0} 条消息` }}</p>
+          </button>
+        </div>
+      </section>
 
       <section
         v-if="voicePreferencePanelOpen"
@@ -47,6 +91,9 @@
         class="voice-preference-panel"
         aria-label="语音偏好设置"
       >
+        <div class="voice-preference-panel__summary">
+          <span>当前设置：{{ voicePreferenceSummary }} · 最长 {{ recordingMaxSecondsLabel }} · {{ voiceSendPreferenceHint }}</span>
+        </div>
         <div
           v-for="group in voicePreferenceGroups"
           :key="group.key"
@@ -120,48 +167,7 @@
 
       <div ref="messageListEl" class="chat-list">
         <div v-if="loadingHistory" class="empty-state">正在加载这段聊天...</div>
-        <article v-if="checkupResult" class="chat-checkup-card">
-          <header class="chat-checkup-card__head">
-            <div>
-              <span>主动巡查</span>
-              <strong>{{ checkupRiskTitle }}</strong>
-            </div>
-            <button class="btn btn-ghost btn-sm" type="button" @click="checkupResult = null">
-              <X :size="14" />
-              关闭
-            </button>
-          </header>
-          <p class="chat-checkup-card__report">{{ checkupResult.report }}</p>
-          <div v-if="checkupActions.length" class="chat-checkup-card__actions">
-            <span>建议推进</span>
-            <strong v-for="(item, index) in checkupActions" :key="index">{{ item }}</strong>
-          </div>
-        </article>
-        <article v-if="swarmResult" class="chat-swarm-card">
-          <header class="chat-swarm-card__head">
-            <div>
-              <span>多智能体协作</span>
-              <strong>感知 → 分析 → 行动 → 陪伴</strong>
-            </div>
-            <button class="btn btn-ghost btn-sm" type="button" @click="swarmResult = null">
-              <X :size="14" />
-              关闭
-            </button>
-          </header>
-          <p class="chat-swarm-card__meta">共 {{ swarmResult.length }} 个角色接力 · 总耗时 {{ swarmTotalTime }}毫秒</p>
-          <div class="chat-swarm-card__roles">
-            <div v-for="(step, index) in swarmResult" :key="step.role" class="chat-swarm-card__role" :class="`is-${step.status}`">
-              <div class="chat-swarm-card__role-title">
-                <span class="chat-swarm-card__role-index">{{ index + 1 }}</span>
-                <span class="chat-swarm-card__role-name">{{ step.role_name }}</span>
-                <span class="chat-swarm-card__role-status">{{ swarmStatusLabel(step) }}</span>
-                <span v-if="step.duration_ms" class="chat-swarm-card__role-time">{{ Math.round(step.duration_ms) }}ms</span>
-              </div>
-              <p class="chat-swarm-card__role-summary">{{ step.summary }}</p>
-            </div>
-          </div>
-        </article>
-        <div v-else-if="!messages.length" class="empty-state">
+        <div v-else-if="!messages.length && !checkupResult && !swarmResult" class="empty-state">
           先说一句，或者上传一段录音。
         </div>
         <article
@@ -175,26 +181,26 @@
             <p class="chat-msg__text">{{ message.content }}</p>
             <div v-if="message.error" class="chat-msg__error-hint" role="alert">
               <p>{{ message.errorMessage || '这次没收到回复，原话还在。' }}</p>
-              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || loadingHistory || startingNewTopic" @click="sendMessage({ retryMessage: message })">重试</button>
-              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || Boolean(draft.trim())" @click="editFailedMessage(message)">重新编辑</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sessionPending || responsePending" @click="sendMessage({ retryMessage: message })">重试</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sessionPending || responsePending || Boolean(draft.trim())" @click="editFailedMessage(message)">重新编辑</button>
             </div>
             <details v-if="message.payload?.scene_context?.summary" class="chat-msg__reference">
               <summary>{{ message.payload.scene_context.source_label }} · 参考内容</summary>
               <p>{{ message.payload.scene_context.summary }}</p>
             </details>
-            <AgentTaskProposals v-if="message.role === 'assistant'" :message="message" :session-id="sessionId" @confirmed="markTaskConfirmed(message, $event)" />
+            <AgentTaskProposals v-if="message.role === 'assistant'" :message="message" :session-id="sessionId" :pair-id="activePairId || null" @confirmed="markTaskConfirmed(message, $event)" />
             <div v-if="message.role === 'assistant' && message.id === lastAssistantId" class="chat-msg__refinements">
               <button
                 type="button"
                 class="btn btn-ghost btn-sm btn-regenerate"
-                :disabled="sending || loadingHistory || regeneratingId === message.id"
+                :disabled="sessionPending || responsePending"
                 @click="regenerateVariant(message)"
               >
                 <RefreshCw :size="12" :class="{ 'is-spinning': regeneratingId === message.id }" />
                 <span>{{ regeneratingId === message.id ? '换一种构思中...' : '换个说法' }}</span>
               </button>
-              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || loadingHistory || regeneratingId === message.id" @click="refineReply('short')">短一点</button>
-              <button type="button" class="btn btn-ghost btn-sm" :disabled="sending || loadingHistory || regeneratingId === message.id" @click="refineReply(sceneContext?.intent === 'plan' ? 'lighter' : 'direct')">{{ sceneContext?.intent === 'plan' ? '换个轻松的办法' : '直接一点' }}</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sessionPending || responsePending" @click="refineReply('short')">短一点</button>
+              <button type="button" class="btn btn-ghost btn-sm" :disabled="sessionPending || responsePending" @click="refineReply(sceneContext?.intent === 'plan' ? 'lighter' : 'direct')">{{ sceneContext?.intent === 'plan' ? '换个轻松的办法' : '直接一点' }}</button>
               <button type="button" class="btn btn-ghost btn-sm" @click="copyReply(message.content)">
                 <Copy :size="12" />
                 <span>复制</span>
@@ -251,7 +257,51 @@
             </div>
           </div>
         </article>
-        <div v-if="sending" class="chat-waiting" role="status" aria-live="polite"><span class="chat-spinner" aria-hidden="true"></span>正在回复…</div>
+        <article v-if="checkupResult" class="chat-checkup-card">
+          <header class="chat-checkup-card__head">
+            <div>
+              <span>主动巡查</span>
+              <strong>{{ checkupRiskTitle }}</strong>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" @click="checkupResult = null">
+              <X :size="14" />
+              关闭
+            </button>
+          </header>
+          <p class="chat-checkup-card__report">{{ checkupResult.report }}</p>
+          <div v-if="checkupActions.length" class="chat-checkup-card__actions">
+            <span>建议推进</span>
+            <strong v-for="(item, index) in checkupActions" :key="index">{{ item }}</strong>
+          </div>
+        </article>
+        <article v-if="swarmResult" class="chat-swarm-card">
+          <header class="chat-swarm-card__head">
+            <div>
+              <span>多智能体协作</span>
+              <strong>感知 · 分析 · 行动 · 陪伴</strong>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" @click="swarmResult = null">
+              <X :size="14" />
+              关闭
+            </button>
+          </header>
+          <p class="chat-swarm-card__meta">共 {{ swarmResult.length }} 个角色接力 · 总耗时 {{ swarmTotalTime }}毫秒</p>
+          <div class="chat-swarm-card__roles">
+            <div v-for="(step, index) in swarmResult" :key="step.role" class="chat-swarm-card__role" :class="`is-${step.status}`">
+              <div class="chat-swarm-card__role-title">
+                <span class="chat-swarm-card__role-index">{{ index + 1 }}</span>
+                <span class="chat-swarm-card__role-name">{{ step.role_name }}</span>
+                <span class="chat-swarm-card__role-status">{{ swarmStatusLabel(step) }}</span>
+                <span v-if="step.duration_ms" class="chat-swarm-card__role-time">{{ Math.round(step.duration_ms) }}ms</span>
+              </div>
+              <p class="chat-swarm-card__role-summary">{{ formatSwarmSummary(step.summary) }}</p>
+            </div>
+          </div>
+        </article>
+        <div v-if="sending || collaborating || runningCheckup" class="chat-waiting" role="status" aria-live="polite">
+          <span class="chat-spinner" aria-hidden="true"></span>
+          {{ collaborating ? '多智能体协作思考中…' : runningCheckup ? '正在主动巡查这段关系…' : '正在回复…' }}
+        </div>
       </div>
       <p v-if="sendError" class="chat-send-error" role="alert">{{ sendError }}</p>
 
@@ -262,7 +312,7 @@
             <span class="chat-suggestions-bar__title">{{ currentDemoQA?.name ? `${currentDemoQA.name} 专属推荐` : '快捷提问' }}</span>
             <span v-if="currentDemoQA?.scenarioDescription" class="chat-suggestions-bar__scenario">· {{ currentDemoQA.scenarioDescription }}</span>
           </div>
-          <span class="chat-suggestions-bar__hint">点击即发</span>
+          <span class="chat-suggestions-bar__hint">填入输入框</span>
         </div>
         <div class="chat-suggestions-bar__list">
           <button
@@ -270,7 +320,7 @@
             :key="idx"
             type="button"
             class="chat-suggestion-chip"
-            :disabled="sending"
+            :disabled="responsePending"
             @click="askSuggestedQuestion(q)"
           >
             {{ q }}
@@ -291,7 +341,8 @@
           ></textarea>
         </label>
         <div class="chat-composer__actions">
-          <button class="btn btn-ghost btn-sm" type="button" :disabled="uploadingVoice || sending || experienceMode.isDemoMode" @click="openVoiceUpload">
+          <span class="chat-composer__note">这里的对话不会发给对方</span>
+          <button class="btn btn-ghost btn-sm" type="button" :disabled="sessionPending || responsePending || uploadingVoice || voiceActive || voiceFinalizing || experienceMode.isDemoMode" @click="openVoiceUpload">
             <Upload :size="15" />
             上传录音
           </button>
@@ -299,7 +350,7 @@
             class="btn btn-sm"
             :class="voiceActive ? 'btn-secondary' : 'btn-ghost'"
             type="button"
-            :disabled="sending || voiceFinalizing"
+            :disabled="sessionPending || responsePending || uploadingVoice || voiceFinalizing"
             @click="toggleVoiceInput"
           >
             <component :is="voiceActive ? StopCircle : Mic" :size="15" />
@@ -319,13 +370,15 @@
 </template>
 
 <script setup>
-import { ArrowUpRight, Copy, Mic, RefreshCw, SendHorizontal, Settings2, StopCircle, Trash2, Upload, X } from 'lucide-vue-next'
+import { formatBeijingMonthDayTime } from '@/utils/datetime'
+import { ArrowUpRight, Copy, History, Mic, RefreshCw, SendHorizontal, Settings2, StopCircle, Trash2, Upload, X } from 'lucide-vue-next'
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { api, isRealAgentEnabled } from '@/api'
 import { inspectVoiceFile } from '@/utils/clientAi'
 import { saveChatDraftToCheckin } from '@/utils/checkinDraftBridge'
+import { clearAllScopedDrafts, loadScopedDraft, saveScopedDraft } from '@/utils/draftPersistence'
 import AgentTaskProposals from '@/components/AgentTaskProposals.vue'
 import { buildSceneContext, isChatScopeCurrent, summarizeAgentTools } from '@/utils/contextAgent'
 import { AI_WAITING_NOTICE, VOICE_TRANSCRIPTION_WAITING_NOTICE } from '@/utils/aiWaitFeedback'
@@ -346,6 +399,7 @@ const props = defineProps({
   sceneContext: { type: Object, default: null },
 })
 
+const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const showToast = inject('showToast')
@@ -401,7 +455,9 @@ function readStoredVoicePreferences() {
 }
 
 const loadingHistory = ref(false)
+const creatingSession = ref(false)
 const sending = ref(false)
+const regeneratingId = ref('')
 const uploadingVoice = ref(false)
 const startingNewTopic = ref(false)
 const messages = ref([])
@@ -409,6 +465,9 @@ const lastAssistantId = computed(() => messages.value.findLast(item => item.role
 const draft = ref('')
 const sessionId = ref('')
 const sessionExpiresAt = ref('')
+const historyPanelOpen = ref(false)
+const loadingSessions = ref(false)
+const historySessions = ref([])
 const voicePreferencePanelOpen = ref(false)
 const voicePreferences = reactive(readStoredVoicePreferences())
 const autoSendVoice = ref(voicePreferences.sending === 'auto')
@@ -433,12 +492,20 @@ let chatDisposed = false
 let pendingSessionRequest = null
 let chatRevision = 0
 
+const sessionPending = computed(() => creatingSession.value || loadingHistory.value || startingNewTopic.value)
+const responsePending = computed(() => sending.value || collaborating.value || runningCheckup.value || Boolean(regeneratingId.value))
+
 function captureChatScope() { return { token: userStore.token, userId: userStore.me?.id, pairId: activePairId.value, revision: chatRevision, disposed: chatDisposed } }
 function assertChatScope(scope) {
   if (!isChatScopeCurrent(scope, captureChatScope())) throw new Error('聊天已关闭或关系已切换，请重新进入。')
 }
 
-const activePairId = computed(() => props.contextPairId !== undefined ? props.contextPairId : userStore.activePairId || null)
+const activePairId = computed(() => {
+  if (props.contextPairId !== undefined) return props.contextPairId
+  const requested = String(route.query.pair_id || '')
+  const available = userStore.pairs.some(pair => pair.status === 'active' && String(pair.id) === requested)
+  return available ? requested : userStore.activePairId || null
+})
 const experienceMode = computed(() =>
   resolveExperienceMode({
     isDemoMode: userStore.isDemoMode,
@@ -447,7 +514,7 @@ const experienceMode = computed(() =>
     pairs: userStore.pairs,
   })
 )
-const currentDemoQA = computed(() => getDemoPersonaQA(activePairId.value))
+const currentDemoQA = computed(() => experienceMode.value.isDemoMode ? getDemoPersonaQA(activePairId.value) : null)
 const demoSuggestedQuestions = computed(() => currentDemoQA.value?.suggestedQuestions || [])
 
 function loadPersonaQA(personaId) {
@@ -466,17 +533,21 @@ function handleEnterKey(event) {
   }
 }
 
-async function askSuggestedQuestion(q) {
-  if (sending.value) return
-  draft.value = q
-  await sendMessage()
+function askSuggestedQuestion(q) {
+  if (responsePending.value) return
+  if (draft.value.trim()) {
+    notify('先发出或清空正在写的话，再选择问题')
+    return
+  }
+  applySuggestedPrompt(q)
 }
 
-const realAgentDemo = computed(() => isRealAgentEnabled())
+const realAgentDemo = computed(() => !experienceMode.value.isDemoMode && isRealAgentEnabled())
 const canSend = computed(() => {
+  if (experienceMode.value.isDemoMode) return false
   const hasText = Boolean(String(draft.value || '').trim())
   const hasTranscript = Boolean(String(pendingVoiceEvidence.value?.transcript_text || '').trim())
-  return !loadingHistory.value && !sending.value && !voiceActive.value && !voiceFinalizing.value && (hasText || hasTranscript)
+  return !sessionPending.value && !responsePending.value && !uploadingVoice.value && !voiceActive.value && !voiceFinalizing.value && (hasText || hasTranscript)
 })
 const voiceButtonLabel = computed(() => {
   if (voiceFinalizing.value) return '收尾中...'
@@ -500,7 +571,7 @@ const emotionDisplayMode = computed(() => voicePreferences.emotion)
 const shouldShowEmotionInsight = computed(() => emotionDisplayMode.value !== 'hidden')
 const shouldShowDetailedEvidence = computed(() => emotionDisplayMode.value === 'evidence')
 const composerHint = computed(() => {
-  if (experienceMode.value.isDemoMode && !realAgentDemo.value) return featureUnavailableReason('demo-online', experienceMode.value)
+  if (experienceMode.value.isDemoMode) return '这里展示样例对话，登录账号后可以发送新消息。'
   if (sending.value) return '亲健正在回复。'
   if (voiceFinalizing.value) return '正在保存录音。'
   if (voiceActive.value) {
@@ -752,8 +823,20 @@ function scrollMessagesToBottom() {
   })
 }
 
+let voiceSessionSeq = 0
+const voiceStarting = ref(false)
+
+function isCurrentVoiceSession(sessionSeq, scope) {
+  return (
+    !chatDisposed
+    && sessionSeq === voiceSessionSeq
+    && isChatScopeCurrent(scope, captureChatScope())
+  )
+}
+
 function cleanupVoiceState(status = '') {
   voiceActive.value = false
+  voiceStarting.value = false
   voiceFinalizing.value = false
   voiceStatus.value = status
   liveTranscript.value = ''
@@ -761,16 +844,27 @@ function cleanupVoiceState(status = '') {
   voiceController.value = null
 }
 
+function invalidateVoiceSession(status = '') {
+  voiceSessionSeq += 1
+  const controller = voiceController.value
+  cleanupVoiceState(status)
+  controller?.cleanup?.()
+}
+
 function stopVoiceInput({ discard = false } = {}) {
   if (!voiceController.value) {
-    cleanupVoiceState()
+    invalidateVoiceSession()
+    return
+  }
+  if (discard) {
+    invalidateVoiceSession()
     return
   }
   voiceActive.value = false
-  voiceFinalizing.value = !discard
-  voiceStatus.value = discard ? '' : '正在保存最后一段录音。'
-  voiceController.value.stop?.({ discard })
-  if (discard) cleanupVoiceState()
+  voiceStarting.value = false
+  voiceFinalizing.value = true
+  voiceStatus.value = '正在保存最后一段录音。'
+  voiceController.value.stop?.({ discard: false })
 }
 
 async function ensureAgentSession({ forceNew = false } = {}) {
@@ -787,6 +881,7 @@ async function ensureAgentSession({ forceNew = false } = {}) {
   if (pendingSessionRequest && !forceNew) return pendingSessionRequest
   const scope = captureChatScope()
   assertChatScope(scope)
+  creatingSession.value = true
   const request = (async () => {
     const session = await api.createAgentSession(scope.pairId, {
       forceNew: forceNew || (props.isolated && !sessionId.value),
@@ -794,7 +889,7 @@ async function ensureAgentSession({ forceNew = false } = {}) {
     })
     assertChatScope(scope)
     const resolvedId = session.session_id || session.id
-    const history = await api.getAgentMessages(resolvedId).catch(() => [])
+    const history = await api.getAgentMessages(resolvedId)
     assertChatScope(scope)
     sessionId.value = resolvedId
     sessionExpiresAt.value = session.expires_at || ''
@@ -808,7 +903,12 @@ async function ensureAgentSession({ forceNew = false } = {}) {
   })()
   pendingSessionRequest = request
   try { return await request }
-  finally { if (pendingSessionRequest === request) pendingSessionRequest = null }
+  finally {
+    if (pendingSessionRequest === request) {
+      pendingSessionRequest = null
+      creatingSession.value = false
+    }
+  }
 }
 
 async function loadInitialSession() {
@@ -849,13 +949,17 @@ function newClientMessageId() {
 }
 
 function editFailedMessage(message) {
-  if (sending.value || draft.value.trim()) return
+  if (sessionPending.value || responsePending.value || draft.value.trim()) return
   draft.value = message.content
   focusComposer()
 }
 
 async function sendMessage({ overrideContent = null, overrideEvidence = null, retryMessage = null } = {}) {
-  if (chatDisposed || loadingHistory.value || sending.value || startingNewTopic.value) return false
+  if (experienceMode.value.isDemoMode) {
+    notify('登录账号后可以发送新消息，输入内容已保留。')
+    return false
+  }
+  if (chatDisposed || sessionPending.value || responsePending.value || uploadingVoice.value) return false
   if (retryMessage && (!messages.value.includes(retryMessage) || !retryMessage.error)) return false
   sendError.value = ''
   const sendScope = captureChatScope()
@@ -888,7 +992,7 @@ async function sendMessage({ overrideContent = null, overrideEvidence = null, re
   optimisticMessage.deliveryPending = true
   // 用户消息立即推入聊天列表，始终予以保留
   if (!retryMessage) {
-    draft.value = ''
+    if (overrideContent === null || draft.value === currentDraft) draft.value = ''
     if (!overrideEvidence || overrideEvidence === pendingVoiceEvidence.value) pendingVoiceEvidence.value = null
     messages.value.push(optimisticMessage)
   }
@@ -949,8 +1053,8 @@ async function sendMessage({ overrideContent = null, overrideEvidence = null, re
   }
 }
 
-function applySuggestedPrompt(text) {
-  draft.value = String(text || '').trim()
+function applySuggestedPrompt(text, { preserveDraft = false } = {}) {
+  if (!preserveDraft || !draft.value.trim()) draft.value = String(text || '').trim()
   nextTick(() => focusComposer())
 }
 
@@ -959,16 +1063,25 @@ function focusComposer() {
 }
 
 async function beginScene(text) {
-  applySuggestedPrompt(text)
+  const reviewedPrompt = String(text || '').trim()
+  if (!reviewedPrompt) return false
+  const scope = captureChatScope()
+  applySuggestedPrompt(reviewedPrompt)
   const ready = await loadInitialSession()
-  if (!ready || chatDisposed) return false
+  if (!ready || !isChatScopeCurrent(scope, captureChatScope())) return false
+  try {
+    await ensureAgentSession()
+    assertChatScope(scope)
+  } catch (error) {
+    if (isChatScopeCurrent(scope, captureChatScope())) notify(error.message || '暂时无法开始这段聊天')
+    return false
+  }
+  if (draft.value !== reviewedPrompt) return false
   return sendMessage()
 }
 
-const regeneratingId = ref('')
-
 async function regenerateVariant(targetMessage) {
-  if (sending.value || loadingHistory.value || regeneratingId.value) return
+  if (sessionPending.value || responsePending.value || uploadingVoice.value || voiceActive.value || voiceFinalizing.value) return
   if (!targetMessage) return
   const scope = captureChatScope()
 
@@ -1021,7 +1134,7 @@ async function regenerateVariant(targetMessage) {
       notify(err.message || '换个说法暂时受阻，请稍后重试')
     }
   } finally {
-    regeneratingId.value = ''
+    if (isChatScopeCurrent(scope, captureChatScope())) regeneratingId.value = ''
   }
 }
 
@@ -1068,6 +1181,7 @@ async function handleVoiceUpload(event) {
   const file = event.target.files?.[0]
   if (voiceInput.value) voiceInput.value.value = ''
   if (!file) return
+  if (sessionPending.value || responsePending.value || uploadingVoice.value || voiceActive.value || voiceFinalizing.value) return
   if (experienceMode.value.isDemoMode) {
     notify(featureUnavailableReason('voice', experienceMode.value))
     return
@@ -1084,6 +1198,7 @@ async function handleVoiceUpload(event) {
 }
 
 function openVoiceUpload() {
+  if (sessionPending.value || responsePending.value || uploadingVoice.value || voiceActive.value || voiceFinalizing.value) return
   if (experienceMode.value.isDemoMode) {
     notify(featureUnavailableReason('voice', experienceMode.value))
     return
@@ -1091,7 +1206,8 @@ function openVoiceUpload() {
   voiceInput.value?.click()
 }
 
-async function handleRealtimeFinal(result) {
+async function handleRealtimeFinal(result, sessionSeq, scope) {
+  if (!isCurrentVoiceSession(sessionSeq, scope)) return
   const transcript = String(result?.text || liveTranscript.value || '').trim()
   let upload = null
   if (result?.rawAudioBlob) {
@@ -1099,9 +1215,11 @@ async function handleRealtimeFinal(result) {
       const audioFile = createAudioFileFromBlob(result.rawAudioBlob)
       upload = await api.uploadFile('voice', audioFile)
     } catch (error) {
+      if (!isCurrentVoiceSession(sessionSeq, scope)) return
       notify(error.message || '原始录音没保存上，这轮先保留转写文字')
     }
   }
+  if (!isCurrentVoiceSession(sessionSeq, scope)) return
 
   const evidence = normalizeVoiceEvidence({
     voice_url: upload?.url || '',
@@ -1130,10 +1248,11 @@ async function handleRealtimeFinal(result) {
   }
 
   draft.value = mergeTranscriptText(draft.value, transcript)
-    notify('录音已放进草稿，可改字再发')
+  notify('录音已放进草稿，可改字再发')
 }
 
-function handleVoiceError(message) {
+function handleVoiceError(message, sessionSeq, scope) {
+  if (!isCurrentVoiceSession(sessionSeq, scope)) return
   const text = String(message || '').trim() || '这次没识别出来，请重试'
   const partialTranscript = String(liveTranscript.value || '').trim()
   cleanupVoiceState(text)
@@ -1150,6 +1269,11 @@ async function toggleVoiceInput() {
     stopVoiceInput()
     return
   }
+  if (voiceStarting.value) {
+    invalidateVoiceSession('已取消开启麦克风。')
+    return
+  }
+  if (sessionPending.value || responsePending.value || uploadingVoice.value) return
   if (voiceFinalizing.value) {
     notify('正在保存最后一段录音')
     return
@@ -1158,49 +1282,71 @@ async function toggleVoiceInput() {
     notify(featureUnavailableReason('voice', experienceMode.value))
     return
   }
+  const sessionSeq = ++voiceSessionSeq
+  const scope = captureChatScope()
+  let controller = null
   try {
+    voiceStarting.value = true
     voiceStatus.value = '正在打开麦克风。'
     recordingRemainingSeconds.value = recordingMaxSeconds
-    voiceController.value = createBackendRealtimeAsr({
+    controller = createBackendRealtimeAsr({
       captureRawAudio: true,
       maxDurationSeconds: recordingMaxSeconds,
       getSocketUrl: () => api.buildRealtimeAsrSocketUrl(),
       onActive: () => {
+        if (!isCurrentVoiceSession(sessionSeq, scope)) {
+          controller?.cleanup?.()
+          return
+        }
+        voiceStarting.value = false
         voiceActive.value = true
         voiceFinalizing.value = false
       },
       onStatus: (text) => {
+        if (!isCurrentVoiceSession(sessionSeq, scope)) return
         voiceStatus.value = text
       },
       onPartial: (text) => {
+        if (!isCurrentVoiceSession(sessionSeq, scope)) return
         if (!voiceActive.value || voiceFinalizing.value) return
         liveTranscript.value = text
         voiceStatus.value = '正在转写，可能会有少量错字。'
       },
       onTick: ({ remainingSeconds }) => {
+        if (!isCurrentVoiceSession(sessionSeq, scope)) return
         if (!voiceActive.value || voiceFinalizing.value) return
         recordingRemainingSeconds.value = remainingSeconds
       },
       onTimeLimit: () => {
+        if (!isCurrentVoiceSession(sessionSeq, scope)) return
         voiceStatus.value = `已到 ${recordingMaxSecondsLabel.value} 上限，正在保存这段语音。`
       },
-      onFinal: handleRealtimeFinal,
-      onError: handleVoiceError,
+      onFinal: (payload) => handleRealtimeFinal(payload, sessionSeq, scope),
+      onError: (message) => handleVoiceError(message, sessionSeq, scope),
     })
-    await voiceController.value.start()
+    voiceController.value = controller
+    const started = await controller.start()
+    if (!started || !isCurrentVoiceSession(sessionSeq, scope)) {
+      controller.cleanup()
+      if (voiceController.value === controller) cleanupVoiceState()
+      return
+    }
   } catch (error) {
+    controller?.cleanup?.()
+    if (!isCurrentVoiceSession(sessionSeq, scope)) return
     cleanupVoiceState()
     notify(describeVoiceStartError(error))
   }
 }
 
 async function startNewTopic() {
-  if (startingNewTopic.value || sending.value || voiceActive.value || voiceFinalizing.value) return
+  if (sessionPending.value || responsePending.value || uploadingVoice.value || voiceActive.value || voiceFinalizing.value) return
   if (experienceMode.value.isDemoMode && !realAgentDemo.value) {
     notify(featureUnavailableReason('demo-online', experienceMode.value))
     return
   }
   startingNewTopic.value = true
+  historyPanelOpen.value = false
   chatRevision++
   pendingSessionRequest = null
   try {
@@ -1210,6 +1356,83 @@ async function startNewTopic() {
     notify(error.message || '暂时不能开启新话题')
   } finally {
     startingNewTopic.value = false
+  }
+}
+
+function formatSessionTopic(item) {
+  const topic = String(item?.topic || '').trim()
+  if (topic) return topic
+  const preview = String(item?.last_message || '').trim()
+  if (preview) return preview.slice(0, 20)
+  return '未命名话题'
+}
+
+function formatSessionTime(value) {
+  return formatBeijingMonthDayTime(value)
+}
+
+async function loadSessionHistory() {
+  if (experienceMode.value.isDemoMode && !realAgentDemo.value) {
+    historySessions.value = []
+    return
+  }
+  const scope = captureChatScope()
+  loadingSessions.value = true
+  try {
+    const list = await api.getAgentSessions(20)
+    assertChatScope(scope)
+    const targetPairId = scope.pairId ? String(scope.pairId) : ''
+    historySessions.value = (Array.isArray(list) ? list : []).filter((item) => {
+      const itemPairId = item?.pair_id ? String(item.pair_id) : ''
+      return itemPairId === targetPairId
+    })
+  } catch (error) {
+    if (isChatScopeCurrent(scope, captureChatScope())) {
+      notify(error.message || '暂时拉不到历史话题')
+    }
+  } finally {
+    if (isChatScopeCurrent(scope, captureChatScope())) {
+      loadingSessions.value = false
+    }
+  }
+}
+
+async function toggleSessionHistory() {
+  historyPanelOpen.value = !historyPanelOpen.value
+  if (historyPanelOpen.value) {
+    await loadSessionHistory()
+  }
+}
+
+async function selectHistorySession(item) {
+  const targetId = item?.session_id
+  if (!targetId || loadingHistory.value) return
+  if (String(targetId) === String(sessionId.value)) {
+    historyPanelOpen.value = false
+    return
+  }
+  const scope = captureChatScope()
+  loadingHistory.value = true
+  historyPanelOpen.value = false
+  try {
+    const history = await api.getAgentMessages(targetId)
+    assertChatScope(scope)
+    sessionId.value = targetId
+    sessionExpiresAt.value = item?.expires_at || ''
+    checkupResult.value = null
+    swarmResult.value = null
+    messages.value = (Array.isArray(history) ? history : [])
+      .filter((entry) => entry.role === 'user' || entry.role === 'assistant')
+      .map(normalizeMessage)
+    scrollMessagesToBottom()
+  } catch (error) {
+    if (isChatScopeCurrent(scope, captureChatScope())) {
+      notify(error.message || '切换历史话题失败，请稍后再试')
+    }
+  } finally {
+    if (isChatScopeCurrent(scope, captureChatScope())) {
+      loadingHistory.value = false
+    }
   }
 }
 
@@ -1247,8 +1470,12 @@ const checkupRiskTitle = computed(() => {
   const map = {
     severe: '风险偏高 · 建议尽快关注',
     high: '风险偏高 · 建议尽快关注',
+    moderate: '有一定波动 · 建议近期关注',
     medium: '有一定波动 · 建议近期关注',
+    watch: '值得留意 · 建议近期关注',
+    mild: '轻度波动 · 保持留意',
     low: '整体平稳',
+    none: '整体平稳',
     monitor: '整体平稳',
   }
   return map[risk] || '巡查完成'
@@ -1264,8 +1491,17 @@ const swarmTotalTime = computed(() => {
   return Math.round(total)
 })
 
+function formatSwarmSummary(value) {
+  return String(value || '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim()
+}
+
 async function runCheckup() {
-  if (runningCheckup.value) return
+  if (sessionPending.value || responsePending.value || runningCheckup.value) return
   const scope = captureChatScope()
   runningCheckup.value = true
   try {
@@ -1287,9 +1523,9 @@ async function runCheckup() {
     }
     scrollMessagesToBottom()
   } catch (error) {
-    notify(error.message || '这次巡查没有完成，请稍后再试')
+    if (isChatScopeCurrent(scope, captureChatScope())) notify(error.message || '这次巡查没有完成，请稍后再试')
   } finally {
-    runningCheckup.value = false
+    if (isChatScopeCurrent(scope, captureChatScope())) runningCheckup.value = false
   }
 }
 
@@ -1299,13 +1535,29 @@ function swarmStatusLabel(step) {
 }
 
 async function runCollaboration() {
-  if (collaborating.value) return
+  if (sessionPending.value || responsePending.value || uploadingVoice.value || voiceActive.value || voiceFinalizing.value) return
   const scope = captureChatScope()
-  const content = String(draft.value || '').trim()
+  const submittedDraft = draft.value
+  const content = String(submittedDraft || '').trim()
   if (!content) {
     notify('先写一句，再让智能体团队协作。')
     return
   }
+  const clientMessageId = newClientMessageId()
+  const optimisticMessage = reactive(normalizeMessage({
+    id: `local-swarm-user-${clientMessageId}`,
+    role: 'user',
+    content,
+    payload: { surface: 'chat', multi_agent: true },
+  }))
+  optimisticMessage.clientMessageId = clientMessageId
+  optimisticMessage.error = false
+  optimisticMessage.errorMessage = ''
+  optimisticMessage.deliveryPending = true
+  messages.value.push(optimisticMessage)
+  if (draft.value === submittedDraft) draft.value = ''
+  scrollMessagesToBottom()
+
   collaborating.value = true
   try {
     const resolvedSessionId = experienceMode.value.isDemoMode && !realAgentDemo.value
@@ -1318,6 +1570,7 @@ async function runCollaboration() {
       multi_agent: true,
     })
     assertChatScope(scope)
+    optimisticMessage.deliveryPending = false
     swarmResult.value = Array.isArray(result?.swarm) ? result.swarm : []
     messages.value.push(normalizeMessage({
       id: result?.message_id || `local-swarm-${Date.now()}`,
@@ -1326,12 +1579,16 @@ async function runCollaboration() {
       payload: { surface: 'chat', multi_agent: true, task_proposals: result?.task_proposals || [] },
       trace: Array.isArray(result?.trace) ? result.trace : [],
     }))
-    draft.value = ''
     scrollMessagesToBottom()
   } catch (error) {
-    notify(error.message || '这是一个多智能体的协作，这次没完成，请稍后再试')
+    if (isChatScopeCurrent(scope, captureChatScope())) {
+      optimisticMessage.deliveryPending = false
+      optimisticMessage.error = true
+      optimisticMessage.errorMessage = error.message || '这次协作没完成，原话已保留。'
+      notify(error.message || '这次协作没完成，请稍后再试')
+    }
   } finally {
-    collaborating.value = false
+    if (isChatScopeCurrent(scope, captureChatScope())) collaborating.value = false
   }
 }
 
@@ -1350,25 +1607,76 @@ watch(autoSendVoice, (value) => {
   }
 })
 
+function chatDraftStorageParams(scopePairId = activePairId.value, ownerId = userStore.me?.id, token = userStore.token) {
+  return {
+    surface: props.isolated ? 'chat_scene' : (props.embedded ? 'chat_embedded' : 'chat'),
+    ownerId: ownerId || '',
+    token: token || '',
+    scopeId: props.isolated
+      ? JSON.stringify([scopePairId || 'solo', props.sceneContext?.sourceLabel || '', props.sceneContext?.title || '', props.sceneContext?.summary || ''])
+      : (scopePairId || 'solo'),
+  }
+}
+
+function persistChatDraft(value = draft.value, scopePairId = activePairId.value, ownerId = userStore.me?.id, token = userStore.token) {
+  if (experienceMode.value.isDemoMode) return
+  saveScopedDraft({
+    ...chatDraftStorageParams(scopePairId, ownerId, token),
+    value: typeof value === 'string' ? value : '',
+  })
+}
+
+function restoreChatDraft(scopePairId = activePairId.value, ownerId = userStore.me?.id, token = userStore.token) {
+  if (experienceMode.value.isDemoMode) return ''
+  const restored = loadScopedDraft(chatDraftStorageParams(scopePairId, ownerId, token))
+  return typeof restored === 'string' ? restored : ''
+}
+
+watch(
+  () => draft.value,
+  (nextValue) => {
+    if (chatDisposed || experienceMode.value.isDemoMode) return
+    persistChatDraft(nextValue)
+  }
+)
+
 watch(
   () => [activePairId.value, userStore.token, userStore.me?.id],
-  async () => {
+  async ([nextPairId, nextToken, nextUserId], [prevPairId, prevToken, prevUserId] = []) => {
+    const sameAccount = Boolean(nextToken && nextToken === prevToken && nextUserId && nextUserId === prevUserId)
+    const hydratedSameSession = Boolean(nextToken && nextToken === prevToken && !prevUserId && nextUserId)
+
+    if (sameAccount && prevPairId !== nextPairId) {
+      persistChatDraft(draft.value, prevPairId, prevUserId, prevToken)
+    } else if (!hydratedSameSession && (nextToken !== prevToken || (prevUserId && nextUserId !== prevUserId))) {
+      clearAllScopedDrafts()
+    }
+
     chatRevision++
     pendingSessionRequest = null
+    creatingSession.value = false
     sending.value = false
+    regeneratingId.value = ''
     sendError.value = ''
     sessionId.value = ''
     sessionExpiresAt.value = ''
+    historyPanelOpen.value = false
+    historySessions.value = []
     startingNewTopic.value = false
-    draft.value = ''
+    if (sameAccount) {
+      draft.value = restoreChatDraft(nextPairId, nextUserId, nextToken)
+    } else if (hydratedSameSession) {
+      if (!draft.value) draft.value = restoreChatDraft(nextPairId, nextUserId, nextToken)
+    } else {
+      draft.value = ''
+    }
     messages.value = []
     pendingVoiceEvidence.value = null
     checkupResult.value = null
     swarmResult.value = null
     runningCheckup.value = false
     collaborating.value = false
-    voiceController.value?.cleanup?.()
-    cleanupVoiceState()
+    invalidateVoiceSession()
 
     await loadInitialSession()
   },
@@ -1377,12 +1685,28 @@ watch(
 
 onMounted(() => {
   loadInitialSession()
+  let usedIncomingPrompt = false
+  if (!props.embedded) {
+    const incomingPrompt = String(route.query?.prompt || '').trim()
+    if (incomingPrompt) {
+      usedIncomingPrompt = true
+      draft.value = incomingPrompt
+      nextTick(() => focusComposer())
+      const nextQuery = { ...route.query }
+      delete nextQuery.prompt
+      router.replace({ path: route.path, query: nextQuery }).catch(() => {})
+    }
+  }
+  if (!usedIncomingPrompt && !draft.value) {
+    const restored = restoreChatDraft()
+    if (restored) draft.value = restored
+  }
 })
 
 onBeforeUnmount(() => {
+  persistChatDraft()
   chatDisposed = true
-  voiceController.value?.cleanup?.()
-  cleanupVoiceState()
+  invalidateVoiceSession()
 })
 </script>
 
@@ -1428,7 +1752,7 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
-#app-shell.has-tabbar .chat-page {
+#app-shell.has-tabbar .chat-page:not(.chat-page--embedded) {
   height: calc(100dvh - var(--header-height, 58px) - var(--tabbar-height, 58px) - env(safe-area-inset-bottom, 0px) - 16px);
 }
 
@@ -1976,8 +2300,122 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.chat-composer__note {
+  margin-right: auto;
+  color: rgba(92, 101, 109, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .btn-send {
   min-width: 72px;
+}
+
+.chat-head__actions .btn.is-active {
+  border-color: rgba(189, 75, 53, 0.34);
+  background: rgba(189, 75, 53, 0.1);
+  color: var(--seal-deep);
+}
+
+.chat-history-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(68, 52, 40, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 253, 249, 0.96);
+}
+
+.chat-history-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-history-panel__head strong {
+  color: var(--ink);
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.chat-history-panel__head span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.chat-history-panel__empty {
+  color: var(--ink-soft);
+  font-size: 13px;
+  padding: 6px 2px;
+}
+
+.chat-history-panel__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.chat-history-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(68, 52, 40, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.chat-history-item:hover {
+  border-color: rgba(189, 75, 53, 0.34);
+  background: #fff9f5;
+}
+
+.chat-history-item.active {
+  border-color: var(--seal);
+  background: rgba(215, 104, 72, 0.08);
+}
+
+.chat-history-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-history-item__top strong {
+  color: var(--ink);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-history-item__top span {
+  color: var(--ink-soft);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.chat-history-item p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-preference-panel__summary {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-size: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed rgba(68, 52, 40, 0.1);
 }
 
 /* 独立聊天页允许整页向下滚动，不让推荐区和输入框挤压消息。 */
@@ -2023,13 +2461,15 @@ onBeforeUnmount(() => {
     gap: 6px;
   }
 
-  #app-shell.has-tabbar .chat-page {
+  #app-shell.has-tabbar .chat-page:not(.chat-page--embedded) {
     height: calc(100dvh - var(--header-height, 58px) - var(--tabbar-height, 58px) - env(safe-area-inset-bottom, 0px) - 10px);
   }
 
   .chat-head {
     gap: 6px;
     margin-bottom: 2px;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .chat-head__title-group .eyebrow {
@@ -2042,11 +2482,10 @@ onBeforeUnmount(() => {
 
   .chat-head__actions {
     display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    overflow-x: visible;
     padding-bottom: 2px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
     width: 100%;
   }
 
@@ -2104,9 +2543,14 @@ onBeforeUnmount(() => {
 
   .chat-composer__actions {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 6px;
+  }
+
+  .chat-composer__note {
+    flex: 1 0 100%;
+    margin-right: 0;
   }
 
   .chat-composer__actions .btn {
@@ -2126,6 +2570,25 @@ onBeforeUnmount(() => {
 
   .voice-preference-trigger__short {
     display: inline;
+  }
+}
+
+/* 短屏和展开设置时保留消息阅读空间，允许整页滚动到输入框。 */
+@media (max-width: 600px) and (max-height: 700px) {
+  .chat-page:not(.chat-page--embedded),
+  #app-shell.has-tabbar .chat-page:not(.chat-page--embedded) {
+    height: auto;
+    min-height: calc(100dvh - var(--header-height, 58px));
+    padding-bottom: 20px;
+  }
+
+  .chat-page:not(.chat-page--embedded) .chat-shell {
+    flex: 0 0 auto;
+  }
+
+  .chat-page:not(.chat-page--embedded) .chat-list {
+    flex: 0 0 auto;
+    height: clamp(260px, 50dvh, 360px);
   }
 }
 </style>

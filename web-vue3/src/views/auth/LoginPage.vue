@@ -47,15 +47,27 @@
 
           <label class="field">
             <span>密码</span>
-            <input
-              v-model="form.password"
-              class="input"
-              type="password"
-              autocomplete="current-password"
-              placeholder="请输入密码"
-              minlength="6"
-              required
-            />
+            <div class="password-input-wrap">
+              <input
+                v-model="form.password"
+                class="input input--with-toggle"
+                :type="showPassword ? 'text' : 'password'"
+                :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+                placeholder="请输入密码"
+                minlength="6"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                :aria-pressed="showPassword"
+                @click="showPassword = !showPassword"
+              >
+                <EyeOff v-if="showPassword" :size="18" aria-hidden="true" />
+                <Eye v-else :size="18" aria-hidden="true" />
+              </button>
+            </div>
           </label>
 
           <div class="auth-options">
@@ -63,11 +75,11 @@
               <input v-model="rememberAccount" type="checkbox" />
               <span>记住账号</span>
             </label>
-            <button type="button" class="text-button" @click="switchMode('reset')">忘记密码</button>
+            <button v-if="PHONE_VERIFICATION_ENABLED" type="button" class="text-button" @click="switchMode('reset')">忘记密码</button>
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="PHONE_VERIFICATION_ENABLED">
           <label class="field">
             <span>手机号</span>
             <input
@@ -103,15 +115,27 @@
 
           <label class="field">
             <span>新密码</span>
-            <input
-              v-model="form.newPassword"
-              class="input"
-              type="password"
-              autocomplete="new-password"
-              placeholder="至少 6 位"
-              minlength="6"
-              required
-            />
+            <div class="password-input-wrap">
+              <input
+                v-model="form.newPassword"
+                class="input input--with-toggle"
+                :type="showNewPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="至少 6 位"
+                minlength="6"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showNewPassword ? '隐藏新密码' : '显示新密码'"
+                :aria-pressed="showNewPassword"
+                @click="showNewPassword = !showNewPassword"
+              >
+                <EyeOff v-if="showNewPassword" :size="18" aria-hidden="true" />
+                <Eye v-else :size="18" aria-hidden="true" />
+              </button>
+            </div>
           </label>
         </template>
 
@@ -137,7 +161,7 @@
           {{ submitting ? '处理中...' : submitText }}
         </button>
 
-        <button v-if="mode !== 'reset'" type="button" class="demo-button" @click="enterDemo">
+        <button v-if="mode !== 'reset' || !PHONE_VERIFICATION_ENABLED" type="button" class="demo-button" @click="enterDemo">
           进入体验样例
         </button>
         <button v-else type="button" class="demo-button" @click="switchMode('login')">
@@ -180,8 +204,9 @@
 </template>
 
 <script setup>
-import { computed, inject, onMounted, reactive, ref } from 'vue'
+import { computed, inject, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Eye, EyeOff } from 'lucide-vue-next'
 import { api } from '@/api'
 import { useUserStore } from '@/stores/user'
 import {
@@ -195,11 +220,23 @@ const userStore = useUserStore()
 const injectedToast = inject('showToast', null)
 
 const mode = ref('login')
+const PHONE_VERIFICATION_ENABLED =
+  import.meta.env?.VITE_PHONE_VERIFICATION_ENABLED === 'true'
 const rememberAccount = ref(false)
 const agreementAccepted = ref(false)
+const showPassword = ref(false)
+const showNewPassword = ref(false)
 const submitting = ref(false)
 const cooldown = ref(0)
 const activeLegalDoc = ref(null)
+let cooldownTimerId = null
+
+onUnmounted(() => {
+  if (cooldownTimerId) {
+    window.clearInterval(cooldownTimerId)
+    cooldownTimerId = null
+  }
+})
 
 const form = reactive({
   account: '',
@@ -245,7 +282,14 @@ function toast(message) {
 }
 
 function switchMode(nextMode) {
+  if (nextMode === 'reset' && !PHONE_VERIFICATION_ENABLED) {
+    toast('找回密码通道暂未开放，请使用账号密码登录')
+    mode.value = 'login'
+    return
+  }
   mode.value = nextMode
+  showPassword.value = false
+  showNewPassword.value = false
 }
 
 function normalizeAccount(value) {
@@ -275,6 +319,11 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (mode.value === 'reset') {
+      if (!PHONE_VERIFICATION_ENABLED) {
+        toast('短信验证码功能暂未开放，请使用账号和密码登录')
+        mode.value = 'login'
+        return
+      }
       if (!/^1\d{10}$/.test(form.phone)) {
         toast('请输入正确的手机号')
         return
@@ -292,6 +341,15 @@ async function handleSubmit() {
     form.account = normalizeAccount(form.account)
     if (!form.account || !form.password) {
       toast('请填写账号和密码')
+      return
+    }
+    // 在提交前检查账号格式，后端仍会再次检查。
+    if (!/^1\d{10}$/.test(form.account) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.account)) {
+      toast('请输入正确的手机号或邮箱')
+      return
+    }
+    if (mode.value === 'register' && (form.password.length < 6 || new TextEncoder().encode(form.password).length > 72)) {
+      toast('密码至少需要 6 位，且不能超过 72 字节')
       return
     }
     if (mode.value === 'register' && !form.nickname) {
@@ -315,6 +373,10 @@ async function handleSubmit() {
 }
 
 async function sendCode() {
+  if (!PHONE_VERIFICATION_ENABLED) {
+    toast('短信验证码功能暂未开放，请使用账号和密码登录')
+    return
+  }
   if (!/^1\d{10}$/.test(form.phone)) {
     toast('请输入正确的手机号')
     return
@@ -323,9 +385,13 @@ async function sendCode() {
     const res = await api.sendPhoneCode(form.phone)
     toast(res.debug_code ? `验证码已发送：${res.debug_code}` : '验证码已发送，请查收')
     cooldown.value = 60
-    const timer = window.setInterval(() => {
+    if (cooldownTimerId) window.clearInterval(cooldownTimerId)
+    cooldownTimerId = window.setInterval(() => {
       cooldown.value -= 1
-      if (cooldown.value <= 0) window.clearInterval(timer)
+      if (cooldown.value <= 0) {
+        window.clearInterval(cooldownTimerId)
+        cooldownTimerId = null
+      }
     }, 1000)
   } catch (error) {
     toast(error.message || '发送失败，请稍后再试')
@@ -673,6 +739,43 @@ function enterDemo() {
 .legal-dialog__foot .primary-submit {
   width: 120px;
   margin-top: 0;
+}
+
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrap .input--with-toggle {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background: rgba(189, 75, 53, 0.08);
+  color: var(--seal-deep);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 1px;
 }
 
 @media (max-width: 900px) {

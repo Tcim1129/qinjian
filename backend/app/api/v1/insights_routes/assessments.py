@@ -31,16 +31,25 @@ router = APIRouter(tags=["关系智能"])
 async def get_weekly_assessment_pack_entry(
     pair_id: str | None = None,
     mode: str | None = None,
+    exclude_item_ids: str | None = None,
+    variant: int = 0,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     pair_scope_id, user_scope_id = await resolve_scope(
         pair_id=pair_id, mode=mode, user=user, db=db
     )
+    excluded = [
+        item.strip()
+        for item in str(exclude_item_ids or "").split(",")
+        if item.strip()
+    ]
     payload = await build_weekly_assessment_pack(
         db,
         pair_id=pair_scope_id,
         user_id=user_scope_id,
+        exclude_item_ids=excluded,
+        variant=max(0, int(variant or 0)),
     )
     return WeeklyAssessmentPackResponse(**payload)
 

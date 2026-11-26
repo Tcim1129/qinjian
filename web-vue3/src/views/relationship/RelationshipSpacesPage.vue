@@ -501,6 +501,7 @@
 </template>
 
 <script setup>
+import { formatBeijingMonthDayTime, getServerTimestampMs } from '@/utils/datetime'
 import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
 import { buildDemoSchedule, buildScheduleContext, createLatestRequest, scheduleDate, demoScheduleCache } from '@/utils/taskSchedule'
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -619,7 +620,7 @@ const pendingRequestEyebrow = computed(() => {
 })
 const pendingRequestDeadline = computed(() => {
   if (!isPendingBreakRequest.value || !pendingRequest.value?.expires_at) return ''
-  const diff = new Date(pendingRequest.value.expires_at).getTime() - clockNow.value
+  const diff = getServerTimestampMs(pendingRequest.value.expires_at) - clockNow.value
   if (!Number.isFinite(diff)) return ''
   if (diff <= 0) return '倒计时已到，重新进入页面后会自动结算'
   const totalMinutes = Math.ceil(diff / 60000)
@@ -1058,14 +1059,7 @@ async function clearPartnerNickname() {
 }
 
 function formatDateTime(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  const hour = `${date.getHours()}`.padStart(2, '0')
-  const minute = `${date.getMinutes()}`.padStart(2, '0')
-  return `${month}-${day} ${hour}:${minute}`
+  return formatBeijingMonthDayTime(value, { padDate: true })
 }
 const scheduleContext = ref(null)
 const scheduleRequests = createLatestRequest()

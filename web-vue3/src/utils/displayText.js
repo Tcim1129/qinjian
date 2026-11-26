@@ -194,6 +194,13 @@ export function reactionShiftLabel(value) {
   return REACTION_SHIFT_LABELS[key] || readableChineseFallback(key, '这次和你平时的反应方式有什么不同，亲健还没看清楚。')
 }
 
+export function shouldShowReactionShift(result) {
+  const shift = normalizeKey(result?.reaction_shift).toLowerCase()
+  const baseline = normalizeKey(result?.baseline_match).toLowerCase()
+  if (!shift || shift === 'unknown') return false
+  return !(shift === 'stable' && ['slight_deviation', 'strong_deviation'].includes(baseline))
+}
+
 export function messageRoleLabel(role) {
   return role === 'user' ? '我' : '亲健'
 }

@@ -1,30 +1,54 @@
-const BACKGROUND_FIELD_RULES = [
-  {
-    key: 'moodScore',
-    label: '今天整体感受',
-    isMissing: (value) => value == null,
-  },
-  {
-    key: 'interactionFreq',
-    label: '互动频率',
-    isMissing: (value) => value == null,
-  },
-  {
-    key: 'initiative',
-    label: '谁先开口',
-    isMissing: (value) => !String(value ?? '').trim(),
-  },
-  {
-    key: 'deepConversation',
-    label: '有没有深聊',
-    isMissing: (value) => value == null,
-  },
-  {
-    key: 'taskCompleted',
-    label: '之前的约定',
-    isMissing: (value) => value == null,
-  },
-]
+export const MAX_CHECKIN_BACKFILL_DAYS = 30
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+export function formatLocalDateKey(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function shiftDateKey(baseDateKey, deltaDays = 0) {
+  const key = ISO_DATE_PATTERN.test(String(baseDateKey || ''))
+    ? String(baseDateKey)
+    : formatLocalDateKey()
+  const [year, month, day] = key.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year, month - 1, day + Number(deltaDays || 0)))
+  return shifted.toISOString().slice(0, 10)
+}
+
+export function getCheckinDateBounds(todayKey = formatLocalDateKey(), maxDays = MAX_CHECKIN_BACKFILL_DAYS) {
+  const safeToday = ISO_DATE_PATTERN.test(String(todayKey || '')) ? String(todayKey) : formatLocalDateKey()
+  return {
+    min: shiftDateKey(safeToday, -Math.max(0, Number(maxDays) || 0)),
+    max: safeToday,
+  }
+}
+
+export function clampCheckinDate(value, todayKey = formatLocalDateKey(), maxDays = MAX_CHECKIN_BACKFILL_DAYS) {
+  const bounds = getCheckinDateBounds(todayKey, maxDays)
+  const candidate = String(value || '').trim()
+  if (!ISO_DATE_PATTERN.test(candidate)) return bounds.max
+  const [y, m, d] = candidate.split('-').map(Number)
+  const parsed = new Date(Date.UTC(y, m - 1, d))
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== candidate) {
+    return bounds.max
+  }
+  if (candidate > bounds.max) return bounds.max
+  if (candidate < bounds.min) return bounds.min
+  return candidate
+}
+
+export function describeCheckinDate(dateKey, todayKey = formatLocalDateKey()) {
+  const safeToday = ISO_DATE_PATTERN.test(String(todayKey || '')) ? String(todayKey) : formatLocalDateKey()
+  const normalized = clampCheckinDate(dateKey, safeToday)
+  if (normalized === safeToday) return '今天'
+  if (normalized === shiftDateKey(safeToday, -1)) return '昨天'
+  if (normalized === shiftDateKey(safeToday, -2)) return '前天'
+  const [, month, day] = normalized.split('-')
+  return `${Number(month)}月${Number(day)}日`
+}
 
 export function normalizeManualCheckinContent({ content = '', imageAnalysisSummary = '' } = {}) {
   const normalizedContent = String(content || '').trim()
@@ -34,38 +58,23 @@ export function normalizeManualCheckinContent({ content = '', imageAnalysisSumma
   return normalizedImageSummary ? `图片记录：${normalizedImageSummary}` : ''
 }
 
-export function getMissingBackgroundFields(form = {}) {
-  return BACKGROUND_FIELD_RULES
-    .filter(({ key, isMissing }) => isMissing(form[key]))
-    .map(({ label }) => label)
+export function getMissingBackgroundFields() {
+  return []
 }
 
 export function getManualCheckinValidation({
   content = '',
   imageAnalysisSummary = '',
-  moodScore = null,
-  interactionFreq = null,
-  initiative = '',
-  deepConversation = null,
-  taskCompleted = null,
 } = {}) {
   const normalizedManualContent = normalizeManualCheckinContent({
     content,
     imageAnalysisSummary,
   })
-  const missingBackgroundFields = getMissingBackgroundFields({
-    moodScore,
-    interactionFreq,
-    initiative,
-    deepConversation,
-    taskCompleted,
-  })
-  const isBackgroundComplete = missingBackgroundFields.length === 0
 
   return {
     normalizedManualContent,
-    missingBackgroundFields,
-    isBackgroundComplete,
-    canSubmitManualCheckin: Boolean(normalizedManualContent) && isBackgroundComplete,
+    missingBackgroundFields: [],
+    isBackgroundComplete: true,
+    canSubmitManualCheckin: Boolean(normalizedManualContent),
   }
 }

@@ -38,6 +38,7 @@ from app.services.task_adaptation import (
     clamp_daily_note_length,
 )
 from app.services.checkin_visibility import PARTNER_VISIBLE_SCOPES
+from app.services.notification_preferences import in_app_notification_enabled
 
 import os
 import sys
@@ -933,7 +934,9 @@ async def create_task_planner_notification(
     target_pair_id: uuid.UUID,
     pair_ids: list[uuid.UUID],
     target_date: date,
-) -> UserNotification:
+) -> UserNotification | None:
+    if not await in_app_notification_enabled(db, user_id, TASK_REMINDER_NOTIFICATION_TYPE):
+        return None
     pair_count = len(pair_ids)
     if pair_count > 1:
         content = "有几段关系的明天安排还没看，系统已经先帮你排好了。"
@@ -985,6 +988,8 @@ async def run_task_planner_reminder_cycle(*, now: datetime | None = None) -> dic
                     getattr(pair, "task_planner_settings", None),
                 )
                 if not effective.get("reminder_enabled", True):
+                    continue
+                if not await in_app_notification_enabled(db, viewer.id, TASK_REMINDER_NOTIFICATION_TYPE):
                     continue
                 local_now = _datetime_in_timezone(
                     now,
@@ -1118,6 +1123,12 @@ async def run_task_planner_reminder_cycle(*, now: datetime | None = None) -> dic
                     if selected_uuid and selected_uuid in pending_pairs:
                         target_pair_id = selected_uuid
 
+                notification = await create_task_planner_notification(
+                    db, user_id=user_id, target_pair_id=target_pair_id,
+                    pair_ids=pending_pairs, target_date=target_date,
+                )
+                if notification is None:
+                    continue
                 for pair_id in pending_pairs:
                     pair = await db.get(Pair, pair_id)
                     if not pair:
@@ -1134,13 +1145,6 @@ async def run_task_planner_reminder_cycle(*, now: datetime | None = None) -> dic
                         reminder_time=str(effective.get("reminder_time") or "21:00"),
                     )
 
-                await create_task_planner_notification(
-                    db,
-                    user_id=user_id,
-                    target_pair_id=target_pair_id,
-                    pair_ids=pending_pairs,
-                    target_date=target_date,
-                )
                 reminded_users += 1
                 reminded_pairs += len(pending_pairs)
 

@@ -11,9 +11,9 @@ from app.services.relationship_algorithms import build_alignment_baseline
 
 logger = logging.getLogger(__name__)
 
-# Dual-view alignment prompts are longer than chat prompts and need more headroom
+# Dual-view alignment prompts are longer than chat prompts and need enough headroom
 # to avoid dropping into fallback content during normal provider latency spikes.
-ALIGNMENT_TIMEOUT_SECONDS = 20
+ALIGNMENT_TIMEOUT_SECONDS = 45
 
 
 ALIGNMENT_SYSTEM_PROMPT = compose_relationship_system_prompt("""请比较双方对同一天或同一阶段的记录，整理共同提到的事情、各自的感受、理解不同的地方，以及可以进一步确认的问题。不判断谁对谁错，也不编造双方未提到的经历。
@@ -45,7 +45,7 @@ ALIGNMENT_PROMPT = """请根据以下关系上下文、双方记录和结构化�
   "misread_risk": "最容易发生的误读或错位（60字内）",
   "divergence_points": ["分歧点1", "分歧点2", "分歧点3"],
   "bridge_actions": ["可以进一步确认的问题或具体做法1", "具体做法2", "具体做法3"],
-  "suggested_opening": "一句可以用来开始沟通的话（80字内）",
+  "suggested_opening": "一句可以用来开始沟通的话（80字内，口语自然，借小事递台阶，避免说教和问责）",
   "coach_note": "沟通时需要留意的事情（60字内）"
 }}"""
 
@@ -175,9 +175,16 @@ async def generate_narrative_alignment(
         {"role": "system", "content": ALIGNMENT_SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
     ]
+    attempt_timeout = max(0.01, min(float(ALIGNMENT_TIMEOUT_SECONDS), 30.0))
     try:
         result = await asyncio.wait_for(
-            chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.35),
+            chat_completion(
+                settings.AI_TEXT_MODEL,
+                messages,
+                temperature=0.35,
+                context_enabled=False,
+                request_timeout_seconds=attempt_timeout,
+            ),
             timeout=ALIGNMENT_TIMEOUT_SECONDS,
         )
     except Exception as exc:

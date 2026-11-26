@@ -144,6 +144,7 @@ export function createSoloTaskEntry(payload, { streak = 0, isoDate = todayIsoLoc
       title: String(payload.title || '').trim(),
       description: String(payload.description || '').trim(),
       category: String(payload.category || 'activity').trim() || 'activity',
+      importance_level: String(payload.importance_level || 'medium').trim() || 'medium',
       source: 'manual',
       is_manual: true,
       target_scope: 'self',
@@ -173,6 +174,39 @@ export function completeSoloTaskEntry(taskId, { streak = 0, isoDate = todayIsoLo
   )
   writeList(SOLO_TASKS_KEY, nextTasks)
   return buildSoloTaskPayload({ tasks: nextTasks, streak, isoDate })
+}
+
+export function findSoloTaskProposal(proposalId) {
+  return readList(SOLO_TASKS_KEY).find(task => task.agent_proposal_id === proposalId) || null
+}
+
+export function confirmSoloTaskProposal(proposal) {
+  if (!getStorageOwner()) throw new Error('请先登录后再保存安排。')
+  const proposalId = String(proposal?.proposal_id || '')
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(proposalId)) throw new Error('行动建议已变化，请重新打开。')
+  const existing = findSoloTaskProposal(proposalId)
+  if (existing) return existing
+  const title = String(proposal.title || '').trim().slice(0, 100)
+  const dueDate = String(proposal.due_date || '')
+  const parsed = new Date(`${dueDate}T00:00:00Z`)
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dueDate || dueDate < todayIsoLocal()) {
+    throw new Error('建议标题或日期已不可用，请重新生成。')
+  }
+  const task = {
+    id: `solo-agent-${proposalId}`, agent_proposal_id: proposalId,
+    title, description: String(proposal.description || '').trim().slice(0, 400),
+    category: 'activity', importance_level: 'medium', source: 'manual', is_manual: true,
+    target_scope: 'self', status: 'pending', due_date: dueDate,
+    created_at: new Date().toISOString(), needs_feedback: false,
+  }
+  try {
+    writeList(SOLO_TASKS_KEY, [task, ...readList(SOLO_TASKS_KEY)])
+  } catch {
+    throw new Error('这次没能保存安排，请检查浏览器存储后重试。')
+  }
+  const saved = findSoloTaskProposal(proposalId)
+  if (!saved) throw new Error('这次没能保存安排，请检查浏览器存储后重试。')
+  return saved
 }
 
 export function saveSoloTaskFeedbackEntry(taskId, feedback, { streak = 0, isoDate = todayIsoLocal() } = {}) {

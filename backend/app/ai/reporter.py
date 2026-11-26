@@ -358,7 +358,7 @@ async def analyze_image(image_path: str, context: str = "") -> dict:
             "emotion_blend_summary": "图片分析失败，系统不会强行判断情绪。",
             "relationship_stage": "待判断",
             "interaction_signal": "暂时无法确认双方互动状态",
-            "social_signal": str(e),
+            "social_signal": "系统暂时无法分析这张图片的互动信号",
             "risk_level": "none",
             "risk_flags": [],
             "care_points": [],

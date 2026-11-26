@@ -18,6 +18,11 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+async def _json_completion(model, messages, **kwargs):
+    """明确要求对象格式，仍按调用方选择的分析模型生成。"""
+    return await chat_completion(model, messages, response_format={"type": "json_object"}, **kwargs)
+
+
 def parse_json_safe(text: str) -> dict[str, Any]:
     """安全解析 LLM 返回的 JSON，兼容 markdown 代码块。"""
     cleaned = text.strip()
@@ -48,6 +53,9 @@ def _get_previous_data(
 
 EXPRESSION_CLARIFY_PROMPT = compose_relationship_system_prompt(
     """你是亲健平台的「表达澄清」分析模块。你的任务是从用户描述的关系事件中，提取结构化信息。
+注意理解网络流行语（如破防、画饼、下头、内耗等）背后的真实情绪状态，留意“行吧/随便/你忙吧”等表述在具体语境下的真实意思（既可能是试探或委屈，也可能是体谅或疲惫），不盲目套用反话公式。
+区分客观事实与主观揣测，保留原话里的人物、否定和条件。情绪字段只记录用户或对方明确说出的感受，缺少依据时写空字符串。
+体察可能存在的心理防御倾向（如反向试探、反复横跳、投射等）与潜在隐忧（如可能担心被忽视、担心失去自主权或不愿显露脆弱），将其作为待确认的可能性而非既成定论。
 
 请根据用户输入，提取以下信息并输出 JSON（不要包含其他文字）：
 {
@@ -69,7 +77,7 @@ async def _expression_clarify(
         {"role": "system", "content": EXPRESSION_CLARIFY_PROMPT},
         {"role": "user", "content": f"请分析以下关系事件：\n\n{user_input}"},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
+    result = await _json_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
     return parse_json_safe(result)
 
 
@@ -85,6 +93,7 @@ register_skill(SkillDefinition(
 
 STANCE_ANALYSIS_PROMPT = compose_relationship_system_prompt(
     """你是亲健平台的「立场分析」模块。根据已有的表达澄清结果，分析各方立场。
+从人物原话出发，分别列出明确立场和仍待确认的诉求。仅凭“做饭累”等描述无法确认对方觉得被忽视或担心什么。推断须写成“可能”或“待确认”，无依据的字段写空字符串。前一步的推断不能作为事实引用。
 
 请输出 JSON（不要包含其他文字）：
 {
@@ -117,7 +126,7 @@ async def _stance_analysis(
             f"表达澄清结果：\n{json.dumps(clarify_data, ensure_ascii=False)}"
         )},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
+    result = await _json_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
     return parse_json_safe(result)
 
 
@@ -163,7 +172,7 @@ async def _conflict_detect(
             f"立场分析：\n{json.dumps(stance_data, ensure_ascii=False)}"
         )},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
+    result = await _json_completion(settings.AI_TEXT_MODEL, messages, temperature=0.3)
     return parse_json_safe(result)
 
 
@@ -180,7 +189,7 @@ register_skill(SkillDefinition(
 ACTION_PLAN_PROMPT = compose_relationship_system_prompt(
     """你是亲健平台的「行动规划」模块。根据前面的分析结果，生成 2-3 个可选行动方案。
 
-每个方案要具体、可执行、有温度。请输出 JSON（不要包含其他文字）：
+每个方案要具体、可执行、有温度，保留用户明确说过的限制。新分工是待商量的选项，用“可以考虑”“如果你愿意”等表述，不能写成用户已经答应承担。请输出 JSON（不要包含其他文字）：
 {
   "proposals": [
     {
@@ -217,7 +226,7 @@ async def _action_plan(
             f"冲突识别：\n{json.dumps(conflict_data, ensure_ascii=False)}"
         )},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.5)
+    result = await _json_completion(settings.AI_TEXT_MODEL, messages, temperature=0.5)
     return parse_json_safe(result)
 
 
@@ -237,8 +246,19 @@ DRAFT_MESSAGE_PROMPT = compose_relationship_system_prompt(
 要求：
 - 使用日常说话的语气，保留用户原有的称呼和表达习惯
 - 根据已知事实说清感受和请求，不编造对方的处境，也不要求用户示弱或讨好
+- 保留用户原话中的条件，把方案中新提出的分工作为可以商量的提议，不能把选中某个方案当成用户答应了其中每件事
 - 不指责、不操控、不翻旧账
+- 方案是待选建议，不是用户已经承诺的事实；没说过的情绪、时间、任务和事后通知都不能补进草稿
+- 用户没说心疼、委屈就不代说，用户没指定今晚、明天就不替他定时间
+- 原话的“可以”必须在每个版本保留：“周末可以洗碗”只能写成“周末洗碗我可以来”等，不能升级成“周末洗碗我来”“周末我负责洗碗”
+- 直接版也要尊重人，不用“光说没用”“你抱怨”“只有搞清楚痛点”等训话表达
 - 给出 2 个版本：一个偏温和，一个偏直接
+
+语言质感要求：
+- 写出来的话要像真人在微信上打字，不是在写检讨书或读朗诵稿
+- 可以用比喻、轻微的自嘲或幽默来让表达更容易被接受
+- 一句话如果能同时传递事实和态度，就不要拆成两句干巴巴的陈述
+- 温和版不等于软弱版，直接版不等于攻击版；两个版本都应该让人读完觉得"这个人说话挺舒服的"
 
 请输出 JSON（不要包含其他文字）：
 {
@@ -273,7 +293,7 @@ async def _draft_message(
             f"用户选择的方案：{selected_proposal}"
         )},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.5)
+    result = await _json_completion(settings.AI_CHAT_PRIMARY_MODEL.strip() or settings.AI_TEXT_MODEL, messages, temperature=0.5)
     return parse_json_safe(result)
 
 
@@ -289,6 +309,9 @@ register_skill(SkillDefinition(
 
 REVIEW_PROMPT = compose_relationship_system_prompt(
     """你是亲健平台的「复盘」模块。帮助用户回顾一次关系事件的处理过程。
+只依据用户描述的实际经过评价效果，不编造谁先提出、谁主动承担或谁已完成什么。
+“我们试了一周”不等于用户主动提出方案，也不等于双方已按反馈调整；尚未做的调整只放在建议字段。
+没有反复出现的证据时，不从一次事件推断长期关系模式。
 
 请输出 JSON（不要包含其他文字）：
 {
@@ -316,7 +339,7 @@ async def _review(
             else f"请基于以下事件生成复盘提纲：\n\n{user_input}"
         )},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.4)
+    result = await _json_completion(settings.AI_CHAT_PRIMARY_MODEL.strip() or settings.AI_TEXT_MODEL, messages, temperature=0.4)
     return parse_json_safe(result)
 
 
@@ -337,8 +360,8 @@ MEMORY_EXTRACT_PROMPT = compose_relationship_system_prompt(
 {
   "memories": [
     {
-      "type": "person/event/strategy/pattern",
-      "subject": "关键词或人名（10字内）",
+      "type": "person/event/strategy/pattern/taboo",
+      "subject": "关键词、雷区或人名（10字内）",
       "content": "需要记住的信息（80字内）",
       "importance": 1-5
     }
@@ -346,10 +369,13 @@ MEMORY_EXTRACT_PROMPT = compose_relationship_system_prompt(
 }
 
 提取原则：
+- 用户原话是事实依据，前置分析只是参考；不得把分析中的推断、建议或表扬转成已发生的事实
+- 没有说明由谁提出的方案，不能记成用户主动提出；没有说明已经调整的安排，不能记成已调整
 - person：新出现的人物及其关系角色和特征
 - event：重要的关系事件及其结果
-- strategy：用户尝试过的处理方式及效果
+- strategy：用户尝试过的处理方式及效果（尤其是哪些有用、哪些没用）
 - pattern：反复出现的互动模式
+- taboo：用户明确表达的雷区、反感点、绝对底线或已明确试过无效的做法（如讨厌被劝大度、抗拒道歉、反感冷暴力等），这类重要度通常为 4 或 5
 - 只提取有长期价值的信息，不记录琐碎细节"""
 )
 
@@ -372,7 +398,7 @@ async def _memory_write(
             f"分析结果：\n{json.dumps(all_data, ensure_ascii=False)}"
         )},
     ]
-    result = await chat_completion(settings.AI_TEXT_MODEL, messages, temperature=0.2)
+    result = await _json_completion(settings.AI_CHAT_PRIMARY_MODEL.strip() or settings.AI_TEXT_MODEL, messages, temperature=0.2)
     return parse_json_safe(result)
 
 

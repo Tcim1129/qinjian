@@ -95,6 +95,8 @@ export const useHomeStore = defineStore('home', () => {
   const tasks = ref([])
   const dailyNote = ref('')
   const milestones = ref([])
+  const reportTrend = ref({ trend: [], direction: 'insufficient_data', days: 30 })
+  const assessmentTrend = ref({ latest_score: null, dimension_scores: [], trend_points: [] })
   const loads = createLatestRequest()
   const demoTrees = new Map()
   let treeScope = null
@@ -109,6 +111,8 @@ export const useHomeStore = defineStore('home', () => {
     tasks.value = []
     dailyNote.value = ''
     milestones.value = []
+    reportTrend.value = { trend: [], direction: 'insufficient_data', days: 30 }
+    assessmentTrend.value = { latest_score: null, dimension_scores: [], trend_points: [] }
   }
 
   async function loadAll(pairId = null) {
@@ -130,6 +134,8 @@ export const useHomeStore = defineStore('home', () => {
       tasks.value = cloneDemo((demoFixture.tasks.tasks || []).filter((task) => task.source !== 'manual').slice(0, 3))
       dailyNote.value = demoFixture.tasks.daily_note || ''
       milestones.value = []
+      reportTrend.value = { trend: [], direction: 'insufficient_data', days: 30 }
+      assessmentTrend.value = cloneDemo(demoFixture.assessmentTrend || { latest_score: null, dimension_scores: [], trend_points: [] })
       return
     }
 
@@ -137,6 +143,8 @@ export const useHomeStore = defineStore('home', () => {
       const results = await Promise.allSettled([
         api.getTodayStatus(null),
         api.getCheckinStreak(null),
+        api.getReportTrend(null, 30),
+        api.getWeeklyAssessmentTrend(null, 6),
       ])
       if (!current()) return
       const unwrap = (r, fallback = {}) => r.status === 'fulfilled' ? r.value : fallback
@@ -150,6 +158,8 @@ export const useHomeStore = defineStore('home', () => {
       tasks.value = []
       dailyNote.value = ''
       milestones.value = []
+      reportTrend.value = unwrap(results[2], { trend: [], direction: 'insufficient_data', days: 30 })
+      assessmentTrend.value = unwrap(results[3], { latest_score: null, dimension_scores: [], trend_points: [] })
       return
     }
 
@@ -160,6 +170,8 @@ export const useHomeStore = defineStore('home', () => {
       api.getCrisisStatus(pairId),
       api.getDailyTasks(pairId),
       api.getMilestones(pairId),
+      api.getReportTrend(pairId, 30),
+      api.getWeeklyAssessmentTrend(pairId, 6),
     ])
     if (!current()) return
     const unwrap = (r, fallback = {}) => r.status === 'fulfilled' ? r.value : fallback
@@ -174,6 +186,8 @@ export const useHomeStore = defineStore('home', () => {
     tasks.value = (dailyPayload.tasks || []).filter((task) => task.source !== 'manual').slice(0, 3)
     dailyNote.value = dailyPayload.daily_note || ''
     milestones.value = unwrap(results[5], [])
+    reportTrend.value = unwrap(results[6], { trend: [], direction: 'insufficient_data', days: 30 })
+    assessmentTrend.value = unwrap(results[7], { latest_score: null, dimension_scores: [], trend_points: [] })
   }
 
   async function waterTree(pairId) {
@@ -230,5 +244,5 @@ export const useHomeStore = defineStore('home', () => {
     return api.completeTask(taskId)
   }
 
-  return { snapshot, tree, crisis, tasks, dailyNote, milestones, loadAll, waterTree, collectTreeEnergy, completeTask, reset }
+  return { snapshot, tree, crisis, tasks, dailyNote, milestones, reportTrend, assessmentTrend, loadAll, waterTree, collectTreeEnergy, completeTask, reset }
 })

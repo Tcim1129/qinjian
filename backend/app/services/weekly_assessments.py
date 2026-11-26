@@ -194,10 +194,20 @@ async def submit_weekly_assessment(
 
     scope = "pair" if normalized_pair_id else "solo"
     occurred_at = (submitted_at or _utcnow()).replace(tzinfo=None)
-    total_score = round(
-        sum(int(item["score"]) for item in normalized_answers) / len(normalized_answers)
-    )
     dimension_scores = _build_dimension_scores(normalized_answers)
+    scored_dimensions = [
+        int(item["score"])
+        for item in dimension_scores
+        if item.get("score") is not None
+    ]
+    total_score = (
+        round(sum(scored_dimensions) / len(scored_dimensions))
+        if scored_dimensions
+        else round(
+            sum(int(item["score"]) for item in normalized_answers)
+            / len(normalized_answers)
+        )
+    )
     previous = await get_latest_weekly_assessment(
         db,
         pair_id=normalized_pair_id,
@@ -298,7 +308,10 @@ async def get_weekly_assessment_trend(
         "dimension_scores": latest["dimension_scores"] if latest else [],
         "trend_points": points,
         "change_summary": (
-            _build_change_summary(latest["total_score"], previous["total_score"])
+            _build_change_summary(
+                latest["total_score"],
+                previous["total_score"] if previous else None,
+            )
             if latest
             else "还没有正式周评估记录。"
         ),

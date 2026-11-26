@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { shouldExpireSession } from '../utils/auth.js'
 import { DEFAULT_API_TIMEOUT_MS, AI_INTERACTION_TIMEOUT_MS, normalizeApiErrorMessage } from '../utils/apiTimeouts.js'
 
 let API_ROOT = '/api/v1'
@@ -23,11 +24,34 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+let unauthorizedHandler = null
+
 apiClient.interceptors.response.use(
   (res) => res.data,
   (err) => {
+    const status = err.response?.status
+    const requestUrl = String(err.config?.url || '')
+    const authorization = err.config?.headers?.get?.('Authorization') || err.config?.headers?.Authorization || ''
+    const requestToken = String(authorization).replace(/^Bearer\s+/i, '')
+    const currentToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('qj_token') : ''
+    if (shouldExpireSession({ status, requestUrl, requestToken, currentToken })) {
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('qj_token')
+        }
+      } catch {
+        // ignore storage errors
+      }
+      if (typeof unauthorizedHandler === 'function') {
+        try {
+          unauthorizedHandler()
+        } catch {
+          // ignore handler errors
+        }
+      }
+    }
     const error = new Error(normalizeApiErrorMessage(err))
-    error.status = error.statusCode = err.response?.status
+    error.status = error.statusCode = status
     error.code = err.code
     const retryAfter = err.response?.headers?.['retry-after']
     if (retryAfter != null) error.retryAfter = Number(retryAfter) || Math.max(0, Math.ceil((Date.parse(retryAfter) - Date.now()) / 1000))
@@ -67,7 +91,7 @@ function realAgentEnabled() {
 function demoCheckupResult() {
   return {
     report:
-      '本期主动巡查完成。关系健康分约 78/100，当前风险等级为「low」。近期互动频率稳定、情绪多为正向，整体平稳。建议保持每周一次的深度对话，并留意异地期间的联系节奏。',
+      '本期主动巡查完成。关系健康分约 78/100，当前风险等级为“低风险（整体平稳）”。近期互动频率稳定、情绪多为正向，整体平稳。建议保持每周一次的深度对话，并留意异地期间的联系节奏。',
     health: 78,
     risk_level: 'low',
     risk_reason: '整体平稳，近 7 天无高冲突信号。',
@@ -132,6 +156,15 @@ export function isRealAgentEnabled() {
   return realAgentEnabled()
 }
 
+const PHONE_VERIFICATION_ENABLED =
+  import.meta.env?.VITE_PHONE_VERIFICATION_ENABLED === 'true'
+
+function rejectDisabledPhoneVerification() {
+  return Promise.reject(
+    new Error('短信验证码功能暂未开放，请使用账号和密码登录')
+  )
+}
+
 export const api = {
   checkBackend,
 
@@ -144,14 +177,17 @@ export const api = {
   },
 
   sendPhoneCode(phone) {
+    if (!PHONE_VERIFICATION_ENABLED) return rejectDisabledPhoneVerification()
     return apiClient.post('/auth/phone/send-code', { phone })
   },
 
   phoneLogin(phone, code) {
+    if (!PHONE_VERIFICATION_ENABLED) return rejectDisabledPhoneVerification()
     return apiClient.post('/auth/phone/login', { phone, code })
   },
 
   resetPasswordByPhone(phone, code, newPassword) {
+    if (!PHONE_VERIFICATION_ENABLED) return rejectDisabledPhoneVerification()
     return apiClient.post('/auth/password-reset/phone', {
       phone,
       code,
@@ -263,9 +299,23 @@ export const api = {
     return apiClient.post(url, pairId ? { pair_id: pairId, ...payload } : payload)
   },
 
-  getTodayStatus(pairId) {
-    const url = pairId ? `/checkins/today?pair_id=${pairId}` : '/checkins/today?mode=solo'
-    return apiClient.get(url)
+  getTodayStatus(pairId, checkinDate = null) {
+    const params = new URLSearchParams()
+    if (pairId) params.set('pair_id', pairId)
+    else params.set('mode', 'solo')
+    if (checkinDate) params.set('checkin_date', checkinDate)
+    return apiClient.get(`/checkins/today?${params.toString()}`)
+  },
+
+  previewCheckinSharing(recordId) {
+    return apiClient.post('/mobile/checkins/sharing-preview', { record_id: recordId })
+  },
+
+  changeCheckinVisibility(recordId, visibilityScope, version) {
+    return apiClient.patch(`/checkins/${recordId}/visibility`, {
+      visibility_scope: visibilityScope, expected_version: String(version),
+      sharing_confirmed: visibilityScope === 'shared_summary',
+    })
   },
 
   getCheckinStreak(pairId) {
@@ -278,11 +328,14 @@ export const api = {
     return apiClient.get(url)
   },
 
-  generateReport(pairId, reportType = 'daily') {
+  generateReport(pairId, reportType = 'daily', reportDate = null) {
     const map = { daily: 'generate-daily', weekly: 'generate-weekly', monthly: 'generate-monthly' }
     const endpoint = map[reportType] || 'generate-daily'
-    const url = pairId ? `/reports/${endpoint}?pair_id=${pairId}` : `/reports/${endpoint}?mode=solo`
-    return apiClient.post(url)
+    const params = new URLSearchParams()
+    if (pairId) params.set('pair_id', pairId)
+    else params.set('mode', 'solo')
+    if (reportType === 'daily' && reportDate) params.set('report_date', reportDate)
+    return apiClient.post(`/reports/${endpoint}?${params.toString()}`)
   },
 
   getLatestReport(pairId, reportType = 'daily') {
@@ -323,6 +376,11 @@ export const api = {
 
   getSafetyStatus(pairId) {
     const url = pairId ? `/insights/safety/status?pair_id=${pairId}` : '/insights/safety/status?mode=solo'
+    return apiClient.get(url)
+  },
+
+  getMethodology(pairId) {
+    const url = pairId ? `/insights/methodology?pair_id=${pairId}` : '/insights/methodology?mode=solo'
     return apiClient.get(url)
   },
 
@@ -379,9 +437,19 @@ export const api = {
     return apiClient.post(`/tasks/${taskId}/result`, payload)
   },
 
-  getWeeklyAssessmentPack(pairId) {
-    const query = pairId ? `pair_id=${encodeURIComponent(pairId)}` : 'mode=solo'
-    return apiClient.get(`/insights/assessments/weekly-pack?${query}`)
+  getWeeklyAssessmentPack(pairId, options = {}) {
+    const params = new URLSearchParams(pairId ? { pair_id: pairId } : { mode: 'solo' })
+    const excludeIds = Array.isArray(options?.excludeItemIds)
+      ? options.excludeItemIds.map((item) => String(item || '').trim()).filter(Boolean)
+      : []
+    if (excludeIds.length) {
+      params.set('exclude_item_ids', excludeIds.join(','))
+    }
+    const variant = Number(options?.variant || 0)
+    if (Number.isFinite(variant) && variant > 0) {
+      params.set('variant', String(Math.floor(variant)))
+    }
+    return apiClient.get(`/insights/assessments/weekly-pack?${params.toString()}`)
   },
 
   submitWeeklyAssessment(pairId, payload) {
@@ -423,11 +491,23 @@ export const api = {
   },
 
   getAttachmentAnalysis(pairId) {
+    if (!pairId) return apiClient.get('/tasks/attachment?mode=solo')
     return apiClient.get(`/tasks/attachment/${pairId}`)
   },
 
   triggerAttachmentAnalysis(pairId) {
-    return apiClient.post(`/tasks/attachment/${pairId}/analyze`)
+    if (!pairId) {
+      return apiClient.post(
+        '/tasks/attachment/analyze?mode=solo',
+        {},
+        { timeout: AI_INTERACTION_TIMEOUT_MS }
+      )
+    }
+    return apiClient.post(
+      `/tasks/attachment/${pairId}/analyze`,
+      {},
+      { timeout: AI_INTERACTION_TIMEOUT_MS }
+    )
   },
 
   getCommunityTips(pairType = 'couple', pairId = null) {
@@ -446,6 +526,10 @@ export const api = {
     return apiClient.get(`/community/notifications?limit=${limit}`)
   },
 
+  markNotificationRead(notificationId) {
+    return apiClient.post(`/community/notifications/${encodeURIComponent(notificationId)}/read`)
+  },
+
   markNotificationsRead() {
     return apiClient.post('/community/notifications/read-all')
   },
@@ -457,6 +541,10 @@ export const api = {
     if (options.surface) params.set('surface', options.surface)
     const query = params.toString()
     return apiClient.post(`/agent/sessions${query ? `?${query}` : ''}`)
+  },
+
+  getAgentSessions(limit = 20) {
+    return apiClient.get(`/agent/sessions?limit=${encodeURIComponent(limit)}`)
   },
 
   getAgentMessages(sessionId) {
@@ -479,15 +567,15 @@ export const api = {
   },
 
   runAgentCheckup(sessionId) {
-    if (demoAgentMode() && !realAgentEnabled()) {
-      return Promise.reject(new Error('在线回复未开启，请开启后重试。'))
+    if (demoAgentMode()) {
+      return Promise.reject(new Error('登录账号后可以使用主动巡查。'))
     }
     return apiClient.post(`/agent/sessions/${sessionId}/checkup`)
   },
 
   collaborateWithAgent(sessionId, content) {
-    if (demoAgentMode() && !realAgentEnabled()) {
-      return Promise.reject(new Error('在线回复未开启，请开启后重试。'))
+    if (demoAgentMode()) {
+      return Promise.reject(new Error('登录账号后可以使用多视角分析。'))
     }
     const payload = content && typeof content === 'object' && !Array.isArray(content)
       ? content
@@ -547,15 +635,18 @@ export const api = {
     return apiClient.post('/privacy/delete-request/cancel')
   },
 
-  buildRealtimeAsrSocketUrl() {
+  async buildRealtimeAsrSocketUrl() {
     const token = sessionStorage.getItem('qj_token')
     if (!token) throw new Error('请先登录')
     if (token === 'demo-mode') throw new Error('预览模式不支持实时语音')
+    const ticketRes = await apiClient.post('/agent/asr/ws-ticket')
+    const ticket = String(ticketRes?.ticket || '').trim()
+    if (!ticket) throw new Error('无法获取实时语音连接凭证')
     const absoluteApiRoot = API_ROOT.startsWith('http')
       ? API_ROOT
       : `${window.location.origin}${API_ROOT.startsWith('/') ? '' : '/'}${API_ROOT}`
     const socketUrl = new URL(`${toWebSocketUrl(absoluteApiRoot)}/agent/asr/realtime`)
-    socketUrl.searchParams.set('token', token)
+    socketUrl.searchParams.set('ticket', ticket)
     return socketUrl.toString()
   },
 
@@ -599,6 +690,10 @@ export const api = {
 
   clearToken() {
     sessionStorage.removeItem('qj_token')
+  },
+
+  setUnauthorizedHandler(handler) {
+    unauthorizedHandler = typeof handler === 'function' ? handler : null
   },
 }
 

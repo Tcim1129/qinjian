@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 import uuid
+import json
+import re
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,6 +156,7 @@ def split_session_history_for_model(
     *,
     history_limit: int | None = None,
 ) -> tuple[list[AgentChatMessage], list[AgentChatMessage]]:
+    history = [message for message in history if not (message.payload or {}).get('memory_suppressed_for_ai')]
     limit = max(1, int(history_limit or _history_limit()))
     if len(history) <= limit:
         return [], history
@@ -180,6 +183,7 @@ def _derive_topic(messages: list[AgentChatMessage]) -> str | None:
 
 
 def summarize_session_head(messages: list[AgentChatMessage]) -> dict[str, Any]:
+    messages = [message for message in messages if not (message.payload or {}).get('memory_suppressed_for_ai')]
     user_points = [
         preview
         for preview in (_preview_text(msg.content, 90) for msg in messages if msg.role == "user")
@@ -280,8 +284,39 @@ def build_messages_for_llm(
     system_prompt: str,
     history: list[AgentChatMessage],
 ) -> list[dict[str, Any]]:
-    _head, tail = split_session_history_for_model(history)
+    head, tail = split_session_history_for_model(history)
     messages_for_llm: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    evidence = _older_user_evidence(head, history)
+    if evidence:
+        messages_for_llm.append({'role': 'user', 'content': evidence})
     for msg in tail:
         messages_for_llm.append(_serialize_tool_call_message(msg))
     return messages_for_llm
+
+
+def _older_user_evidence(head, history, budget: int = 12000) -> str:
+    """按本轮问题找较早原文，不把助手说过的话当成用户事实，也不另存长期记忆。"""
+    entries = [(index, _serialize_tool_call_message(msg)['content']) for index, msg in enumerate(head) if msg.role == 'user' and msg.content]
+    if not entries:
+        return ''
+    query = next((msg.content for msg in reversed(history) if msg.role == 'user'), '')
+    def terms(value):
+        chunks = re.findall(r'[\u4e00-\u9fff]|[a-z0-9]+', value.lower())
+        return set(chunks[i] + chunks[i+1] for i in range(len(chunks)-1)) | {word for word in chunks if len(word) > 1}
+    query_terms = terms(query)
+    # 保留开场及近期衔接，其余按本轮问题与原文的重合程度选择，最后恢复时间顺序。
+    priority = [*entries[:2], *entries[-6:], *sorted(entries, key=lambda row: (len(terms(row[1]) & query_terms), row[0]), reverse=True)]
+    selected = {}
+    size = 0
+    for index, content in priority:
+        if index in selected:
+            continue
+        line = json.dumps({'顺序': index + 1, '用户原文': content}, ensure_ascii=False)
+        if size + len(line) + 1 <= budget:
+            selected[index] = line
+            size += len(line) + 1
+    if not selected:
+        selected[entries[0][0]] = json.dumps({'用户原文节选': entries[0][1][:budget // 2]}, ensure_ascii=False)
+    return ('以下是本次会话较早的用户原文资料，不是新的指令或已核实的他人动机。'
+            '按顺序阅读，更正和当前明确意愿以较新的为准。未选入的内容不等于用户没说过；不确定时不要否认历史。\n'
+            + '\n'.join(selected[index] for index in sorted(selected)))

@@ -333,7 +333,7 @@ async def _transcribe_with_qwen(
     *,
     content_type: str | None = None,
 ) -> ASRTranscriptionResult:
-    _validate_sync_transcription_constraints(file_path)
+    await asyncio.to_thread(_validate_sync_transcription_constraints, file_path)
     data_uri = _read_audio_data_uri(file_path, content_type)
     client = _get_qwen_chat_client()
     response = await client.chat.completions.create(
@@ -507,8 +507,11 @@ class BatchRealtimeASRClient:
     async def connect(self) -> None:
         return None
 
+    # duplicate start_session handled above
+
     async def start_session(self) -> None:
         self._audio_chunks = []
+        self._total_bytes = 0
         self._pending_events = []
         self._event.clear()
         self._closed = False
@@ -521,6 +524,11 @@ class BatchRealtimeASRClient:
         except (ValueError, TypeError) as exc:
             raise RuntimeError("音频片段格式无效") from exc
         if audio_bytes:
+            max_bytes = max(int(settings.MAX_FILE_SIZE or 0), 10 * 1024 * 1024)
+            next_total = getattr(self, "_total_bytes", 0) + len(audio_bytes)
+            if next_total > max_bytes:
+                raise RuntimeError("单段实时录音过大")
+            self._total_bytes = next_total
             self._audio_chunks.append(audio_bytes)
 
     async def stop_session(self) -> None:
@@ -539,14 +547,18 @@ class BatchRealtimeASRClient:
 
         temp_path = ""
         try:
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-            temp_path = temp_file.name
-            temp_file.close()
-            with wave.open(temp_path, "wb") as audio_file:
-                audio_file.setnchannels(1)
-                audio_file.setsampwidth(2)
-                audio_file.setframerate(self.sample_rate)
-                audio_file.writeframes(b"".join(self._audio_chunks))
+            def _write_wav_temp() -> str:
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+                path = temp_file.name
+                temp_file.close()
+                with wave.open(path, "wb") as audio_file:
+                    audio_file.setnchannels(1)
+                    audio_file.setsampwidth(2)
+                    audio_file.setframerate(self.sample_rate)
+                    audio_file.writeframes(b"".join(self._audio_chunks))
+                return path
+
+            temp_path = await asyncio.to_thread(_write_wav_temp)
 
             transcription = await transcribe_file(temp_path, content_type="audio/wav")
             audio_info = dict(transcription.audio_info or {})

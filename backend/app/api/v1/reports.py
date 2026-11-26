@@ -3,7 +3,7 @@
 import uuid
 import logging
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +39,8 @@ from app.services.privacy_audit import privacy_audit_scope
 from app.services.product_prefs import resolve_privacy_mode
 from app.services.checkin_visibility import (
     pair_report_content,
+    report_input_snapshot,
+    report_inputs_current,
     report_source_snapshot,
     report_sources_authorized,
 )
@@ -146,7 +148,13 @@ def _partner_label(pair: Pair, user: User, partner: User | None) -> str:
     ).strip() or "对方"
 
 
-def _normalize_report_text(text: str, *, self_label: str, partner_label: str) -> str:
+def _normalize_report_text(
+    text: str,
+    *,
+    self_label: str,
+    partner_label: str,
+    viewer_is_user_a: bool = True,
+) -> str:
     normalized = str(text or "")
     if not normalized:
         return normalized
@@ -154,17 +162,28 @@ def _normalize_report_text(text: str, *, self_label: str, partner_label: str) ->
     for pattern in BOTH_SIDE_PATTERNS:
         normalized = pattern.sub("双方", normalized)
 
-    normalized = re.sub(r"A\s*方", self_label, normalized)
-    normalized = re.sub(r"B\s*方", partner_label, normalized)
-    return normalized
+    side_a_label = self_label if viewer_is_user_a else partner_label
+    side_b_label = partner_label if viewer_is_user_a else self_label
+    return re.sub(
+        r"(A\s*方|B\s*方)",
+        lambda match: side_a_label if match.group(1).startswith("A") else side_b_label,
+        normalized,
+    )
 
 
-def _normalize_report_value(value, *, self_label: str, partner_label: str):
+def _normalize_report_value(
+    value,
+    *,
+    self_label: str,
+    partner_label: str,
+    viewer_is_user_a: bool = True,
+):
     if isinstance(value, str):
         return _normalize_report_text(
             value,
             self_label=self_label,
             partner_label=partner_label,
+            viewer_is_user_a=viewer_is_user_a,
         )
     if isinstance(value, list):
         return [
@@ -172,6 +191,7 @@ def _normalize_report_value(value, *, self_label: str, partner_label: str):
                 item,
                 self_label=self_label,
                 partner_label=partner_label,
+                viewer_is_user_a=viewer_is_user_a,
             )
             for item in value
         ]
@@ -181,6 +201,7 @@ def _normalize_report_value(value, *, self_label: str, partner_label: str):
                 item,
                 self_label=self_label,
                 partner_label=partner_label,
+                viewer_is_user_a=viewer_is_user_a,
             )
             for key, item in value.items()
         }
@@ -318,6 +339,7 @@ def _serialize_report_response(
     report: Report,
     *,
     partner_label: str = "对方",
+    viewer_is_user_a: bool = True,
     include_copy_normalization: bool = False,
     evidence_summary: list[str] | None = None,
     limitation_note: str | None = None,
@@ -333,21 +355,25 @@ def _serialize_report_response(
             content,
             self_label="你",
             partner_label=partner_label,
+            viewer_is_user_a=viewer_is_user_a,
         )
         normalized_evidence_summary = _normalize_report_value(
             normalized_evidence_summary,
             self_label="你",
             partner_label=partner_label,
+            viewer_is_user_a=viewer_is_user_a,
         )
         normalized_limitation_note = _normalize_report_value(
             normalized_limitation_note,
             self_label="你",
             partner_label=partner_label,
+            viewer_is_user_a=viewer_is_user_a,
         )
         normalized_safety_handoff = _normalize_report_value(
             normalized_safety_handoff,
             self_label="你",
             partner_label=partner_label,
+            viewer_is_user_a=viewer_is_user_a,
         )
 
     return ReportResponse(
@@ -366,6 +392,30 @@ def _serialize_report_response(
     )
 
 
+async def _active_report_job(db, report_id, generation, *, lock=False):
+    statement = select(Report).where(Report.id == report_id).execution_options(populate_existing=True)
+    if lock:
+        statement = statement.with_for_update()
+    report = (await db.execute(statement)).scalar_one_or_none()
+    if not report or report.created_at != generation or report.status != ReportStatus.PENDING:
+        return None
+    return report
+
+
+async def _fail_report_job(db, report_id, generation):
+    await db.rollback()
+    report = await _active_report_job(db, report_id, generation, lock=True)
+    if report:
+        report.content = None
+        report.health_score = None
+        report.status = ReportStatus.FAILED
+        await db.commit()
+
+
+def _report_completion_key(report):
+    return f"report:{report.id}:completed:{report.created_at.isoformat()}"
+
+
 async def _process_daily_report(
     report_id: uuid.UUID,
     pair_id: uuid.UUID | str,
@@ -375,6 +425,7 @@ async def _process_daily_report(
     actor_user_id: str | None = None,
     privacy_mode: str = "cloud",
     source_versions: list | None = None,
+    generation_created_at: datetime | None = None,
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -383,12 +434,19 @@ async def _process_daily_report(
         report = result.scalar_one_or_none()
         if not report:
             return
+        generation = generation_created_at or report.created_at
+        if report.created_at != generation or report.status != ReportStatus.PENDING:
+            return
 
         async def _discard(reason: str) -> None:
             """来源记录已撤回共享：作废本次结果，绝不写回。"""
+            nonlocal report
+            report = await _active_report_job(db, report_id, generation, lock=True)
+            if not report:
+                return
             report.content = None
             report.health_score = None
-            report.status = ReportStatus.PENDING
+            report.status = ReportStatus.FAILED
             await record_relationship_event(
                 db,
                 event_type="report.discarded",
@@ -396,7 +454,7 @@ async def _process_daily_report(
                 entity_type="report",
                 entity_id=report.id,
                 payload={"report_type": _report_enum_value(report.type), "reason": reason},
-                idempotency_key=f"report:{report.id}:discarded:{reason}",
+                idempotency_key=f"report:{report.id}:discarded:{generation.isoformat()}:{reason}",
             )
             await db.commit()
 
@@ -417,6 +475,9 @@ async def _process_daily_report(
                     report_content = await generate_solo_report(
                         pair_type="solo", content=content_a
                     )
+                report = await _active_report_job(db, report_id, generation, lock=True)
+                if not report:
+                    return
                 report.content = report_content
                 report.health_score = report_content.get("health_score")
                 report.status = ReportStatus.COMPLETED
@@ -431,7 +492,7 @@ async def _process_daily_report(
                         "health_score": report.health_score,
                         "crisis_level": (report.content or {}).get("crisis_level"),
                     },
-                    idempotency_key=f"report:{report.id}:completed",
+                    idempotency_key=_report_completion_key(report),
                 )
                 await refresh_profile_and_plan(db, user_id=report.user_id)
                 await db.commit()
@@ -451,8 +512,12 @@ async def _process_daily_report(
                     content_b=content_b,
                 )
             # 落库前再次校验：运行期间来源记录可能被撤回
-            if not await report_sources_authorized(db, source_versions):
+            if not await report_sources_authorized(db, source_versions, lock=True):
                 await _discard("source_revoked_during_run")
+                return
+
+            report = await _active_report_job(db, report_id, generation, lock=True)
+            if not report:
                 return
 
             report.content = report_content
@@ -474,15 +539,14 @@ async def _process_daily_report(
                     "health_score": report.health_score,
                     "crisis_level": (report.content or {}).get("crisis_level"),
                 },
-                idempotency_key=f"report:{report.id}:completed",
+                idempotency_key=_report_completion_key(report),
             )
             await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
             logger.error(f"Daily report generation failed for {report_id}: {str(e)}")
-            report.status = ReportStatus.FAILED
-            await db.commit()
+            await _fail_report_job(db, report_id, generation)
 
 
 async def _process_weekly_report(
@@ -492,6 +556,8 @@ async def _process_weekly_report(
     daily_reports: list,
     actor_user_id: str | None = None,
     privacy_mode: str = "cloud",
+    source_reports: list | None = None,
+    generation_created_at: datetime | None = None,
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -499,6 +565,13 @@ async def _process_weekly_report(
         result = await db.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
+            return
+        generation = generation_created_at or report.created_at
+        if report.created_at != generation or report.status != ReportStatus.PENDING:
+            return
+
+        if not await report_inputs_current(db, source_reports):
+            await _fail_report_job(db, report_id, generation)
             return
 
         try:
@@ -511,6 +584,12 @@ async def _process_weekly_report(
                 privacy_mode=privacy_mode,
             ):
                 report_content = await generate_weekly_report(pair_type, daily_reports)
+            if not await report_inputs_current(db, source_reports, lock=True):
+                await _fail_report_job(db, report_id, generation)
+                return
+            report = await _active_report_job(db, report_id, generation, lock=True)
+            if not report:
+                return
             report.content = report_content
             report.health_score = report_content.get("overall_health_score")
             report.status = ReportStatus.COMPLETED
@@ -530,15 +609,14 @@ async def _process_weekly_report(
                     "health_score": report.health_score,
                     "crisis_level": (report.content or {}).get("crisis_level"),
                 },
-                idempotency_key=f"report:{report.id}:completed",
+                idempotency_key=_report_completion_key(report),
             )
             await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
             logger.error(f"Weekly report generation failed for {report_id}: {str(e)}")
-            report.status = ReportStatus.FAILED
-            await db.commit()
+            await _fail_report_job(db, report_id, generation)
 
 
 async def _process_monthly_report(
@@ -548,6 +626,8 @@ async def _process_monthly_report(
     weekly_reports: list,
     actor_user_id: str | None = None,
     privacy_mode: str = "cloud",
+    source_reports: list | None = None,
+    generation_created_at: datetime | None = None,
 ):
     from app.services.crisis_processor import process_crisis_from_report
 
@@ -555,6 +635,13 @@ async def _process_monthly_report(
         result = await db.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
+            return
+        generation = generation_created_at or report.created_at
+        if report.created_at != generation or report.status != ReportStatus.PENDING:
+            return
+
+        if not await report_inputs_current(db, source_reports):
+            await _fail_report_job(db, report_id, generation)
             return
 
         try:
@@ -567,6 +654,12 @@ async def _process_monthly_report(
                 privacy_mode=privacy_mode,
             ):
                 report_content = await generate_monthly_report(pair_type, weekly_reports)
+            if not await report_inputs_current(db, source_reports, lock=True):
+                await _fail_report_job(db, report_id, generation)
+                return
+            report = await _active_report_job(db, report_id, generation, lock=True)
+            if not report:
+                return
             report.content = report_content
             report.health_score = report_content.get("overall_health_score")
             report.status = ReportStatus.COMPLETED
@@ -586,15 +679,26 @@ async def _process_monthly_report(
                     "health_score": report.health_score,
                     "crisis_level": (report.content or {}).get("crisis_level"),
                 },
-                idempotency_key=f"report:{report.id}:completed",
+                idempotency_key=_report_completion_key(report),
             )
             await refresh_profile_and_plan(db, pair_id=report.pair_id)
 
             await db.commit()
         except Exception as e:
             logger.error(f"Monthly report generation failed for {report_id}: {str(e)}")
-            report.status = ReportStatus.FAILED
-            await db.commit()
+            await _fail_report_job(db, report_id, generation)
+
+
+def _prepare_pending_report(existing: Report | None, **values) -> Report:
+    # 预警可能仍引用旧报告，重试时保留报告编号。
+    report = existing if existing is not None else Report()
+    for name, value in values.items():
+        setattr(report, name, value)
+    report.status = ReportStatus.PENDING
+    report.content = None
+    report.health_score = None
+    report.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    return report
 
 
 @router.post("/generate-daily", response_model=ReportResponse)
@@ -602,11 +706,17 @@ async def trigger_daily_report(
     background_tasks: BackgroundTasks,
     pair_id: uuid.UUID | None = None,
     mode: str | None = None,
+    report_date: date | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """手动触发生成今日报告（异步，使用后台任务以防阻塞）"""
-    today = current_local_date()
+    """手动触发生成指定日期（默认今日，最多过去 30 天内）的日报"""
+    current_day = current_local_date()
+    today = report_date or current_day
+    if today > current_day:
+        raise HTTPException(status_code=422, detail="不能为未来的日期生成日报")
+    if today < current_day - timedelta(days=30):
+        raise HTTPException(status_code=422, detail="仅支持为过去 30 天内的日期生成日报")
     is_solo = mode == "solo"
     privacy_mode = resolve_privacy_mode(getattr(user, "product_prefs", None))
     relaxed_test_account = is_relaxed_test_account(user)
@@ -625,23 +735,23 @@ async def trigger_daily_report(
                 raise HTTPException(status_code=400, detail="今天尚未打卡")
 
         result = await db.execute(
-            select(Report).where(
+            select(Report)
+            .where(
                 Report.user_id == user.id,
                 Report.report_date == today,
                 Report.type == ReportType.SOLO,
             )
+            .order_by(Report.created_at.desc())
+            .limit(1)
+            .with_for_update()
         )
         existing = result.scalar_one_or_none()
-        if existing:
-            if existing.status == ReportStatus.FAILED:
-                await db.delete(existing)
-                await db.flush()
-            else:
-                return existing
+        if existing and existing.status != ReportStatus.FAILED:
+            return existing
 
         content = checkin.content if checkin else RELAXED_REPORT_PLACEHOLDER
 
-        report = Report(
+        report = _prepare_pending_report(existing,
             user_id=user.id,
             pair_id=None,
             type=ReportType.SOLO,
@@ -664,6 +774,7 @@ async def trigger_daily_report(
                 "",
                 str(user.id),
                 privacy_mode,
+                generation_created_at=report.created_at,
             )
         return report
 
@@ -680,19 +791,19 @@ async def trigger_daily_report(
     if len(checkins) < 2 and not relaxed_test_account:
         raise HTTPException(status_code=400, detail="需要双方都完成打卡后才能生成报告")
     result = await db.execute(
-        select(Report).where(
+        select(Report)
+        .where(
             Report.pair_id == pair_id,
             Report.report_date == today,
             Report.type == ReportType.DAILY,
         )
+        .order_by(Report.created_at.desc())
+        .limit(1)
+        .with_for_update()
     )
     existing = result.scalar_one_or_none()
-    if existing:
-        if existing.status == ReportStatus.FAILED:
-            await db.delete(existing)
-            await db.flush()
-        else:
-            return existing
+    if existing and existing.status != ReportStatus.FAILED:
+        return existing
 
     checkin_a = next((c for c in checkins if c.user_id == pair.user_a_id), None)
     checkin_b = next((c for c in checkins if c.user_id == pair.user_b_id), None)
@@ -702,7 +813,7 @@ async def trigger_daily_report(
     content_a = pair_report_content(checkin_a, RELAXED_REPORT_PLACEHOLDER)
     content_b = pair_report_content(checkin_b, RELAXED_REPORT_PLACEHOLDER)
 
-    report = Report(
+    report = _prepare_pending_report(existing,
         pair_id=pair_id,
         type=ReportType.DAILY,
         status=ReportStatus.PENDING,
@@ -725,6 +836,7 @@ async def trigger_daily_report(
             str(user.id),
             privacy_mode,
             source_versions=report_source_snapshot([checkin_a, checkin_b]),
+            generation_created_at=report.created_at,
         )
 
     return report
@@ -752,19 +864,19 @@ async def trigger_weekly_report(
     pair_id = pair.id
 
     result = await db.execute(
-        select(Report).where(
+        select(Report)
+        .where(
             Report.pair_id == pair_id,
             Report.report_date >= week_ago,
             Report.type == ReportType.WEEKLY,
         )
+        .order_by(Report.report_date.desc(), Report.created_at.desc())
+        .limit(1)
+        .with_for_update()
     )
     existing = result.scalar_one_or_none()
-    if existing:
-        if existing.status == ReportStatus.FAILED:
-            await db.delete(existing)
-            await db.flush()
-        else:
-            return existing
+    if existing and existing.status != ReportStatus.FAILED:
+        return existing
 
     result = await db.execute(
         select(Report)
@@ -776,7 +888,8 @@ async def trigger_weekly_report(
         )
         .order_by(Report.report_date)
     )
-    daily_reports = [r.content for r in result.scalars().all() if r.content]
+    source_daily_reports = [r for r in result.scalars().all() if r.content]
+    daily_reports = [r.content for r in source_daily_reports]
 
     if len(daily_reports) < 3:
         if not relaxed_test_account:
@@ -789,7 +902,7 @@ async def trigger_weekly_report(
             _relaxed_daily_report_placeholder,
         )
 
-    report = Report(
+    report = _prepare_pending_report(existing,
         pair_id=pair_id,
         type=ReportType.WEEKLY,
         status=ReportStatus.PENDING,
@@ -810,6 +923,8 @@ async def trigger_weekly_report(
             daily_reports,
             str(user.id),
             privacy_mode,
+            source_reports=report_input_snapshot(source_daily_reports),
+            generation_created_at=report.created_at,
         )
 
     return report
@@ -843,15 +958,13 @@ async def trigger_monthly_report(
             Report.report_date >= month_ago,
             Report.type == ReportType.MONTHLY,
         )
-        .order_by(Report.report_date)
+        .order_by(Report.report_date.desc(), Report.created_at.desc())
+        .limit(1)
+        .with_for_update()
     )
     existing = result.scalar_one_or_none()
-    if existing:
-        if existing.status == ReportStatus.FAILED:
-            await db.delete(existing)
-            await db.flush()
-        else:
-            return existing
+    if existing and existing.status != ReportStatus.FAILED:
+        return existing
 
     result = await db.execute(
         select(Report)
@@ -863,7 +976,8 @@ async def trigger_monthly_report(
         )
         .order_by(Report.report_date)
     )
-    weekly_reports = [r.content for r in result.scalars().all() if r.content]
+    source_weekly_reports = [r for r in result.scalars().all() if r.content]
+    weekly_reports = [r.content for r in source_weekly_reports]
 
     if len(weekly_reports) < 2:
         if not relaxed_test_account:
@@ -874,7 +988,7 @@ async def trigger_monthly_report(
             _relaxed_weekly_report_placeholder,
         )
 
-    report = Report(
+    report = _prepare_pending_report(existing,
         pair_id=pair_id,
         type=ReportType.MONTHLY,
         status=ReportStatus.PENDING,
@@ -895,6 +1009,8 @@ async def trigger_monthly_report(
             weekly_reports,
             str(user.id),
             privacy_mode,
+            source_reports=report_input_snapshot(source_weekly_reports),
+            generation_created_at=report.created_at,
         )
 
     return report
@@ -1007,7 +1123,11 @@ async def get_latest_report(
         pair_id = pair.id
         partner = await _resolve_partner_for_pair(db, pair=pair, user=user)
         partner_label = _partner_label(pair, user, partner)
-        query = select(Report).where(Report.pair_id == pair_id)
+        pair_report_types = (ReportType.DAILY, ReportType.WEEKLY, ReportType.MONTHLY)
+        query = select(Report).where(
+            Report.pair_id == pair_id,
+            Report.type.in_(pair_report_types),
+        )
         if report_type in ("daily", "weekly", "monthly"):
             query = query.where(Report.type == ReportType(report_type))
     query = query.order_by(Report.report_date.desc()).limit(1)
@@ -1025,6 +1145,7 @@ async def get_latest_report(
     return _serialize_report_response(
         report,
         partner_label=partner_label,
+        viewer_is_user_a=(str(pair.user_a_id) == str(user.id)) if pair else True,
         include_copy_normalization=bool(pair),
         evidence_summary=safety.get("evidence_summary") or [],
         limitation_note=safety.get("limitation_note"),
@@ -1058,8 +1179,11 @@ async def get_report_history(
         pair_id = pair.id
         partner = await _resolve_partner_for_pair(db, pair=pair, user=user)
         partner_label = _partner_label(pair, user, partner)
+        pair_report_types = (ReportType.DAILY, ReportType.WEEKLY, ReportType.MONTHLY)
         query = select(Report).where(
-            Report.pair_id == pair_id, Report.status == ReportStatus.COMPLETED
+            Report.pair_id == pair_id,
+            Report.type.in_(pair_report_types),
+            Report.status == ReportStatus.COMPLETED,
         )
         if report_type in ("daily", "weekly", "monthly"):
             query = query.where(Report.type == ReportType(report_type))
@@ -1070,6 +1194,7 @@ async def get_report_history(
         _serialize_report_response(
             report,
             partner_label=partner_label,
+            viewer_is_user_a=(str(pair.user_a_id) == str(user.id)) if pair else True,
             include_copy_normalization=bool(pair),
         )
         for report in result.scalars().all()

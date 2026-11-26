@@ -556,31 +556,68 @@ def _rotation_candidates(
     *,
     pair_id: uuid.UUID | None,
     user_id: uuid.UUID | None,
+    exclude_item_ids: list[str] | None = None,
+    variant: int = 0,
 ) -> list[dict]:
-    ordered_dimensions = list(
+    base_dimensions = list(
         dict.fromkeys(
             [dim for dim in low_dimensions if dim in DIMENSION_LABELS]
             + _stable_dimension_order(pair_id=pair_id, user_id=user_id)
         )
     )
+    normalized_variant = max(0, int(variant or 0))
+    if base_dimensions and normalized_variant:
+        shift = normalized_variant % len(base_dimensions)
+        ordered_dimensions = base_dimensions[shift:] + base_dimensions[:shift]
+    else:
+        ordered_dimensions = base_dimensions
+
+    excluded = {str(item_id).strip() for item_id in (exclude_item_ids or []) if str(item_id).strip()}
+    recently_used = set(used_item_ids[:12])
     candidates: list[dict] = []
     seen_item_ids: set[str] = set()
-    recently_used = set(used_item_ids[:12])
 
-    for dimension in ordered_dimensions:
-        for item in ROTATION_ITEMS:
-            if item["dimension"] != dimension or not item["active"]:
-                continue
-            if item["item_id"] in seen_item_ids:
-                continue
-            if item["item_id"] in recently_used:
-                continue
-            candidates.append(item)
-            seen_item_ids.add(item["item_id"])
+    def _collect_interleaved(*, skip_recent: bool, skip_excluded: bool) -> None:
+        buckets: list[list[dict]] = []
+        for dimension in ordered_dimensions:
+            dim_items = [
+                item
+                for item in ROTATION_ITEMS
+                if item["dimension"] == dimension
+                and item["active"]
+                and item["item_id"] not in seen_item_ids
+                and (not skip_recent or item["item_id"] not in recently_used)
+                and (not skip_excluded or item["item_id"] not in excluded)
+            ]
+            if dim_items and normalized_variant:
+                item_shift = normalized_variant % len(dim_items)
+                dim_items = dim_items[item_shift:] + dim_items[:item_shift]
+            if dim_items:
+                buckets.append(dim_items)
 
+        depth = 0
+        while buckets:
+            added = False
+            for bucket in buckets:
+                if depth < len(bucket):
+                    item = bucket[depth]
+                    if item["item_id"] not in seen_item_ids:
+                        candidates.append(item)
+                        seen_item_ids.add(item["item_id"])
+                        added = True
+            if not added:
+                break
+            depth += 1
+
+    _collect_interleaved(skip_recent=True, skip_excluded=True)
     if len(candidates) >= 4:
         return candidates
 
+    _collect_interleaved(skip_recent=False, skip_excluded=True)
+    if len(candidates) >= 4:
+        return candidates
+
+    _collect_interleaved(skip_recent=False, skip_excluded=False)
     for item in ROTATION_ITEMS:
         if not item["active"] or item["item_id"] in seen_item_ids:
             continue
@@ -595,6 +632,8 @@ async def build_weekly_assessment_pack(
     *,
     pair_id: str | uuid.UUID | None = None,
     user_id: str | uuid.UUID | None = None,
+    exclude_item_ids: list[str] | None = None,
+    variant: int = 0,
 ) -> dict:
     normalized_pair_id = _normalize_uuid(pair_id)
     normalized_user_id = _normalize_uuid(user_id)
@@ -614,6 +653,8 @@ async def build_weekly_assessment_pack(
         used_item_ids,
         pair_id=normalized_pair_id,
         user_id=normalized_user_id,
+        exclude_item_ids=exclude_item_ids,
+        variant=variant,
     )[:4]
     items = CORE_ITEMS + rotation_items
 

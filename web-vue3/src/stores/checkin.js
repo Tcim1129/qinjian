@@ -28,8 +28,8 @@ export const useCheckinStore = defineStore('checkin', () => {
     await loadScoped('streak', streak, () => api.getCheckinStreak(pairId))
   }
 
-  async function loadTodayStatus(pairId) {
-    await loadScoped('today', todayStatus, () => api.getTodayStatus(pairId))
+  async function loadTodayStatus(pairId, checkinDate = null) {
+    await loadScoped('today', todayStatus, () => api.getTodayStatus(pairId, checkinDate))
   }
 
   async function loadHistory(pairId, limit = 14) {

@@ -45,17 +45,18 @@
       </div>
     </div>
 
-    <div v-if="!hasPairContext && !userStore.isDemoMode" class="card">
-      <p class="eyebrow">还没有双人安排</p>
-      <h3>先建立关系，再安排两个人一起做的事</h3>
+    <div v-if="!hasPairContext && !userStore.isDemoMode" class="card challenge-solo-banner">
+      <div class="challenge-solo-banner__copy">
+        <p class="eyebrow">当前为个人安排模式</p>
+        <h3>现在可以先新增和管理个人安排，建立关系后会解锁双方共同安排</h3>
+      </div>
       <div class="hero-actions">
         <button class="btn btn-primary btn-sm" type="button" @click="$router.push('/pair')">去关系页</button>
         <button class="btn btn-ghost btn-sm" type="button" @click="$router.push('/checkin')">先去记录</button>
       </div>
     </div>
 
-    <template v-else>
-      <div class="challenge-shell">
+    <div class="challenge-shell">
         <div class="card card-accent challenge-summary-card">
           <div class="challenge-summary-card__head">
             <div>
@@ -116,7 +117,7 @@
           </div>
         </div>
 
-        <div v-if="showComposer" class="card challenge-composer-card">
+        <div v-if="showComposer" ref="composerCardRef" class="card challenge-composer-card">
           <div class="card-header card-header--stack">
             <div>
               <p class="eyebrow">{{ editingTaskId ? '编辑安排' : '新增安排' }}</p>
@@ -311,7 +312,6 @@
           <div v-else class="empty-state">{{ scopeTab === 'today' ? '今天还没有安排' : '明天还没有安排' }}</div>
         </div>
       </div>
-    </template>
     <TaskResultDialog v-if="resultTask" :task="resultTask" :pair-id="pair?.id" :date="activeDate" @close="resultTask = null" @saved="loadCurrentTasks" @analyze="scheduleContext = $event" />
     <ContextAgentDialog v-if="scheduleContext" :context="scheduleContext" @close="scheduleContext = null" />
   </div>
@@ -321,7 +321,7 @@
 import ContextAgentDialog from '@/components/ContextAgentDialog.vue'
 import TaskResultDialog from '@/components/TaskResultDialog.vue'
 import { buildDemoSchedule, buildScheduleContext, buildTaskFollowupContext, describeTaskFeedback, feedbackOutcomes, feedbackPayload, createLatestRequest, scheduleDate, demoScheduleCache } from '@/utils/taskSchedule'
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RotateCcw } from 'lucide-vue-next'
 import { clampDailyNote, getNextDailyNote, DAILY_NOTE_CANDIDATES } from '@/utils/dailyNotes'
@@ -435,6 +435,7 @@ const loadingTasks = ref(false)
 const savingSettings = ref(false)
 const showSettingsPanel = ref(false)
 const showComposer = ref(false)
+const composerCardRef = ref(null)
 const editingTaskId = ref('')
 const taskDraft = ref(createTaskDraft(scopeTab.value))
 const savingTask = ref(false)
@@ -536,8 +537,8 @@ onMounted(() => {
   if (hasPairContext.value) {
     loadCurrentTasks()
   } else {
-    soloPayload.value = loadSoloTaskPack()
-    tasksPayload.value = { tasks: soloPayload.value.tasks || [] }
+    soloPayload.value = loadSoloTaskPack({ isoDate: activeDate.value })
+    tasksPayload.value = { ...soloPayload.value, tasks: soloPayload.value.tasks || [] }
   }
 })
 
@@ -690,6 +691,9 @@ function openComposer(task = null) {
     taskDraft.value = createTaskDraft(scopeTab.value)
   }
   showComposer.value = true
+  nextTick(() => {
+    composerCardRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  })
 }
 
 function closeComposer() {
@@ -716,10 +720,11 @@ async function saveTask() {
       if (editingTaskId.value) {
         showToast('个人模式暂不支持编辑旧安排，请重新新增一条')
       } else {
-        createSoloTaskEntry(payload)
+        createSoloTaskEntry(payload, { isoDate: activeDate.value })
+        showToast('个人安排已保存')
       }
-      soloPayload.value = loadSoloTaskPack()
-      tasksPayload.value = { tasks: soloPayload.value.tasks || [] }
+      soloPayload.value = loadSoloTaskPack({ isoDate: activeDate.value })
+      tasksPayload.value = { ...soloPayload.value, tasks: soloPayload.value.tasks || [] }
     } else if (userStore.isDemoMode) {
       showToast(editingTaskId.value ? '样例安排已更新' : '样例安排已新增')
       const task = { ...payload, id: editingTaskId.value || `sample-manual-${Date.now()}`, source: 'manual', status: 'pending', editable: true, importance_adjustable: true, refreshable: false }
@@ -939,9 +944,9 @@ async function refreshSingleTask(task) {
 
 async function completeTask(task) {
   if (!hasPairContext.value) {
-    completeSoloTaskEntry(task.id)
-    soloPayload.value = loadSoloTaskPack()
-    tasksPayload.value = { tasks: soloPayload.value.tasks || [] }
+    completeSoloTaskEntry(task.id, { isoDate: activeDate.value })
+    soloPayload.value = loadSoloTaskPack({ isoDate: activeDate.value })
+    tasksPayload.value = { ...soloPayload.value, tasks: soloPayload.value.tasks || [] }
     return
   }
   if (userStore.isDemoMode) {
@@ -1015,9 +1020,9 @@ async function submitFeedback(taskId) {
   submittingFeedbackId.value = taskId
   try {
     if (!hasPairContext.value) {
-      saveSoloTaskFeedbackEntry(taskId, draft)
-      soloPayload.value = loadSoloTaskPack()
-      tasksPayload.value = { tasks: soloPayload.value.tasks || [] }
+      saveSoloTaskFeedbackEntry(taskId, draft, { isoDate: activeDate.value })
+      soloPayload.value = loadSoloTaskPack({ isoDate: activeDate.value })
+      tasksPayload.value = { ...soloPayload.value, tasks: soloPayload.value.tasks || [] }
     } else if (userStore.isDemoMode) {
       tasksPayload.value = {
         ...tasksPayload.value,
@@ -1378,6 +1383,19 @@ onBeforeUnmount(() => scheduleRequests.invalidate())
   white-space: nowrap;
   transition: all 0.2s ease;
   flex-shrink: 0;
+}
+
+.challenge-solo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.challenge-solo-banner__copy h3 {
+  margin-top: 4px;
+  font-size: 16px;
 }
 
 .btn-note-rotate:hover {

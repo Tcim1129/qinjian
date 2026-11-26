@@ -1,6 +1,6 @@
 """Timeline insight routes."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, validate_pair_access
+from app.core.time import current_local_date, utc_naive_to_local_datetime
 from app.core.database import get_db
 from app.models import (
     Checkin,
@@ -19,6 +20,7 @@ from app.models import (
     RelationshipTask,
     Report,
     ReportStatus,
+    ReportType,
     User,
 )
 from app.schemas import (
@@ -33,6 +35,14 @@ from app.schemas import (
 from app.services.intervention_effectiveness import build_intervention_scorecard
 from app.services.playbook_runtime import sync_active_playbook_runtime
 from app.services.relationship_intelligence import record_relationship_event
+from app.services.display_labels import (
+    decision_feedback_label,
+    plan_type_label,
+    report_type_label,
+    risk_level_label,
+    status_label,
+    task_category_label,
+)
 from app.services.timeline_archive import (
     list_archive_checkins,
     list_archive_reports,
@@ -48,9 +58,25 @@ from .shared import (
     get_latest_completed_report_for_scope,
     resolve_scope,
     serialize_timeline_event,
+    timeline_branch_label,
+    timeline_event_label,
+    timeline_source_label,
+    timeline_transition_type_label,
+    timeline_trigger_type_label,
 )
 
 router = APIRouter(tags=["关系智能"])
+
+TIMELINE_HIDDEN_EVENT_TYPES = (
+    "message.simulated",
+    "message.feedback_submitted",
+    "decision.feedback_submitted",
+)
+
+
+def _is_owner_private_event(event: RelationshipEvent) -> bool:
+    event_type = str(event.event_type or "").strip()
+    return event_type.startswith("privacy.") or event_type in TIMELINE_HIDDEN_EVENT_TYPES
 
 
 async def get_accessible_timeline_event(
@@ -60,8 +86,27 @@ async def get_accessible_timeline_event(
     if not event:
         raise HTTPException(status_code=404, detail="时间轴节点不存在")
 
+    if _is_owner_private_event(event):
+        if event.user_id and str(event.user_id) == str(user.id):
+            return event
+        raise HTTPException(status_code=404, detail="时间轴节点不存在")
+
     if event.pair_id:
         await validate_pair_access(str(event.pair_id), user, db, require_active=False)
+        if event.entity_type == "checkin" and event.entity_id:
+            checkin = await db.get(Checkin, event.entity_id)
+            if not checkin or (str(checkin.user_id) != str(user.id) and (
+                checkin.raw_deleted_at is not None or checkin.visibility_scope != "shared_summary"
+            )):
+                raise HTTPException(status_code=404, detail="时间轴节点不存在")
+        if event.entity_type == "report" and event.entity_id:
+            report = await db.get(Report, event.entity_id)
+            if report and report.type == ReportType.SOLO and str(report.user_id) != str(user.id):
+                raise HTTPException(status_code=404, detail="时间轴节点不存在")
+        elif event.entity_type == "relationship_task" and event.entity_id:
+            task = await db.get(RelationshipTask, event.entity_id)
+            if task and task.user_id is not None and str(task.user_id) != str(user.id):
+                raise HTTPException(status_code=404, detail="时间轴节点不存在")
         return event
 
     if event.user_id and str(event.user_id) == str(user.id):
@@ -163,13 +208,13 @@ async def build_timeline_event_detail(
 
     elif event.entity_type == "report" and event.entity_id:
         report = await db.get(Report, event.entity_id)
-        if report:
+        if report and (report.type != ReportType.SOLO or str(report.user_id) == str(viewer.id)):
             content = report.content or {}
             metrics.extend(
                 item
                 for item in [
-                    detail_metric("报告类型", report.type.value),
-                    detail_metric("状态", report.status.value),
+                    detail_metric("报告类型", report_type_label(report.type.value)),
+                    detail_metric("状态", status_label(report.status.value)),
                     detail_metric("健康分", report.health_score),
                     detail_metric("报告日期", report.report_date.isoformat()),
                 ]
@@ -203,16 +248,17 @@ async def build_timeline_event_detail(
 
     elif event.entity_type == "relationship_task" and event.entity_id:
         task = await db.get(RelationshipTask, event.entity_id)
-        if task:
+        if task and (task.user_id is None or str(task.user_id) == str(viewer.id)):
+            completed_local = utc_naive_to_local_datetime(task.completed_at)
             metrics.extend(
                 item
                 for item in [
-                    detail_metric("任务类别", task.category),
-                    detail_metric("任务状态", task.status.value),
+                    detail_metric("任务类别", task_category_label(task.category)),
+                    detail_metric("任务状态", status_label(task.status.value)),
                     detail_metric("截止日期", task.due_date.isoformat()),
                     detail_metric(
                         "完成时间",
-                        task.completed_at.isoformat() if task.completed_at else None,
+                        completed_local.strftime("%Y-%m-%d %H:%M") if completed_local else None,
                     ),
                 ]
                 if item
@@ -234,8 +280,8 @@ async def build_timeline_event_detail(
             metrics.extend(
                 item
                 for item in [
-                    detail_metric("风险等级", alert.level.value),
-                    detail_metric("预警状态", alert.status.value),
+                    detail_metric("风险等级", risk_level_label(alert.level.value)),
+                    detail_metric("预警状态", status_label(alert.status.value)),
                     detail_metric("关联健康分", alert.health_score),
                 ]
                 if item
@@ -260,10 +306,10 @@ async def build_timeline_event_detail(
             metrics.extend(
                 item
                 for item in [
-                    detail_metric("迁移类型", transition.transition_type),
-                    detail_metric("触发方式", transition.trigger_type),
+                    detail_metric("变更类型", timeline_transition_type_label(transition.transition_type)),
+                    detail_metric("触发方式", timeline_trigger_type_label(transition.trigger_type)),
                     detail_metric("推进到第几天", transition.to_day),
-                    detail_metric("目标分支", transition.to_branch),
+                    detail_metric("当前节奏", timeline_branch_label(transition.to_branch)),
                 ]
                 if item
             )
@@ -282,9 +328,9 @@ async def build_timeline_event_detail(
             metrics.extend(
                 item
                 for item in [
-                    detail_metric("计划类型", plan.plan_type),
-                    detail_metric("风险级别", plan.risk_level),
-                    detail_metric("计划状态", plan.status),
+                    detail_metric("计划类型", plan_type_label(plan.plan_type)),
+                    detail_metric("风险级别", risk_level_label(plan.risk_level)),
+                    detail_metric("计划状态", status_label(plan.status)),
                     detail_metric("开始日期", plan.start_date.isoformat()),
                 ]
                 if item
@@ -298,12 +344,42 @@ async def build_timeline_event_detail(
                 if item
             )
 
-    elif event.event_type in {"message.feedback_submitted", "alignment.feedback_submitted", "decision.feedback_submitted"}:
+    elif event.event_type == "assessment.weekly_submitted" or event.entity_type == "weekly_assessment":
+        total_score = payload.get("total_score")
+        scope_text = "双人关系" if payload.get("scope") == "pair" else "自我回看"
         metrics.extend(
             item
             for item in [
-                detail_metric("反馈类型", payload.get("feedback_label") or payload.get("feedback_type")),
-                detail_metric("目标事件", payload.get("target_event_type")),
+                detail_metric("体检范围", scope_text),
+                detail_metric("综合分", f"{total_score}/100" if total_score is not None else None),
+            ]
+            if item
+        )
+        for dimension in payload.get("dimension_scores") or []:
+            if isinstance(dimension, dict) and dimension.get("label") and dimension.get("score") is not None:
+                metric = detail_metric(str(dimension["label"]), f"{dimension['score']} 分")
+                if metric:
+                    metrics.append(metric)
+        change_summary = payload.get("change_summary")
+        if change_summary:
+            evidence_cards.append(detail_card("变化说明", change_summary, tone="insight"))
+
+    elif event.event_type in {"message.feedback_submitted", "alignment.feedback_submitted", "decision.feedback_submitted"}:
+        feedback_text = payload.get("feedback_label") or (
+            decision_feedback_label(payload.get("feedback_type"))
+            if payload.get("feedback_type")
+            else None
+        )
+        target_event_text = (
+            timeline_event_label(str(payload.get("target_event_type")))
+            if payload.get("target_event_type")
+            else None
+        )
+        metrics.extend(
+            item
+            for item in [
+                detail_metric("反馈类型", feedback_text),
+                detail_metric("关联事件", target_event_text),
             ]
             if item
         )
@@ -311,7 +387,7 @@ async def build_timeline_event_detail(
             item
             for item in [
                 detail_card("反馈备注", payload.get("note"), tone="support"),
-                detail_card("反馈记录", payload.get("feedback_label") or payload.get("feedback_type"), tone="progress"),
+                detail_card("反馈记录", feedback_text, tone="progress"),
             ]
             if item
         )
@@ -319,8 +395,8 @@ async def build_timeline_event_detail(
     metrics.extend(
         item
         for item in [
-            detail_metric("事件类型", event.event_type),
-            detail_metric("事件来源", event.source),
+            detail_metric("事件类型", timeline_event_label(event.event_type)),
+            detail_metric("记录来源", timeline_source_label(event.source)),
         ]
         if item
     )
@@ -391,6 +467,7 @@ async def _load_archive_items(
         db,
         pair_id=pair_scope_id,
         user_id=user_scope_id,
+        actor_user_id=actor_user_id,
         before_at=before_at,
         before_seen_ids=before_seen_ids,
         limit=limit,
@@ -400,6 +477,7 @@ async def _load_archive_items(
         db,
         pair_id=pair_scope_id,
         user_id=user_scope_id,
+        actor_user_id=actor_user_id,
         before_at=before_at,
         before_seen_ids=before_seen_ids,
         limit=limit,
@@ -434,6 +512,8 @@ async def get_relationship_timeline(
         .where(
             *event_scope_query(pair_scope_id, user_scope_id),
             RelationshipEvent.event_type.not_like("%.viewed"),
+            RelationshipEvent.event_type.not_like("privacy.%"),
+            RelationshipEvent.event_type.not_in(TIMELINE_HIDDEN_EVENT_TYPES),
         )
         .order_by(
             RelationshipEvent.occurred_at.desc(),
@@ -441,8 +521,52 @@ async def get_relationship_timeline(
         )
         .limit(bounded_limit)
     )
-    events = result.scalars().all()
-    serialized_events = [serialize_timeline_event(event) for event in events]
+    raw_events = result.scalars().all()
+    report_ids = [
+        e.entity_id for e in raw_events if e.entity_type == "report" and e.entity_id
+    ]
+    task_ids = [
+        e.entity_id for e in raw_events if e.entity_type == "relationship_task" and e.entity_id
+    ]
+    hidden_report_ids: set[str] = set()
+    if report_ids:
+        rep_rows = (await db.execute(select(Report).where(Report.id.in_(report_ids)))).scalars().all()
+        hidden_report_ids = {
+            str(r.id)
+            for r in rep_rows
+            if r.type == ReportType.SOLO and str(r.user_id) != str(user.id)
+        }
+    hidden_task_ids: set[str] = set()
+    if task_ids:
+        task_rows = (
+            await db.execute(select(RelationshipTask).where(RelationshipTask.id.in_(task_ids)))
+        ).scalars().all()
+        hidden_task_ids = {
+            str(t.id)
+            for t in task_rows
+            if t.user_id is not None and str(t.user_id) != str(user.id)
+        }
+    events = [
+        e
+        for e in raw_events
+        if not (
+            (e.entity_type == "report" and e.entity_id and str(e.entity_id) in hidden_report_ids)
+            or (
+                e.entity_type == "relationship_task"
+                and e.entity_id
+                and str(e.entity_id) in hidden_task_ids
+            )
+        )
+    ]
+    serialized_events = []
+    for event in events:
+        item = serialize_timeline_event(event)
+        if event.entity_type == "checkin" and str(event.user_id) != str(user.id):
+            checkin = await db.get(Checkin, event.entity_id) if event.entity_id else None
+            if not checkin or checkin.raw_deleted_at is not None or checkin.visibility_scope != "shared_summary":
+                continue
+            item["payload"] = None
+        serialized_events.append(item)
     highlights = [item["summary"] for item in serialized_events[:3]]
 
     await record_relationship_event(
@@ -573,12 +697,12 @@ async def export_relationship_timeline_archive(
         "pair_id": pair_scope_id,
         "user_id": user_scope_id,
         "item_count": len(safe_items),
-        "exported_at": datetime.utcnow(),
+        "exported_at": datetime.now(timezone.utc),
         "items": safe_items,
     }
     response = JSONResponse(content=jsonable_encoder(payload))
     response.headers["Content-Disposition"] = (
-        f'attachment; filename="qinjian-{scope}-archive-{date.today().isoformat()}.json"'
+        f'attachment; filename="qinjian-{scope}-archive-{current_local_date().isoformat()}.json"'
     )
     return response
 

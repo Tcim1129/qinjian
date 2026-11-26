@@ -19,8 +19,12 @@ export function reportPeriodLabel(report = {}) {
 
 export function selectReportHistory(rows = [], type = 'daily') {
   const seen = new Set()
+  const matchesType = (row) => {
+    const rowType = String(row.report_type || row.type || type).toLowerCase()
+    return rowType === type
+  }
   return [...rows]
-    .filter(row => (row.report_type || row.type || type) === type)
+    .filter(matchesType)
     .sort((a, b) => String(b.report_date || b.created_at || '').localeCompare(String(a.report_date || a.created_at || '')) || String(b.created_at || '').localeCompare(String(a.created_at || '')))
     .filter(row => {
       const key = dayKey(row.report_date || row.created_at) || row.id

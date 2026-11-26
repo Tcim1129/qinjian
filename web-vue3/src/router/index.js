@@ -1,5 +1,8 @@
+import { ref } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+
+export const routeLoading = ref(false)
 
 function requireAuth(to, from, next) {
   const token = sessionStorage.getItem('qj_token')
@@ -16,7 +19,8 @@ const routes = [
     beforeEnter: requireAuth,
   },
   {
-    path: '/relationship-spaces/:pairId',
+    path: '/relationship-space/:pairId',
+    alias: '/relationship-spaces/:pairId',
     name: 'relationship-space-detail',
     component: () => import('@/views/relationship/RelationshipSpacesPage.vue'),
     meta: { title: '关系空间' },
@@ -30,6 +34,7 @@ const routes = [
   },
   {
     path: '/pair',
+    alias: ['/pair/list', '/pair/invite', '/pair/join'],
     name: 'pair',
     component: () => import('@/views/pair/PairPage.vue'),
     meta: { title: '建立关系' },
@@ -196,10 +201,14 @@ const routes = [
     meta: { title: '会员' },
     beforeEnter: requireAuth,
   },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/',
+  },
 ]
 
 export function warmCoreRouteComponents() {
-  const coreRouteNames = new Set(['home', 'checkin', 'discover', 'report', 'timeline', 'profile'])
+  const coreRouteNames = new Set(['home', 'chat', 'checkin', 'discover', 'report', 'timeline', 'profile', 'pair', 'challenges', 'health-test'])
   for (const route of routes) {
     if (!coreRouteNames.has(route.name) || typeof route.component !== 'function') continue
     route.component().catch(() => null)
@@ -209,10 +218,16 @@ export function warmCoreRouteComponents() {
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash }
+    return { top: 0 }
+  },
 })
 
 router.beforeEach(async (to, from, next) => {
-  document.title = '亲健'
+  routeLoading.value = true
+  document.title = to.meta?.title ? `${to.meta.title} · 亲健` : '亲健'
   const token = sessionStorage.getItem('qj_token')
   const userStore = useUserStore()
   if (to.meta.guest && token) {
@@ -223,6 +238,14 @@ router.beforeEach(async (to, from, next) => {
     if (!ok) return next('/auth')
   }
   next()
+})
+
+router.afterEach(() => {
+  routeLoading.value = false
+})
+
+router.onError(() => {
+  routeLoading.value = false
 })
 
 export default router

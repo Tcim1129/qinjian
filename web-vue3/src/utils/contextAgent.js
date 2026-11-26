@@ -5,6 +5,12 @@ export function buildContextPrompt(context = {}) {
   return `${source}\n\n${summary}\n\n${question}\n\n请把事实和推测分开，不确定的地方直接说明。推测不代表对方真实想法。先给建议，不要保存记录或创建任务。`
 }
 
+export function buildTimelineDaySummary(items = []) {
+  return items.slice(0, 6).map(item => [...new Set(
+    [item.title, item.summary, item.detail].map(value => String(value || '').trim()).filter(Boolean)
+  )].join('：')).filter(Boolean).join('\n')
+}
+
 export function buildSceneContext(context = {}) {
   return {
     source_label: String(context.sourceLabel || '当前记录').trim().slice(0, 100),
@@ -18,7 +24,9 @@ const toolLabels = {
   search_timeline: '查找相关往事', get_active_tasks: '查看已有安排',
   get_task_feedback: '查看之前的反馈', get_crisis_status: '检查安全提醒',
   analyze_behavior: '梳理当前表达', preview_message_risk: '检查这句话的表达',
-  evaluate_intervention_need: '评估下一步', create_task: '提出行动建议',
+  evaluate_intervention_need: '评估下一步', run_skill_analysis: '梳理矛盾与思路',
+  recall_relationship_memories: '回看之前记下的事', save_relationship_memory: '保存长期记忆',
+  remove_relationship_memory: '停用长期记忆', create_task: '提出行动建议',
   extract_checkin_data: '整理记录内容',
 }
 

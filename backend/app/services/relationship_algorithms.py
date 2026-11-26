@@ -38,6 +38,117 @@ FOCUS_SUMMARIES = {
 
 ALGORITHM_VERSION = "relationship_judgement_v2"
 
+_OTHER_PARTY_SUBJECT = (
+    r"(?:他|她|对方|男朋友|女朋友|老公|老婆|对象|前任|室友|朋友|同事|领导|我爸|我妈|爸|妈)"
+)
+_OTHER_PARTY_QUOTED_SPAN_RE = re.compile(
+    _OTHER_PARTY_SUBJECT
+    + r"[^，。；;！？!?\n]{0,10}(?:说|发|发了|发来|回了|回我|讲|骂)(?:了)?(?:一句|句)?[：:\s]*"
+    + r"[“\"‘'「『]([^”\"’'」』]+)[”\"’'」』]"
+)
+_OTHER_PARTY_PURE_REPORT_RE = re.compile(
+    r"^"
+    + _OTHER_PARTY_SUBJECT
+    + r"(?:刚刚|刚才|刚|昨天|今天)?(?:对我|跟我|向我|给我|回我)(?:说|发|发了|讲|骂)(?:了)?(?:一句|句)?[：:\s]*"
+    + r"[^，。；;！？!?\n]{1,28}[。！？!?]?$"
+)
+_RHETORICAL_REBUKE_RE = re.compile(
+    r"(?:你|你们)?(?:能不能|就不能|可不可以)\s*(?:别|不要|少|滚)"
+)
+_SECOND_PERSON_DISMISSIVE_RE = re.compile(
+    r"(?:别|不要|少)(?:总|老|一直|天天)?(?:来)?烦我|(?:总|老|天天)来烦我|少来这套|真烦人"
+)
+_SECOND_PERSON_GENERALIZING_RE = re.compile(
+    r"你(?:每次都|总是|老是|从来|永远|根本|动不动就|别总|总来)"
+)
+_CALM_SELF_BOUNDARY_RE = re.compile(
+    r"^我(?:今天|今晚|现在|这会儿|暂时|先)?(?:有点累|想先静一静|想安静|想自己待|需要自己待|先一个人待|不想继续聊|想先休息)"
+)
+
+
+def analyze_draft_attribution(cleaned: str) -> dict[str, Any]:
+    """区分本人准备发出的话与转述/引用对方原话，避免把对方说的话当成本人指责。"""
+    if not cleaned:
+        return {
+            "speaker_attribution": "self_outgoing",
+            "self_authored_text": "",
+            "quoted_segments": [],
+        }
+
+    quoted_segments = [m.group(1).strip() for m in _OTHER_PARTY_QUOTED_SPAN_RE.finditer(cleaned) if m.group(1).strip()]
+    remainder = _OTHER_PARTY_QUOTED_SPAN_RE.sub("", cleaned)
+    remainder_clean = re.sub(r"[，,。；;！？!?：:\s]+", "", remainder)
+
+    if quoted_segments:
+        if not remainder_clean or remainder_clean in {"这句", "这句话", "这样"}:
+            return {
+                "speaker_attribution": "quoted_other_party",
+                "self_authored_text": "",
+                "quoted_segments": quoted_segments,
+            }
+        return {
+            "speaker_attribution": "mixed",
+            "self_authored_text": _clean_text(remainder),
+            "quoted_segments": quoted_segments,
+        }
+
+    if _OTHER_PARTY_PURE_REPORT_RE.match(cleaned):
+        return {
+            "speaker_attribution": "quoted_other_party",
+            "self_authored_text": "",
+            "quoted_segments": [cleaned],
+        }
+
+    return {
+        "speaker_attribution": "self_outgoing",
+        "self_authored_text": cleaned,
+        "quoted_segments": [],
+    }
+
+
+def _collect_escalation_cues(self_authored: str) -> tuple[list[str], float]:
+    if not self_authored:
+        return [], 0.0
+    cues: list[str] = []
+    extra_score = 0.0
+    if _RHETORICAL_REBUKE_RE.search(self_authored):
+        cues.append("“你能不能别……”这类反问句式容易让对方先感到被责怪而防御")
+        extra_score += 0.65
+    if _SECOND_PERSON_DISMISSIVE_RE.search(self_authored):
+        cues.append("“别总来烦我”这类排斥表达容易让对方感到被嫌弃，引发对立")
+        extra_score += 0.75
+    if _SECOND_PERSON_GENERALIZING_RE.search(self_authored) or _has_any(self_authored, ABSOLUTE_MARKERS):
+        cues.append("“每次都/总/从来”等概括词容易把讨论拉向争论对错")
+    if _has_any(self_authored, BLAME_MARKERS):
+        cues.append("指责性开头容易让对方只听到批评，忽略你真正想说的事")
+    if _has_any(self_authored, ("滚", "闭嘴", "真服了", "懒得")):
+        cues.append("带厌烦或推开意味的措辞容易让对话直接僵住")
+    return cues[:3], round(extra_score, 2)
+
+
+def _pressure_risk_summary(self_authored: str, pressure_count: int) -> tuple[str, str]:
+    if not self_authored:
+        return "none", "暂无施压或威胁风险"
+    if pressure_count >= 2 or (pressure_count >= 1 and _has_any(self_authored, BLAME_MARKERS + ABSOLUTE_MARKERS)):
+        return "watch", "带有催促或施压语气，留意对方压迫感"
+    if pressure_count >= 1:
+        return "watch", "略带催促语气，暂无明显威胁"
+    return "none", "暂无施压或威胁风险"
+
+
+def _friction_level_summary(
+    speaker_attribution: str,
+    score: float,
+    cues: list[str],
+) -> tuple[str, str]:
+    if speaker_attribution == "quoted_other_party":
+        return "low", "像是在转述对方的话，不是你主动发出的指责"
+    if score >= 1.9:
+        return "high", "刺激性较强，容易引发明显对立"
+    if score >= 0.95 or cues:
+        return "medium", "部分字眼容易让对方防御或让对话升级"
+    return "low", "表达较平和，未见明显刺激字眼"
+
 
 def _clean_text(text: str | None) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
@@ -228,15 +339,87 @@ def _rewrite_draft(cleaned: str, risk_level: str, signal: dict[str, Any]) -> str
 def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
     del context
     cleaned = _clean_text(draft)
-    signal = build_behavior_signal(cleaned, risk_level="none", sentiment_hint=None)
-    focus_labels = _focus_labels(cleaned, signal)
-    absolute_count = _count_markers(cleaned, ABSOLUTE_MARKERS)
-    blame_count = _count_markers(cleaned, BLAME_MARKERS)
-    pressure_count = _count_markers(cleaned, PRESSURE_MARKERS)
-    soften_count = _count_markers(cleaned, SOFTENING_MARKERS)
-    time_window_count = _count_markers(cleaned, TIME_WINDOW_MARKERS)
-    disengage_count = _count_markers(cleaned, DISENGAGE_MARKERS)
-    exclamation_count = cleaned.count("!") + cleaned.count("！")
+    attribution = analyze_draft_attribution(cleaned)
+    speaker_attribution = attribution["speaker_attribution"]
+    scored_text = attribution["self_authored_text"]
+
+    if speaker_attribution == "quoted_other_party":
+        signal = build_behavior_signal("", risk_level="none", sentiment_hint="neutral")
+        return {
+            "partner_view": "如果原样发出去，对方可能不清楚你是在复述他的话，还是想接着回应。",
+            "likely_impact": "只把对方说过的话转述回去，容易让对话停在重复原话，还没说清你的态度。",
+            "risk_level": "low",
+            "risk_reason": "这句像是在转述对方对你说的话，不是你主动发出的指责；发前可以先写清你想回什么。",
+            "safer_rewrite": "你刚才那句话让我挺不舒服的。",
+            "suggested_tone": "先写清你自己的回应",
+            "conversation_goal": "确认是转述原话还是准备回复",
+            "speaker_attribution": speaker_attribution,
+            "pressure_risk_level": "none",
+            "pressure_risk_label": "暂无施压或威胁风险",
+            "escalation_friction_level": "low",
+            "escalation_friction_label": "像是在转述对方的话，不是你主动发出的指责",
+            "escalation_cues": [],
+            "algorithm_version": ALGORITHM_VERSION,
+            "confidence": 0.62,
+            "decision_trace": {
+                "algorithm_version": ALGORITHM_VERSION,
+                "layer": "message_simulation",
+                "speaker_attribution": speaker_attribution,
+                "quoted_segments": attribution["quoted_segments"],
+                "focus_labels": ["被理解"],
+                "signal": {
+                    "inferred_tone": "neutral",
+                    "reaction_type": "neutral",
+                    "pressure_score": 0,
+                    "softening_score": 0,
+                    "blame_score": 0,
+                    "emotion_tags": [],
+                },
+                "score_breakdown": {"tone": 0.0, "reaction": 0.0, "markers": 0.0, "softening": 0.0, "punctuation": 0.0},
+                "risk_score": 0.0,
+                "confidence": 0.62,
+                "narrative": {
+                    "partner_view": "如果原样发出去，对方可能不清楚你是在复述他的话，还是想接着回应。",
+                    "likely_impact": "只把对方说过的话转述回去，容易让对话停在重复原话，还没说清你的态度。",
+                    "conversation_goal": "确认是转述原话还是准备回复",
+                    "suggested_tone": "先写清你自己的回应",
+                },
+            },
+            "focus_labels": ["被理解"],
+            "risk_score": 0.0,
+            "baseline_delta": -1.0,
+            "fallback_reason": None,
+            "shadow_result": None,
+            "feedback_status": "pending_feedback",
+            "do_list": ["先确认这是对方说的话，再写出你想回复的内容"],
+            "avoid_list": ["不要把转述原话直接当成待发送消息"],
+            "structured_evidence": {
+                "speaker_attribution": speaker_attribution,
+                "quoted_segments": attribution["quoted_segments"],
+                "risk_score": 0.0,
+                "pressure_risk_level": "none",
+                "escalation_friction_level": "low",
+                "escalation_cues": [],
+                "reaction_type": "neutral",
+                "inferred_tone": "neutral",
+                "absolute_count": 0,
+                "blame_count": 0,
+                "pressure_count": 0,
+                "soften_count": 0,
+                "time_window_count": 0,
+            },
+        }
+
+    signal = build_behavior_signal(scored_text, risk_level="none", sentiment_hint=None)
+    focus_labels = _focus_labels(scored_text, signal)
+    absolute_count = _count_markers(scored_text, ABSOLUTE_MARKERS)
+    blame_count = _count_markers(scored_text, BLAME_MARKERS)
+    pressure_count = _count_markers(scored_text, PRESSURE_MARKERS)
+    soften_count = _count_markers(scored_text, SOFTENING_MARKERS)
+    time_window_count = _count_markers(scored_text, TIME_WINDOW_MARKERS)
+    disengage_count = _count_markers(scored_text, DISENGAGE_MARKERS)
+    exclamation_count = scored_text.count("!") + scored_text.count("！")
+    escalation_cues, friction_bonus = _collect_escalation_cues(scored_text)
 
     score = 0.0
     if signal["inferred_tone"] == "intense":
@@ -245,8 +428,15 @@ def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = 
         score += 0.9
     elif signal["reaction_type"] == "withdraw":
         score += 0.5
-    score += min(1.75, absolute_count * 0.62 + blame_count * 0.68 + pressure_count * 0.3 + disengage_count * 0.5)
-    if absolute_count and cleaned.startswith("你"):
+    score += min(
+        1.95,
+        absolute_count * 0.62
+        + blame_count * 0.68
+        + pressure_count * 0.3
+        + disengage_count * 0.5
+        + friction_bonus,
+    )
+    if (absolute_count or friction_bonus > 0) and scored_text.startswith("你"):
         score += 0.35
     if absolute_count and disengage_count:
         score += 0.55
@@ -254,9 +444,16 @@ def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = 
     score -= min(1.2, soften_count * 0.32 + time_window_count * 0.22)
     if signal["reaction_type"] in {"clarify", "repair"}:
         score -= 0.28
+    # 平和的第一人称边界表达不按冲突计分
+    if _CALM_SELF_BOUNDARY_RE.match(scored_text) and not escalation_cues and pressure_count == 0:
+        score = 0.0
     score = max(0.0, round(score, 2))
 
     risk_level = _risk_level_from_score(score)
+    pressure_risk_level, pressure_risk_label = _pressure_risk_summary(scored_text, pressure_count)
+    escalation_friction_level, escalation_friction_label = _friction_level_summary(
+        speaker_attribution, score, escalation_cues
+    )
     confidence = _confidence_from_message_score(
         score=score,
         signal=signal,
@@ -270,28 +467,67 @@ def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = 
     score_breakdown = {
         "tone": 1.1 if signal["inferred_tone"] == "intense" else 0.0,
         "reaction": 0.9 if signal["reaction_type"] in {"defend", "urgent"} else 0.5 if signal["reaction_type"] == "withdraw" else 0.0,
-        "markers": round(min(1.75, absolute_count * 0.62 + blame_count * 0.68 + pressure_count * 0.3 + disengage_count * 0.5), 2),
+        "markers": round(
+            min(
+                1.95,
+                absolute_count * 0.62
+                + blame_count * 0.68
+                + pressure_count * 0.3
+                + disengage_count * 0.5
+                + friction_bonus,
+            ),
+            2,
+        ),
         "softening": round(min(1.2, soften_count * 0.32 + time_window_count * 0.22), 2),
         "punctuation": round(min(0.45, exclamation_count * 0.18), 2),
     }
-    if absolute_count and cleaned.startswith("你"):
+    if (absolute_count or friction_bonus > 0) and scored_text.startswith("你"):
         score_breakdown["markers"] = round(score_breakdown["markers"] + 0.35, 2)
     if absolute_count and disengage_count:
         score_breakdown["markers"] = round(score_breakdown["markers"] + 0.55, 2)
 
+    if _CALM_SELF_BOUNDARY_RE.match(scored_text) and risk_level == "low":
+        reason_text = "直接说明了自己需要空间，没有责怪或施压。"
+        partner_view_text = "对方会知道你现在想自己待一会儿，没有明显的指责意味。"
+        likely_impact_text = "大多能先暂停当前对话，保留各自的边界。"
+        rewrite_text = cleaned
+        goal_text = "平静说明自己需要独处或暂停"
+        tone_text = "保持当前平静语气"
+    elif friction_bonus > 0 and risk_level != "low":
+        reason_text = "没有明显威胁或强迫，但反问和排斥措辞容易让对方先防御或升级对立。"
+        partner_view_text = "对方可能感到被指责、被推开，容易先防御或顶回来。"
+        likely_impact_text = "对话容易转成争执态度问题，而不是说清你现在想暂停沟通。"
+        rewrite_text = "我现在不想被打扰，先不聊了。"
+        goal_text = "表达想暂停沟通的边界，不激化对立"
+        tone_text = "平静、直接"
+    else:
+        reason_text = _risk_reason(score, scored_text, signal)
+        partner_view_text = _partner_view(risk_level, signal)
+        likely_impact_text = _likely_impact(risk_level, signal)
+        rewrite_text = _rewrite_draft(cleaned, risk_level, signal)
+        goal_text = _conversation_goal(risk_level, signal)
+        tone_text = _suggested_tone(risk_level, signal)
+
     payload = {
-        "partner_view": _partner_view(risk_level, signal),
-        "likely_impact": _likely_impact(risk_level, signal),
+        "partner_view": partner_view_text,
+        "likely_impact": likely_impact_text,
         "risk_level": risk_level,
-        "risk_reason": _risk_reason(score, cleaned, signal),
-        "safer_rewrite": _rewrite_draft(cleaned, risk_level, signal),
-        "suggested_tone": _suggested_tone(risk_level, signal),
-        "conversation_goal": _conversation_goal(risk_level, signal),
+        "risk_reason": reason_text,
+        "safer_rewrite": rewrite_text,
+        "suggested_tone": tone_text,
+        "conversation_goal": goal_text,
+        "speaker_attribution": speaker_attribution,
+        "pressure_risk_level": pressure_risk_level,
+        "pressure_risk_label": pressure_risk_label,
+        "escalation_friction_level": escalation_friction_level,
+        "escalation_friction_label": escalation_friction_label,
+        "escalation_cues": escalation_cues,
         "algorithm_version": ALGORITHM_VERSION,
         "confidence": confidence,
         "decision_trace": {
             "algorithm_version": ALGORITHM_VERSION,
             "layer": "message_simulation",
+            "speaker_attribution": speaker_attribution,
             "focus_labels": focus_labels,
             "signal": {
                 "inferred_tone": signal["inferred_tone"],
@@ -305,10 +541,10 @@ def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = 
             "risk_score": score,
             "confidence": confidence,
             "narrative": {
-                "partner_view": _partner_view(risk_level, signal),
-                "likely_impact": _likely_impact(risk_level, signal),
-                "conversation_goal": _conversation_goal(risk_level, signal),
-                "suggested_tone": _suggested_tone(risk_level, signal),
+                "partner_view": partner_view_text,
+                "likely_impact": likely_impact_text,
+                "conversation_goal": goal_text,
+                "suggested_tone": tone_text,
             },
         },
         "focus_labels": focus_labels,
@@ -318,21 +554,29 @@ def build_message_preview_baseline(draft: str, context: dict[str, Any] | None = 
         "shadow_result": None,
         "feedback_status": "pending_feedback",
         "do_list": (
-            ["先把想确认的事具体说出来", "问问对方什么时候方便回复"]
+            ["直接保留你现在的平静边界表达即可"]
+            if _CALM_SELF_BOUNDARY_RE.match(scored_text) and risk_level == "low"
+            else ["先把想确认的事具体说出来", "问问对方什么时候方便回复"]
             if risk_level == "low"
-            else ["先说具体发生了什么", "说清自己的感受和要求"]
+            else ["先说具体发生了什么", "说清自己的感受和边界"]
             if risk_level == "medium"
             else ["只讨论当前这一件事", "如果说不下去，可以先暂停"]
         ),
         "avoid_list": (
-            ["不要临时翻出以前的事", "不要一次讨论太多问题"]
+            ["不必额外补出你没打算兑现的承诺"]
+            if _CALM_SELF_BOUNDARY_RE.match(scored_text) and risk_level == "low"
+            else ["不要临时翻出以前的事", "不要一次讨论太多问题"]
             if risk_level == "low"
             else ["避免用“你每次都这样”概括对方", "不要连续发消息催促"]
             if risk_level == "medium"
             else ["不要辱骂或贬低对方", "不要要求对方立刻回复或认错"]
         ),
         "structured_evidence": {
+            "speaker_attribution": speaker_attribution,
             "risk_score": score,
+            "pressure_risk_level": pressure_risk_level,
+            "escalation_friction_level": escalation_friction_level,
+            "escalation_cues": escalation_cues,
             "reaction_type": signal["reaction_type"],
             "inferred_tone": signal["inferred_tone"],
             "absolute_count": absolute_count,

@@ -299,6 +299,27 @@ async def log_privacy_transcription(
     )
 
 
+_RUN_TYPE_LABELS = {
+    "agent_chat": "私下对话整理",
+    "message_simulation": "发前看看预演",
+    "daily_report": "关系简报生成",
+    "weekly_report": "关系周报生成",
+    "narrative_alignment": "双视角对齐分析",
+    "transcription": "语音转文字",
+}
+
+
+def _humanize_privacy_audit_summary(event: RelationshipEvent, payload: dict[str, Any]) -> str:
+    if event.event_type == "privacy.ai.chat.logged":
+        run_label = _RUN_TYPE_LABELS.get(str(payload.get("run_type") or ""), "智能文本处理")
+        status = str(payload.get("status") or "completed").strip().lower()
+        return f"{run_label}已完成" if status == "completed" else f"{run_label}未完成"
+    if event.event_type == "privacy.ai.transcription.logged":
+        status = str(payload.get("status") or "completed").strip().lower()
+        return "语音转文字已完成" if status == "completed" else "语音转文字未完成"
+    return str(payload.get("summary") or "")
+
+
 def serialize_privacy_audit_entry(event: RelationshipEvent) -> dict[str, Any]:
     payload = dict(event.payload or {})
     return {
@@ -306,13 +327,11 @@ def serialize_privacy_audit_entry(event: RelationshipEvent) -> dict[str, Any]:
         "event_type": event.event_type,
         "event_label": payload.get("event_label")
         or PRIVACY_EVENT_LABELS.get(event.event_type, event.event_type),
-        "summary": payload.get("summary") or "",
+        "summary": _humanize_privacy_audit_summary(event, payload),
         "occurred_at": event.occurred_at,
         "meta": {
             "status": payload.get("status"),
             "scope": payload.get("scope"),
-            "model": payload.get("model"),
-            "provider": payload.get("provider"),
             "latency_ms": payload.get("latency_ms"),
             "scheduled_for": payload.get("scheduled_for"),
             "delete_status": payload.get("delete_status"),
